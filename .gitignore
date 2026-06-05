@@ -62,3 +62,6 @@ __pycache__/
 *.pyo
 .venv/
 venv/
+
+# 로컬 CLI 도구·임시 비밀값
+.tools/

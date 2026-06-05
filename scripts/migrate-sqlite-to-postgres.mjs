@@ -10,12 +10,26 @@ const SQLITE = process.env.LEGACY_SQLITE_PATH || './prisma/dev.db'
 const db = new Database(SQLITE, { readonly: true })
 const prisma = new PrismaClient()
 
-const toDate = (v) => (v === null || v === undefined ? null : new Date(Number(v)))
+// SQLite 의 DateTime 은 ms 정수 또는 ISO 문자열로 혼재 가능 → 견고하게 변환
+const toDate = (v) => {
+  if (v === null || v === undefined || v === '') return null
+  let d
+  if (typeof v === 'number') d = new Date(v)
+  else if (/^\d{10,}$/.test(String(v).trim())) d = new Date(Number(v))  // epoch ms
+  else d = new Date(String(v))                                          // ISO
+  return isNaN(d.getTime()) ? null : d
+}
 const conv = (row, dateFields, colMap) => {
   const out = {}
   for (const [k, v] of Object.entries(row)) {
     const field = colMap?.[k] ?? k
-    out[field] = dateFields.includes(field) ? toDate(v) : v
+    if (dateFields.includes(field)) {
+      const d = toDate(v)
+      // 빈 값은 null 유지, 파싱 불가한 비어있지 않은 값은 현재시각으로 대체(필수 컬럼 보호)
+      out[field] = d === null && v !== null && v !== undefined && v !== '' ? new Date() : d
+    } else {
+      out[field] = v
+    }
   }
   return out
 }
