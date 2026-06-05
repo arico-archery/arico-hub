@@ -11,7 +11,8 @@
     "db:seed": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "migrate:data": "node scripts/migrate-sqlite-to-postgres.mjs"
+    "migrate:data": "node scripts/migrate-sqlite-to-postgres.mjs",
+    "push": "node scripts/auto-push.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
