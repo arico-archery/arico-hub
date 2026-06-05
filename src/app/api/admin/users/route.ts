@@ -1,22 +1,24 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
-import { SUPER_ADMINS } from '@/auth'
+import { getSession } from '@/lib/get-session'
+import { SUPER_ADMINS } from '@/lib/session'
 
 async function requireSuper() {
-  const session = await auth()
-  const email = session?.user?.email?.toLowerCase()
-  if (!email) return { ok: false as const, status: 401 }
-  const me = await prisma.user.findUnique({ where: { email } })
+  const s = await getSession()
+  if (!s) return { ok: false as const, status: 401 }
+  const me = await prisma.user.findUnique({ where: { email: s.email } })
   if (!me || me.role !== 'super_admin') return { ok: false as const, status: 403 }
-  return { ok: true as const, email }
+  return { ok: true as const }
 }
 
 // 사용자 목록 (슈퍼어드민)
 export async function GET() {
   const g = await requireSuper()
   if (!g.ok) return NextResponse.json({ error: 'forbidden' }, { status: g.status })
-  const users = await prisma.user.findMany({ orderBy: [{ role: 'asc' }, { createdAt: 'asc' }] })
+  const users = await prisma.user.findMany({
+    select: { id: true, email: true, name: true, role: true, status: true, lastLogin: true, createdAt: true },
+    orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+  })
   return NextResponse.json({ users })
 }
 

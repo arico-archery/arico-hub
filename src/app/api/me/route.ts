@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { getSession } from '@/lib/get-session'
 
 // 본인 프로필 조회
 export async function GET() {
-  const session = await auth()
-  const email = session?.user?.email?.toLowerCase()
-  if (!email) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
-  const user = await prisma.user.findUnique({ where: { email } })
+  const s = await getSession()
+  if (!s) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
+  const user = await prisma.user.findUnique({ where: { email: s.email } })
   if (!user) return NextResponse.json({ error: 'not_found' }, { status: 404 })
   return NextResponse.json({
     email: user.email,

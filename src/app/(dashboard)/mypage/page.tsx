@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { signOut } from 'next-auth/react'
 import { useI18n } from '@/lib/i18n'
 import { UserCircle, Mail, ShieldCheck, Clock, LogOut, CheckCircle2 } from 'lucide-react'
 
@@ -18,6 +17,11 @@ export default function MyPage() {
   useEffect(() => {
     fetch('/api/me').then(r => r.json()).then(d => { if (!d.error) setMe(d) }).catch(() => {})
   }, [])
+
+  const logout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    window.location.href = '/login'
+  }
 
   const roleLabel = (r: string) =>
     r === 'super_admin' ? (isKo ? '슈퍼 관리자' : 'スーパー管理者') : (isKo ? '관리자' : '管理者')
@@ -60,7 +64,7 @@ export default function MyPage() {
         {/* 로그아웃 */}
         <div className="px-6 pb-6">
           <button
-            onClick={() => signOut({ callbackUrl: '/login' })}
+            onClick={logout}
             className="w-full flex items-center justify-center gap-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 py-2.5 rounded-lg text-sm font-medium hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
           >
             <LogOut className="w-4 h-4" />

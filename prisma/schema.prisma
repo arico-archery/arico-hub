@@ -127,17 +127,17 @@ model Setting {
   updatedAt DateTime @updatedAt
 }
 
-// 관리자 사용자 (Microsoft Entra ID 로그인, @arico.group 도메인만)
+// 관리자 사용자 (이메일/비밀번호 회원가입, @arico.group 도메인만)
 model User {
-  id        Int       @id @default(autoincrement())
-  email     String    @unique
-  name      String    @default("")
-  role      String    @default("admin")    // super_admin | admin
-  status    String    @default("active")   // active | disabled
-  image     String    @default("")
-  lastLogin DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id           Int       @id @default(autoincrement())
+  email        String    @unique
+  name         String    @default("")
+  passwordHash String    @default("")        // scrypt: salt:hash
+  role         String    @default("admin")   // super_admin | admin
+  status       String    @default("active")  // active | disabled
+  lastLogin    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 
 // ── 발주 관리 ──────────────────────────────────────────────────

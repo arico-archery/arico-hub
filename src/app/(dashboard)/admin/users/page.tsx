@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSession } from 'next-auth/react'
 import { useI18n } from '@/lib/i18n'
 import { ShieldCheck, ShieldAlert } from 'lucide-react'
 
@@ -14,17 +13,20 @@ const SUPER = ['sms@arico.group', 'sbs@arico.group']
 export default function UsersAdminPage() {
   const { lang } = useI18n()
   const isKo = lang === 'ko'
-  const { data: session, status } = useSession()
+  const [role, setRole] = useState<string | null>(null) // null=로딩
   const [users, setUsers] = useState<U[]>([])
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<number | null>(null)
 
-  const isSuper = session?.user?.role === 'super_admin'
+  const isSuper = role === 'super_admin'
 
   const load = () => {
     setLoading(true)
     fetch('/api/admin/users').then(r => r.json()).then(d => { setUsers(d.users ?? []); setLoading(false) }).catch(() => setLoading(false))
   }
+  useEffect(() => {
+    fetch('/api/me').then(r => r.ok ? r.json() : null).then(d => setRole(d?.role ?? '')).catch(() => setRole(''))
+  }, [])
   useEffect(() => { if (isSuper) load() }, [isSuper])
 
   const patch = async (id: number, body: { role?: string; status?: string }) => {
@@ -35,7 +37,7 @@ export default function UsersAdminPage() {
     else { const d = await res.json().catch(() => ({})); if (d.error === 'protected_super_admin') alert(isKo ? '고정 슈퍼 관리자(sms/sbs)는 변경할 수 없습니다.' : '固定スーパー管理者は変更できません。') }
   }
 
-  if (status === 'loading') return <div className="p-6 text-gray-400">…</div>
+  if (role === null) return <div className="p-6 text-gray-400">…</div>
   if (!isSuper) {
     return (
       <div className="p-6 max-w-lg mx-auto text-center py-20">

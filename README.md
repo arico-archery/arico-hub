@@ -110,15 +110,15 @@ npm run dev          # http://localhost:3000
 
 ---
 
-## 인증 (Microsoft Entra ID)
+## 인증 (이메일/비밀번호 회원가입)
 
-- **NextAuth(Auth.js) + Microsoft Entra ID(OAuth)**. MS365의 **`@arico.group` 도메인 계정만** 로그인 허용.
-- 첫 로그인 시 **자동으로 관리자(admin) 등록**. 슈퍼 어드민(`sms@`, `sbs@arico.group`)은 자동 부여.
-- 역할: `super_admin` / `admin`. 슈퍼 어드민은 **사용자 관리**(`/admin/users`)에서 역할·활성 상태 변경 가능.
+- **이메일+비밀번호 회원가입/로그인**. **회원가입 시 `@arico.group` 이메일만 허용**.
+- 가입 즉시 **관리자(admin)** 로 등록. 슈퍼 어드민(`sms@`, `sbs@arico.group`)은 자동 부여.
+- 역할: `super_admin` / `admin`. 슈퍼 어드민은 **사용자 관리**(`/admin/users`)에서 역할·활성 상태 변경.
 - **마이페이지**(`/mypage`): 본인 프로필·권한·로그아웃.
-- 구현: `src/auth.ts`(도메인 제한·역할 upsert), `src/auth.config.ts`(Edge), `src/middleware.ts`, `src/app/api/auth/[...nextauth]`, `src/app/login`.
-- Azure 앱 등록 필요 → 리다이렉트 URI `https://<도메인>/api/auth/callback/microsoft-entra-id` + 환경변수 `AUTH_MICROSOFT_ENTRA_ID_*`.
-- 도메인/슈퍼어드민 변경: `src/auth.ts`의 `ALLOWED_DOMAIN`, `SUPER_ADMINS`.
+- 세션: `AUTH_SECRET`으로 서명한 httpOnly 쿠키(7일). 비밀번호는 scrypt 해시 저장.
+- 구현: `src/lib/session.ts`(쿠키 서명·Edge), `src/lib/password.ts`(scrypt), `src/middleware.ts`, `src/app/api/auth/{signup,login,logout}`, `src/app/{login,signup}`.
+- 도메인/슈퍼어드민 변경: `src/lib/session.ts`의 `ALLOWED_DOMAIN`, `SUPER_ADMINS`.
 
 ---
 

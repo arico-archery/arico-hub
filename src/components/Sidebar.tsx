@@ -6,19 +6,26 @@ import {
   LayoutDashboard, Package, ShoppingCart, CreditCard,
   Users, BarChart3, Settings, RefreshCw, ChevronRight, Globe, Truck, ClipboardList, BookOpen, LogOut
 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/lib/i18n'
 import Logo, { AricoMark } from '@/components/Logo'
-import { useSession, signOut } from 'next-auth/react'
 import { UserCircle, ShieldCheck } from 'lucide-react'
 
 export default function Sidebar() {
   const pathname = usePathname()
   const { lang, toggle, t } = useI18n()
-  const { data: session } = useSession()
-  const isSuper = session?.user?.role === 'super_admin'
+  const [role, setRole] = useState<string>('')
+  const isSuper = role === 'super_admin'
 
-  const handleLogout = () => signOut({ callbackUrl: '/login' })
+  useEffect(() => {
+    fetch('/api/me').then(r => r.ok ? r.json() : null).then(d => { if (d?.role) setRole(d.role) }).catch(() => {})
+  }, [])
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    window.location.href = '/login'
+  }
 
   const navItems = [
     { href: '/',                 label: t.nav.dashboard,       icon: LayoutDashboard },
