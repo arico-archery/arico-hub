@@ -9,15 +9,16 @@ import {
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/lib/i18n'
 import Logo, { AricoMark } from '@/components/Logo'
+import { useSession, signOut } from 'next-auth/react'
+import { UserCircle, ShieldCheck } from 'lucide-react'
 
 export default function Sidebar() {
   const pathname = usePathname()
   const { lang, toggle, t } = useI18n()
+  const { data: session } = useSession()
+  const isSuper = session?.user?.role === 'super_admin'
 
-  const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    window.location.href = '/login'
-  }
+  const handleLogout = () => signOut({ callbackUrl: '/login' })
 
   const navItems = [
     { href: '/',                 label: t.nav.dashboard,       icon: LayoutDashboard },
@@ -32,6 +33,8 @@ export default function Sidebar() {
     { href: '/exchange-rates',   label: t.nav.exchangeRates,   icon: RefreshCw },
     { href: '/settings',         label: t.nav.settings,        icon: Settings },
     { href: '/manual',           label: t.nav.manual,          icon: BookOpen },
+    { href: '/mypage',           label: t.nav.mypage,          icon: UserCircle },
+    ...(isSuper ? [{ href: '/admin/users', label: t.nav.userMgmt, icon: ShieldCheck }] : []),
   ]
 
   return (

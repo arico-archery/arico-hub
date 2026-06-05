@@ -1,41 +1,19 @@
 'use client'
 
-import { useState, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
+import { signIn } from 'next-auth/react'
+import { useSearchParams } from 'next/navigation'
 import { AricoMark } from '@/components/Logo'
 
-function LoginForm() {
-  const router = useRouter()
+function LoginInner() {
   const params = useSearchParams()
-  const from = params.get('from') || '/'
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const error = params.get('error')
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      })
-      if (res.ok) {
-        router.replace(from.startsWith('/') ? from : '/')
-        router.refresh()
-      } else if (res.status === 401) {
-        setError('비밀번호가 올바르지 않습니다. / パスワードが正しくありません。')
-      } else {
-        setError('로그인 설정이 필요합니다(서버 환경변수). / ログイン設定が必要です。')
-      }
-    } catch {
-      setError('연결 오류 / 接続エラー')
-    } finally {
-      setLoading(false)
-    }
-  }
+  const msg = error
+    ? error === 'AccessDenied'
+      ? '@arico.group 계정만 접속할 수 있습니다. (또는 비활성화된 계정)\n@arico.group アカウントのみアクセスできます。'
+      : '로그인 중 오류가 발생했습니다. 다시 시도해 주세요. / ログインエラー'
+    : ''
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900 p-4">
@@ -43,26 +21,33 @@ function LoginForm() {
         <div className="flex flex-col items-center mb-6">
           <AricoMark size={48} />
           <h1 className="mt-3 text-xl font-bold text-gray-900 dark:text-white">ARICO Distribution Hub</h1>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">로그인 / ログイン</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">관리자 로그인 / 管理者ログイン</p>
         </div>
-        <form onSubmit={submit} className="space-y-3">
-          <input
-            type="password"
-            autoFocus
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            placeholder="비밀번호 / パスワード"
-            className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading || !password}
-            className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            {loading ? '확인 중… / 確認中…' : '로그인 / ログイン'}
-          </button>
-        </form>
+
+        {msg && (
+          <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2 mb-4 whitespace-pre-line text-center">
+            {msg}
+          </p>
+        )}
+
+        <button
+          onClick={() => signIn('microsoft-entra-id', { callbackUrl: '/' })}
+          className="w-full flex items-center justify-center gap-2.5 bg-[#2f2f2f] hover:bg-black text-white py-3 rounded-lg text-sm font-medium transition-colors"
+        >
+          {/* Microsoft 로고 */}
+          <svg className="w-4 h-4" viewBox="0 0 21 21" aria-hidden="true">
+            <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+            <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+            <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+            <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+          </svg>
+          Microsoft 계정으로 로그인
+        </button>
+
+        <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-4 text-center leading-relaxed">
+          MS365의 <span className="font-semibold">@arico.group</span> 계정만 허용됩니다.<br />
+          @arico.group の MS365 アカウントのみ
+        </p>
       </div>
     </div>
   )
@@ -71,7 +56,7 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <Suspense fallback={null}>
-      <LoginForm />
+      <LoginInner />
     </Suspense>
   )
 }

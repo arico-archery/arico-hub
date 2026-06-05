@@ -110,12 +110,15 @@ npm run dev          # http://localhost:3000
 
 ---
 
-## 인증
+## 인증 (Microsoft Entra ID)
 
-- 미설정(로컬) 시 통과, 설정 시 **모든 경로 보호**.
-- `/login`에서 `APP_PASSWORD` 입력 → HMAC 서명된 httpOnly 세션 쿠키 발급(7일).
-- 구현: `src/middleware.ts`, `src/lib/auth.ts`, `src/app/api/auth/*`, `src/app/login/page.tsx`.
-- 다중 사용자·역할이 필요하면 NextAuth(Credentials/OAuth)로 확장 가능.
+- **NextAuth(Auth.js) + Microsoft Entra ID(OAuth)**. MS365의 **`@arico.group` 도메인 계정만** 로그인 허용.
+- 첫 로그인 시 **자동으로 관리자(admin) 등록**. 슈퍼 어드민(`sms@`, `sbs@arico.group`)은 자동 부여.
+- 역할: `super_admin` / `admin`. 슈퍼 어드민은 **사용자 관리**(`/admin/users`)에서 역할·활성 상태 변경 가능.
+- **마이페이지**(`/mypage`): 본인 프로필·권한·로그아웃.
+- 구현: `src/auth.ts`(도메인 제한·역할 upsert), `src/auth.config.ts`(Edge), `src/middleware.ts`, `src/app/api/auth/[...nextauth]`, `src/app/login`.
+- Azure 앱 등록 필요 → 리다이렉트 URI `https://<도메인>/api/auth/callback/microsoft-entra-id` + 환경변수 `AUTH_MICROSOFT_ENTRA_ID_*`.
+- 도메인/슈퍼어드민 변경: `src/auth.ts`의 `ALLOWED_DOMAIN`, `SUPER_ADMINS`.
 
 ---
 

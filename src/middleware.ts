@@ -1,26 +1,22 @@
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
-import { verifySessionToken, SESSION_COOKIE } from '@/lib/auth'
+import NextAuth from 'next-auth'
+import authConfig from '@/auth.config'
 
-// 로그인/인증 API/정적 파일 외 모든 경로를 보호한다.
-export async function middleware(req: NextRequest) {
-  const secret = process.env.AUTH_SECRET ?? ''
-  // 인증 미설정(로컬에서 AUTH_SECRET/APP_PASSWORD 없음)이면 통과 — 개발 편의
-  if (!secret || !process.env.APP_PASSWORD) return NextResponse.next()
+// Edge 안전 인스턴스(Prisma 미사용) — JWT 세션만 검증
+const { auth } = NextAuth(authConfig)
 
-  const token = req.cookies.get(SESSION_COOKIE)?.value
-  const ok = await verifySessionToken(token, secret)
-  if (ok) return NextResponse.next()
-
-  const url = req.nextUrl.clone()
-  url.pathname = '/login'
-  url.searchParams.set('from', req.nextUrl.pathname)
-  return NextResponse.redirect(url)
-}
+export default auth((req) => {
+  if (!req.auth) {
+    return Response.redirect(new URL('/login', req.nextUrl.origin))
+  }
+  // /admin/* 은 슈퍼어드민만
+  if (req.nextUrl.pathname.startsWith('/admin') && req.auth.user?.role !== 'super_admin') {
+    return Response.redirect(new URL('/', req.nextUrl.origin))
+  }
+})
 
 export const config = {
-  // 로그인 페이지·인증 API·정적자산·이미지 확장자는 미들웨어 제외
+  // 로그인·인증 API·정적자산 제외한 모든 경로 보호
   matcher: [
-    '/((?!login|api/auth|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico)$).*)',
+    '/((?!login|api/auth|_next/static|_next/image|favicon.ico|manual/|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico)$).*)',
   ],
 }

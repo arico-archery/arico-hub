@@ -15,6 +15,8 @@ const T = {
       exchangeRates: '환율 설정',
       settings: '설정',
       manual: '사용 메뉴얼',
+      mypage: '마이페이지',
+      userMgmt: '사용자 관리',
       logout: '로그아웃',
     },
     common: {
@@ -600,6 +602,8 @@ const T = {
       exchangeRates: '為替設定',
       settings: '設定',
       manual: '利用マニュアル',
+      mypage: 'マイページ',
+      userMgmt: 'ユーザー管理',
       logout: 'ログアウト',
     },
     common: {
