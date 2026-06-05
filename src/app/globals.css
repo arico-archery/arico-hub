@@ -1,0 +1,120 @@
+@import "tailwindcss";
+
+/* ── 색상 토큰 (라이트 기본) ───────────────────────────
+   순수 흰/검정 대신 눈이 편한 톤. 본문 대비 WCAG AA(4.5:1) 충족. */
+:root {
+  --bg:       #fafafa;   /* 페이지 배경 (순수 흰 대신) */
+  --surface:  #ffffff;   /* 카드/패널 표면 */
+  --text:     #171717;   /* 본문 (대비 ~16:1) */
+  --muted:    #4b5563;   /* 보조 텍스트 gray-600 (대비 ~7:1, AA 충족) */
+  --border:   #e5e7eb;   /* 경계선 */
+  --link:     #2563eb;   /* 링크 blue-600 */
+
+  /* 하위 호환 (기존 변수명 유지) */
+  --background: var(--bg);
+  --foreground: var(--text);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* ── 다크 모드 토큰 (시스템 설정 연동) ──────────────────
+   순수 검정 대신 slate 톤, 본문은 밝은 회색으로 묻힘 방지. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:      #0f172a;   /* slate-900 */
+    --surface: #1e293b;   /* slate-800 */
+    --text:    #f1f5f9;   /* slate-100 (대비 ~15:1) */
+    --muted:   #cbd5e1;   /* slate-300 (보조 텍스트도 밝게 — 묻힘 방지) */
+    --border:  #334155;   /* slate-700 */
+    --link:    #60a5fa;   /* blue-400 (어두운 배경에서 대비 확보) */
+  }
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ── 반응형: 가로 스크롤·넘침 방지 ─────────────────────── */
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+/* 넘치기 쉬운 요소들 */
+img, video, canvas, svg {
+  max-width: 100%;
+  height: auto;
+}
+table, pre {
+  max-width: 100%;
+}
+
+/* ── 다크 모드 가독성 보정 (저대비로 묻히기 쉬운 요소) ─────
+   Tailwind dark: 유틸을 안 쓴 곳까지 시스템 다크모드에서 보정. */
+@media (prefers-color-scheme: dark) {
+  /* 가장 흐린 보조 텍스트(gray-400/500)는 다크 배경에서 더 밝게 */
+  .text-gray-400 { color: #9ca3af !important; } /* gray-400 → 유지(대비 확보 수준) */
+  .text-gray-500 { color: #9ca3af !important; } /* gray-500 → gray-400 로 밝게 */
+  /* 링크 기본색이 너무 어두우면 밝게 */
+  a:not([class*="text-"]):not([class*="bg-"]) { color: var(--link); }
+}
+
+/* ── 다크모드 전역 폼 요소 ──────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  select,
+  textarea {
+    background-color: #374151;
+    color: #f9fafb;
+    border-color: #4b5563;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"])::placeholder,
+  textarea::placeholder {
+    color: #9ca3af;
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+  }
+  /* 파일 입력 */
+  input[type="file"] {
+    color: #d1d5db;
+  }
+  /* 옵션 드롭다운 */
+  option {
+    background-color: #374151;
+    color: #f9fafb;
+  }
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 15mm 15mm 20mm 15mm;
+  }
+  body {
+    background: white;
+    font-size: 12px;
+    color: black;
+  }
+  .print\:hidden {
+    display: none !important;
+  }
+  .print\:bg-white {
+    background: white !important;
+  }
+  .print\:shadow-none {
+    box-shadow: none !important;
+  }
+  .print\:rounded-none {
+    border-radius: 0 !important;
+  }
+  .print\:p-0 {
+    padding: 0 !important;
+  }
+}

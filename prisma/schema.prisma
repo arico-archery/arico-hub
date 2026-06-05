@@ -1,0 +1,211 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")   // 런타임 (Supabase pooler, 6543)
+  directUrl = env("DIRECT_URL")     // 마이그레이션/db push (Supabase direct, 5432)
+}
+
+model Supplier {
+  id          Int       @id @default(autoincrement())
+  code        String    @unique // JVD, MK, FIVICS, SIBUYA, KOREA, ANGEL
+  name        String
+  currency    String    // USD, JPY, EUR
+  priceType   String    // COST, RETAIL (SIBUYA uses RETAIL as cost)
+  taxRate     Float     @default(0)
+  discount    Float     @default(0) // ANGEL 掛率 (0.6 or 0.7)
+  color       String    @default("#3b82f6")
+  products        Product[]
+  purchaseOrders  PurchaseOrder[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Product {
+  id              Int       @id @default(autoincrement())
+  supplierCode    String
+  supplier        Supplier  @relation(fields: [supplierCode], references: [code])
+  productCode     String
+  name            String
+  brand           String    @default("")
+  category        String    @default("")
+  costPrice       Float     // in supplier's currency
+  msrp            Float     @default(0) // in supplier's currency
+  unit            String    @default("1")
+  availability    String    @default("in_stock")
+  imageUrl1       String    @default("")
+  imageUrl2       String    @default("")
+  imageUrl3       String    @default("")
+  url             String    @default("")
+  salePriceJpy    Float     @default(0) // 판매가(JPY), 0 = 미설정
+  jvdMatchCode    String    @default("") // matched ARICO product code
+  optionSize      String    @default("") // サイズ e.g., LH, RH, #1, 30-40#
+  optionColor     String    @default("") // カラー e.g., シルバー, ブラック
+  shopProductId   String    @default("") // 仕入先ショップの商品ID (SIBUYA 商品ID等)
+  scrapedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  orderItems          OrderItem[]
+  purchaseOrderItems  PurchaseOrderItem[]
+  stockLevel          StockLevel?
+  aricoCatalogs       AricoCatalog[]
+
+  @@unique([supplierCode, productCode])
+  @@index([brand])
+  @@index([supplierCode])
+}
+
+model ExchangeRate {
+  id        Int      @id @default(autoincrement())
+  currency  String   @unique // USD, JPY, EUR
+  rateToJpy Float    // 1 USD = X JPY (JPY→JPY = 1.0)
+  updatedAt DateTime @updatedAt
+}
+
+model Customer {
+  id          Int       @id @default(autoincrement())
+  code        String    @unique
+  name        String
+  company     String    @default("")
+  email       String    @default("")
+  phone       String    @default("")
+  address     String    @default("")
+  memo        String    @default("")
+  orders      Order[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Order {
+  id                Int         @id @default(autoincrement())
+  orderNo           String      @unique
+  customerId        Int
+  customer          Customer    @relation(fields: [customerId], references: [id])
+  orderDate         DateTime    @default(now())
+  dueDate           DateTime?
+  delayNotifyDate   DateTime?   // 지연 시 고객 연락 예정일
+  completedAt       DateTime?   // 배송완료 처리 일시
+  status            String      @default("pending") // pending, confirmed, shipped, delivered, cancelled
+  paymentStatus     String      @default("unpaid") // unpaid, partial, paid
+  paymentDate       DateTime?
+  shippingDate      DateTime?
+  deliveryDate      DateTime?
+  trackingNo        String      @default("")
+  totalAmountJpy    Float       @default(0)
+  totalCostJpy      Float       @default(0)
+  paidAmountJpy     Float       @default(0)
+  memo              String      @default("")
+  items             OrderItem[]
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+}
+
+model OrderItem {
+  id              Int            @id @default(autoincrement())
+  orderId         Int
+  order           Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId       Int
+  product         Product        @relation(fields: [productId], references: [id])
+  quantity        Int            @default(1)
+  salePriceJpy    Float          // selling price in JPY
+  costPriceJpy    Float          // cost price in JPY at time of order
+  // 조달 상태: needed(미발주) | ordered(발주완료) | received(입고완료)
+  procureStatus   String         @default("needed")
+  optionMemo      String         @default("")  // 사이즈/컬러/기타 비고 (예: LH, シルバー 280, 赤)
+  purchaseOrderId Int?           // 연결된 발주서
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  createdAt       DateTime       @default(now())
+
+  @@index([procureStatus])
+}
+
+model Setting {
+  key       String   @id
+  value     String   @default("")
+  updatedAt DateTime @updatedAt
+}
+
+// ── 발주 관리 ──────────────────────────────────────────────────
+
+model PurchaseOrder {
+  id            Int                  @id @default(autoincrement())
+  poNo          String               @unique             // PO-20260529-0001
+  supplierCode  String
+  supplier      Supplier             @relation(fields: [supplierCode], references: [code])
+  // draft → ordered(발주전송) → confirmed(제조사 재고확인) → paid(매입지급) → partial/received(입고) → cancelled
+  status        String               @default("draft")
+  orderDate     DateTime             @default(now())     // 발주일
+  expectedDate  DateTime?                                // 예상 입고일
+  receivedDate  DateTime?                                // 실제 입고일
+  totalCostJpy  Float                @default(0)
+  memo          String               @default("")
+  // 제조사 재고확인·청구서(프로포마) 수령 단계
+  confirmedDate     DateTime?                            // 재고확인/제조사 청구서 수령일
+  supplierInvoiceNo String          @default("")         // 제조사 청구서 번호
+  confirmedForeign  Float            @default(0)          // 제조사 확정 청구액(공급사 통화)
+  confirmedCurrency String          @default("")         // USD / JPY 등
+  confirmedTotalJpy Float            @default(0)          // 확정 청구액 JPY 환산(지급 기준)
+  // 제조사 입금(매입 지급)
+  paymentStatus String               @default("unpaid")  // unpaid | paid
+  paidAmountJpy Float                @default(0)
+  paidDate      DateTime?
+  items         PurchaseOrderItem[]
+  orderItems    OrderItem[]          // 이 발주로 처리되는 고객 주문 품목
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([supplierCode])
+  @@index([status])
+}
+
+model PurchaseOrderItem {
+  id               Int           @id @default(autoincrement())
+  purchaseOrderId  Int
+  purchaseOrder    PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  productId        Int
+  product          Product       @relation(fields: [productId], references: [id])
+  quantity         Int           @default(1)             // 발주 수량
+  confirmedQty     Int?                                  // 제조사 확정 수량(재고확인). null=미확인, 0=품절
+  receivedQty      Int           @default(0)             // 입고 수량
+  unitCostJpy      Float         @default(0)             // 발주 당시 단가(JPY)
+  memo             String        @default("")
+  createdAt        DateTime      @default(now())
+}
+
+// ── 재고 관리 ──────────────────────────────────────────────────
+
+model StockLevel {
+  id            Int      @id @default(autoincrement())
+  productId     Int      @unique
+  product       Product  @relation(fields: [productId], references: [id])
+  quantity      Int      @default(0)   // 현재 재고
+  reservedQty   Int      @default(0)   // 예약(주문 확정) 수량
+  reorderPoint  Int      @default(0)   // 재발주 기준 수량
+  updatedAt     DateTime @updatedAt
+}
+
+model AricoCatalog {
+  id              Int      @id @default(autoincrement())
+  productCode     String   @unique @map("product_code")
+  brand           String   @default("") @map("brand")
+  name            String
+  priceJpy        Int      @default(0) @map("price_jpy")
+  priceJpyNotax   Int      @default(0) @map("price_jpy_notax")
+  msrpJpy         Int      @default(0) @map("msrp_jpy")
+  imageUrl1       String   @default("") @map("image_url_1")
+  imageUrl2       String   @default("") @map("image_url_2")
+  imageUrl3       String   @default("") @map("image_url_3")
+  url             String   @default("")
+  scrapedAt       String   @default("") @map("scraped_at")
+  supplierProductId Int?   @map("supplier_product_id")
+  // 매칭된 공급사 상품 삭제 시 자동으로 NULL 처리 → dangling 참조 근본 차단
+  supplierProduct Product? @relation(fields: [supplierProductId], references: [id], onDelete: SetNull)
+  // ARICO 자사몰 옵션 (JSON: [{label, values:[...]}]) — 주문 시 옵션 선택용
+  options         String   @default("") @map("options")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("arico_catalog")
+}
