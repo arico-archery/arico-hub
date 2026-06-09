@@ -27,10 +27,10 @@ export async function GET(req: Request) {
     ...(completed === '0' ? { completedAt: null } : {}),
     ...(q ? {
       OR: [
-        { orderNo: { contains: q } },
-        { customer: { name: { contains: q } } },
-        { customer: { company: { contains: q } } },
-        { memo: { contains: q } },
+        { orderNo: { contains: q, mode: 'insensitive' as const } },
+        { customer: { name: { contains: q, mode: 'insensitive' as const } } },
+        { customer: { company: { contains: q, mode: 'insensitive' as const } } },
+        { memo: { contains: q, mode: 'insensitive' as const } },
       ]
     } : {}),
   }

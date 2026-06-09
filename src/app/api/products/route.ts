@@ -42,11 +42,11 @@ export async function GET(req: Request) {
   const where = {
     ...(q ? {
       OR: [
-        { name: { contains: q } },
-        { brand: { contains: q } },
-        { productCode: { contains: q } },
-        { optionSize:  { contains: q } },
-        { optionColor: { contains: q } },
+        { name: { contains: q, mode: 'insensitive' as const } },
+        { brand: { contains: q, mode: 'insensitive' as const } },
+        { productCode: { contains: q, mode: 'insensitive' as const } },
+        { optionSize:  { contains: q, mode: 'insensitive' as const } },
+        { optionColor: { contains: q, mode: 'insensitive' as const } },
       ]
     } : {}),
     ...(supplier ? { supplierCode: supplier } : {}),

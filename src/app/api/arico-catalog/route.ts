@@ -11,7 +11,7 @@ export async function GET(req: Request) {
 
   try {
     const textWhere = q
-      ? { OR: [{ name: { contains: q } }, { brand: { contains: q } }, { productCode: { contains: q } }] }
+      ? { OR: [{ name: { contains: q, mode: 'insensitive' as const } }, { brand: { contains: q, mode: 'insensitive' as const } }, { productCode: { contains: q, mode: 'insensitive' as const } }] }
       : {}
     const matchWhere = matchedOnly
       ? { supplierProductId: { not: null } }

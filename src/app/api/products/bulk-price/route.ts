@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   const where = {
     ...(supplierCode ? { supplierCode } : {}),
     ...(category ? { category } : {}),
-    ...(q ? { OR: [{ name: { contains: q } }, { brand: { contains: q } }, { productCode: { contains: q } }] } : {}),
+    ...(q ? { OR: [{ name: { contains: q, mode: 'insensitive' as const } }, { brand: { contains: q, mode: 'insensitive' as const } }, { productCode: { contains: q, mode: 'insensitive' as const } }] } : {}),
     ...(noPriceOnly ? { salePriceJpy: 0 } : {}),
   }
 
