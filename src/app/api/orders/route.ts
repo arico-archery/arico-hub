@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { createWithSeqRetry } from '@/lib/seq'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -108,11 +109,9 @@ export async function POST(req: Request) {
   const body = await req.json()
   const { customerId, items, memo, dueDate } = body
 
-  // Generate order number
+  // 주문번호: ORD-YYYYMMDD-NNNN. 현존 최대 일련번호 기준 + 충돌 시 재시도(동시성·삭제 안전)
   const today = new Date()
   const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '')
-  const count = await prisma.order.count()
-  const orderNo = `ORD-${dateStr}-${String(count + 1).padStart(4, '0')}`
 
   // Calculate totals
   type OrderItemInput = {
@@ -133,21 +132,28 @@ export async function POST(req: Request) {
     }
   })
 
-  const order = await prisma.order.create({
-    data: {
-      orderNo,
-      customerId: Number(customerId),
-      memo: memo ?? '',
-      dueDate: dueDate ? new Date(dueDate) : null,
-      totalAmountJpy,
-      totalCostJpy,
-      items: { create: itemsData },
+  const order = await createWithSeqRetry(
+    async (attempt) => {
+      const last = await prisma.order.findFirst({ orderBy: { id: 'desc' }, select: { orderNo: true } })
+      const lastSeq = last ? (parseInt(last.orderNo.split('-').pop() || '0', 10) || 0) : 0
+      return `ORD-${dateStr}-${String(lastSeq + 1 + attempt).padStart(4, '0')}`
     },
-    include: {
-      customer: true,
-      items: { include: { product: true } },
-    },
-  })
+    (orderNo) => prisma.order.create({
+      data: {
+        orderNo,
+        customerId: Number(customerId),
+        memo: memo ?? '',
+        dueDate: dueDate ? new Date(dueDate) : null,
+        totalAmountJpy,
+        totalCostJpy,
+        items: { create: itemsData },
+      },
+      include: {
+        customer: true,
+        items: { include: { product: true } },
+      },
+    }),
+  )
 
   // 주문에서 사람이 확정한 정보를 공급사 상품 / ARICO 카탈로그에 역반영한다.
   // 주문이 쌓일수록 판매가·매칭이 실제 거래 기준으로 점점 정확해진다.

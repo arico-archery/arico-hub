@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { createWithSeqRetry, nextPoNo } from '@/lib/seq'
 
 /**
  * POST /api/backorders/create-po
@@ -77,32 +78,33 @@ export async function POST(req: Request) {
     const poItems    = Array.from(productMap.values())
     const totalCost  = poItems.reduce((s, i) => s + i.unitCostJpy * i.quantity, 0)
 
-    // PO 번호 생성
+    // PO 번호: 동시성·삭제 안전 채번 + 충돌 재시도
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-    const count   = await prisma.purchaseOrder.count()
-    const poNo    = `PO-${dateStr}-${String(count + 1).padStart(4, '0')}`
 
     // 발주서 메모: 관련 주문 목록 자동 포함
     const orderNos = [...new Set(groupItems.map(i => i.order.orderNo))].join(', ')
     const autoMemo = `백오더 발주 (주문: ${orderNos})${memo ? '\n' + memo : ''}`
 
-    const po = await prisma.purchaseOrder.create({
-      data: {
-        poNo,
-        supplierCode,
-        status:       'ordered',
-        expectedDate: expectedDate ? new Date(expectedDate) : null,
-        totalCostJpy: totalCost,
-        memo:         autoMemo,
-        items: {
-          create: poItems.map(i => ({
-            productId:   i.productId,
-            quantity:    i.quantity,
-            unitCostJpy: i.unitCostJpy,
-          })),
+    const po = await createWithSeqRetry(
+      (attempt) => nextPoNo(dateStr, attempt),
+      (poNo) => prisma.purchaseOrder.create({
+        data: {
+          poNo,
+          supplierCode,
+          status:       'ordered',
+          expectedDate: expectedDate ? new Date(expectedDate) : null,
+          totalCostJpy: totalCost,
+          memo:         autoMemo,
+          items: {
+            create: poItems.map(i => ({
+              productId:   i.productId,
+              quantity:    i.quantity,
+              unitCostJpy: i.unitCostJpy,
+            })),
+          },
         },
-      },
-    })
+      }),
+    )
 
     // OrderItem 업데이트: procureStatus → 'ordered', purchaseOrderId 연결
     await prisma.orderItem.updateMany({
@@ -110,7 +112,7 @@ export async function POST(req: Request) {
       data:  { procureStatus: 'ordered', purchaseOrderId: po.id },
     })
 
-    createdPOs.push({ poNo, supplierCode, itemCount: groupItems.length })
+    createdPOs.push({ poNo: po.poNo, supplierCode, itemCount: groupItems.length })
   }
 
   return NextResponse.json({ created: createdPOs })
