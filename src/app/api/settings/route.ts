@@ -19,9 +19,7 @@ const DEFAULT_KEYS = [
 
 // GET /api/settings — 모든 설정 반환 { key: value }
 export async function GET() {
-  const rows = await prisma.$queryRaw<{ key: string; value: string }[]>`
-    SELECT key, value FROM Setting
-  `
+  const rows = await prisma.setting.findMany({ select: { key: true, value: true } })
   const map: Record<string, string> = {}
   for (const k of DEFAULT_KEYS) map[k] = ''
   for (const r of rows) map[r.key] = r.value
@@ -32,11 +30,11 @@ export async function GET() {
 export async function POST(req: Request) {
   const body = await req.json() as Record<string, string>
   for (const [key, value] of Object.entries(body)) {
-    await prisma.$executeRaw`
-      INSERT INTO Setting (key, value, updatedAt)
-      VALUES (${key}, ${value}, CURRENT_TIMESTAMP)
-      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = CURRENT_TIMESTAMP
-    `
+    await prisma.setting.upsert({
+      where: { key },
+      create: { key, value },
+      update: { value },
+    })
   }
   return NextResponse.json({ ok: true })
 }

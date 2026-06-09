@@ -39,7 +39,7 @@ export async function GET(req: Request) {
   const candidates = await prisma.product.findMany({
     where: {
       supplierCode: target.supplierCode,
-      name: { startsWith: namePrefix },
+      name: { startsWith: namePrefix, mode: 'insensitive' },
       OR: [{ optionSize: { not: '' } }, { optionColor: { not: '' } }],
     },
     select: {

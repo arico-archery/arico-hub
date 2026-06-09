@@ -17,10 +17,10 @@ export async function POST(req: Request) {
   let papagoId = ''
   let papagoSecret = ''
   try {
-    const settings = await prisma.$queryRaw<{ key: string; value: string }[]>`
-      SELECT key, value FROM Setting
-      WHERE key IN ('deepl_api_key', 'papago_client_id', 'papago_client_secret')
-    `
+    const settings = await prisma.setting.findMany({
+      where: { key: { in: ['deepl_api_key', 'papago_client_id', 'papago_client_secret'] } },
+      select: { key: true, value: true },
+    })
     const settingMap = Object.fromEntries(settings.map(s => [s.key, s.value]))
     deeplKey = settingMap['deepl_api_key'] ?? ''
     papagoId = settingMap['papago_client_id'] ?? ''

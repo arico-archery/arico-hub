@@ -6,7 +6,7 @@ import { AricoMark } from '@/components/Logo'
 
 async function getSettings(): Promise<Record<string, string>> {
   try {
-    const rows = await prisma.$queryRaw<{ key: string; value: string }[]>`SELECT key, value FROM Setting`
+    const rows = await prisma.setting.findMany({ select: { key: true, value: true } })
     return Object.fromEntries(rows.map(r => [r.key, r.value]))
   } catch {
     return {}
