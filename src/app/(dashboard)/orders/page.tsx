@@ -223,12 +223,12 @@ export default function OrdersPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t.orders.title}</h1>
-          <p className="text-gray-600 font-medium text-sm mt-1">{t.common.total} {total}{t.common.cases}</p>
+          <p className="text-gray-600 dark:text-gray-400 font-medium text-sm mt-1">{t.common.total} {total}{t.common.cases}</p>
         </div>
         <div className="flex items-center gap-2">
           <a
             href={`/api/orders?format=csv&completed=${tab === 'done' ? '1' : '0'}${statusFilter ? `&status=${statusFilter}` : ''}${payFilter ? `&paymentStatus=${payFilter}` : ''}${searchQ ? `&q=${encodeURIComponent(searchQ)}` : ''}`}
-            className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
           >
             <Download className="w-3.5 h-3.5" /> CSV
           </a>
@@ -266,7 +266,7 @@ export default function OrdersPage() {
         <div className="relative min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
-            className="pl-9 pr-4 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+            className="pl-9 pr-4 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
             placeholder={t.orders.searchPlaceholder}
             value={searchQ}
             onChange={e => setSearchQ(e.target.value)}
@@ -274,22 +274,22 @@ export default function OrdersPage() {
         </div>
         {tab === 'active' && (
           <>
-            <div className="w-px h-5 bg-gray-200" />
+            <div className="w-px h-5 bg-gray-200 dark:bg-gray-600" />
             <div className="flex gap-2 items-center">
-              <span className="text-xs text-gray-600 font-medium">{t.common.status}:</span>
+              <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">{t.common.status}:</span>
               {['', ...Object.keys(STATUS_LABELS_T)].map(s => (
                 <button key={s || 'all'} onClick={() => setStatusFilter(s)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${statusFilter === s ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${statusFilter === s ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
                   {s ? STATUS_LABELS_T[s].label : t.common.all}
                 </button>
               ))}
             </div>
-            <div className="w-px h-5 bg-gray-200" />
+            <div className="w-px h-5 bg-gray-200 dark:bg-gray-600" />
             <div className="flex gap-2 items-center">
-              <span className="text-xs text-gray-600 font-medium">{t.payments.colPaid}:</span>
+              <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">{t.payments.colPaid}:</span>
               {['', ...Object.keys(PAY_LABELS_T)].map(s => (
                 <button key={s || 'all'} onClick={() => setPayFilter(s)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${payFilter === s ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${payFilter === s ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
                   {s ? PAY_LABELS_T[s].label : t.common.all}
                 </button>
               ))}
@@ -345,10 +345,10 @@ export default function OrdersPage() {
                     {/* 거래처 */}
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-900 dark:text-gray-100">{order.customer.name}</p>
-                      <p className="text-gray-500 text-xs">{order.customer.company}</p>
+                      <p className="text-gray-500 dark:text-gray-400 text-xs">{order.customer.company}</p>
                     </td>
                     {/* 날짜 */}
-                    <td className="px-4 py-3 text-gray-600 font-medium text-xs whitespace-nowrap">
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300 font-medium text-xs whitespace-nowrap">
                       <p>{new Date(order.orderDate).toLocaleDateString('ja-JP')}</p>
                       {isComplete && order.completedAt && (
                         <p className="text-green-600 font-medium">
@@ -369,7 +369,7 @@ export default function OrdersPage() {
                               done && isComplete   ? 'bg-green-500 text-white' :
                               done                 ? 'bg-blue-500 text-white' :
                               current              ? 'bg-blue-100 text-blue-500 ring-2 ring-blue-300' :
-                              'bg-gray-100 text-gray-300'
+                              'bg-gray-100 dark:bg-gray-700 text-gray-300 dark:text-gray-500'
                             }`}>
                               {done
                                 ? <CheckCircle2 className="w-3.5 h-3.5" />
@@ -378,9 +378,9 @@ export default function OrdersPage() {
                             </div>
                             <span className={`text-[10px] leading-none ${
                               done && isComplete ? 'text-green-600 font-medium' :
-                              done               ? 'text-blue-500 font-medium' :
+                              done               ? 'text-blue-500 dark:text-blue-400 font-medium' :
                               current            ? 'text-blue-400' :
-                              'text-gray-400'
+                              'text-gray-400 dark:text-gray-500'
                             }`}>{step.label}</span>
                           </div>
                         </td>
@@ -388,7 +388,7 @@ export default function OrdersPage() {
                     })}
 
                     {/* 금액 */}
-                    <td className="px-4 py-3 text-right font-medium text-gray-900 tabular-nums">
+                    <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100 tabular-nums">
                       {formatJpy(order.totalAmountJpy)}
                       {unpaid > 0 && (
                         <p className="text-red-500 text-xs">{t.orders.unpaidAmount} {formatJpy(unpaid)}</p>
@@ -439,7 +439,7 @@ export default function OrdersPage() {
                                         {item.optionMemo}
                                       </span>
                                     )}
-                                    <span className="text-gray-500">×{item.quantity}</span>
+                                    <span className="text-gray-500 dark:text-gray-400">×{item.quantity}</span>
                                     {/* 조달 상태 */}
                                     <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
                                       item.procureStatus === 'received' ? 'bg-green-100 text-green-700' :
@@ -450,7 +450,7 @@ export default function OrdersPage() {
                                        item.procureStatus === 'ordered'  ? t.orders.procureOrdered : t.orders.procureNeeded}
                                     </span>
                                   </div>
-                                  <span className="font-medium text-gray-900">{formatJpy(item.salePriceJpy * item.quantity)}</span>
+                                  <span className="font-medium text-gray-900 dark:text-gray-100">{formatJpy(item.salePriceJpy * item.quantity)}</span>
                                 </div>
                               ))}
                             </div>
@@ -461,11 +461,11 @@ export default function OrdersPage() {
 
                             {/* 입금 */}
                             <div>
-                              <p className="text-xs text-gray-600 font-medium mb-1 flex items-center gap-1">
+                              <p className="text-xs text-gray-600 dark:text-gray-400 font-medium mb-1 flex items-center gap-1">
                                 <CreditCard className="w-3 h-3" /> {t.orders.paymentStatusLabel}
                               </p>
                               <select
-                                className="w-full border border-gray-200 rounded px-2 py-1 text-xs"
+                                className="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1 text-xs"
                                 value={order.paymentStatus}
                                 onChange={e => updateStatus(order.id, 'paymentStatus', e.target.value)}
                               >
@@ -475,7 +475,7 @@ export default function OrdersPage() {
                                 <div className="mt-1.5 flex gap-1">
                                   <input
                                     type="number"
-                                    className="flex-1 border border-gray-200 rounded px-2 py-1 text-xs text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    className="flex-1 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1 text-xs text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                                     placeholder={`잔액 ¥${(order.totalAmountJpy - order.paidAmountJpy).toLocaleString()}`}
                                     value={partialPayInputs[order.id] ?? ''}
                                     onChange={e => setPartialPayInputs(p => ({ ...p, [order.id]: e.target.value }))}
@@ -488,9 +488,9 @@ export default function OrdersPage() {
 
                             {/* 주문 상태 */}
                             <div>
-                              <p className="text-xs text-gray-600 font-medium mb-1">{t.orders.orderStatusLabel}</p>
+                              <p className="text-xs text-gray-600 dark:text-gray-400 font-medium mb-1">{t.orders.orderStatusLabel}</p>
                               <select
-                                className="w-full border border-gray-200 rounded px-2 py-1 text-xs"
+                                className="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1 text-xs"
                                 value={order.status}
                                 onChange={e => updateStatus(order.id, 'status', e.target.value)}
                               >
@@ -499,8 +499,8 @@ export default function OrdersPage() {
                             </div>
 
                             {/* 발송 */}
-                            <div className="pt-1 border-t border-gray-100">
-                              <p className="text-xs text-gray-600 font-medium mb-1.5 flex items-center gap-1">
+                            <div className="pt-1 border-t border-gray-100 dark:border-gray-700">
+                              <p className="text-xs text-gray-600 dark:text-gray-400 font-medium mb-1.5 flex items-center gap-1">
                                 <Truck className="w-3 h-3" /> {t.orders.shipProcess}
                               </p>
                               {/* 입고 진행 — 입고된 품목만 부분발송 가능 */}
@@ -529,7 +529,7 @@ export default function OrdersPage() {
                                 onChange={v => setShipInfo(prev => ({ ...prev, [order.id]: { ...prev[order.id], date: v } }))}
                               />
                               <input type="text"
-                                className="w-full border border-gray-200 rounded px-2 py-1 text-xs mb-1.5"
+                                className="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1 text-xs mb-1.5"
                                 placeholder={t.orders.trackingNoPlaceholder}
                                 defaultValue={order.trackingNo}
                                 onChange={e => setShipInfo(prev => ({ ...prev, [order.id]: { ...prev[order.id], trackingNo: e.target.value } }))}
@@ -544,8 +544,8 @@ export default function OrdersPage() {
                             </div>
 
                             {/* 배송완료 → 완료 처리 */}
-                            <div className="pt-1 border-t border-gray-100">
-                              <p className="text-xs text-gray-600 font-medium mb-1.5 flex items-center gap-1">
+                            <div className="pt-1 border-t border-gray-100 dark:border-gray-700">
+                              <p className="text-xs text-gray-600 dark:text-gray-400 font-medium mb-1.5 flex items-center gap-1">
                                 <MapPin className="w-3 h-3" /> {t.orders.btnDone}
                               </p>
                               {order.completedAt ? (
@@ -556,7 +556,7 @@ export default function OrdersPage() {
                                   </p>
                                   <button
                                     onClick={() => updateStatus(order.id, 'status', 'shipped')}
-                                    className="w-full border border-gray-200 text-gray-500 py-1.5 rounded text-xs hover:bg-gray-50"
+                                    className="w-full border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300 py-1.5 rounded text-xs hover:bg-gray-50 dark:hover:bg-gray-700"
                                   >{t.orders.cancelDone}</button>
                                 </div>
                               ) : (
@@ -575,8 +575,8 @@ export default function OrdersPage() {
                             </div>
 
                             {/* 지연 연락 날짜 */}
-                            <div className="pt-1 border-t border-gray-100">
-                              <p className="text-xs text-gray-600 font-medium mb-1">{t.orders.delayNotifyLabel}</p>
+                            <div className="pt-1 border-t border-gray-100 dark:border-gray-700">
+                              <p className="text-xs text-gray-600 dark:text-gray-400 font-medium mb-1">{t.orders.delayNotifyLabel}</p>
                               <div className="flex gap-1">
                                 <DateInput
                                   size="sm"
@@ -600,10 +600,10 @@ export default function OrdersPage() {
                             </div>
 
                             {/* 메모 */}
-                            <div className="pt-1 border-t border-gray-100">
-                              <p className="text-xs text-gray-600 font-medium mb-1">{t.common.memo}</p>
+                            <div className="pt-1 border-t border-gray-100 dark:border-gray-700">
+                              <p className="text-xs text-gray-600 dark:text-gray-400 font-medium mb-1">{t.common.memo}</p>
                               <textarea
-                                className="w-full border border-gray-200 rounded px-2 py-1 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                className="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 rows={2}
                                 placeholder={t.orders.orderMemoPlaceholder}
                                 defaultValue={order.memo}
@@ -678,7 +678,7 @@ export default function OrdersPage() {
         {/* 페이지네이션 */}
         {total > PAGE_SIZE && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
-            <p className="text-xs text-gray-600 font-medium">
+            <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">
               {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} / {formatNumber(total)}건
             </p>
             <div className="flex items-center gap-1">
@@ -694,7 +694,7 @@ export default function OrdersPage() {
                 else p = page - 3 + i
                 return (
                   <button key={p} onClick={() => setPage(p)}
-                    className={`px-2.5 py-1 rounded text-xs font-medium ${page === p ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-200'}`}>
+                    className={`px-2.5 py-1 rounded text-xs font-medium ${page === p ? 'bg-blue-600 text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
                     {p}
                   </button>
                 )
