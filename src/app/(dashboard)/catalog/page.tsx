@@ -26,6 +26,11 @@ type SupplierProduct = {
   supplier: { currency: string }
 }
 
+type CatalogStats = {
+  total: number; matched: number; unmatched: number
+  bySupplier: Record<string, number>
+}
+
 const PAGE_SIZE = 96
 
 // ── 매칭 모달 ─────────────────────────────────────────
@@ -178,6 +183,17 @@ export default function CatalogPage() {
   const [krwPerJpy] = useState(9.5)
   const [autoMatching, setAutoMatching] = useState(false)
   const [autoMatchResult, setAutoMatchResult] = useState<AutoMatchResult>(null)
+  const [stats, setStats] = useState<CatalogStats | null>(null)
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await fetch('/api/arico-catalog?stats=1')
+      const data = await res.json()
+      setStats(data)
+    } catch { /* 무시 */ }
+  }, [])
+
+  useEffect(() => { fetchStats() }, [fetchStats])
 
   const fetchItems = useCallback(async (currentPage = 1) => {
     setLoading(true)
@@ -210,6 +226,7 @@ export default function CatalogPage() {
         ? { ...item, supplierProductId: product?.id ?? null, matchedProduct: product ?? null }
         : item
     ))
+    fetchStats()
   }
 
   const handleAutoMatch = async (dryRun = false) => {
@@ -226,6 +243,7 @@ export default function CatalogPage() {
       if (!dryRun && data.saved > 0) {
         // 결과 반영
         fetchItems(page)
+        fetchStats()
       }
     } catch (e) {
       console.error(e)
@@ -265,6 +283,51 @@ export default function CatalogPage() {
           </button>
         </div>
       </div>
+
+      {/* 매칭율 요약 */}
+      {stats && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 mb-3">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-baseline gap-2">
+              <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">{t.catalog.matchRate}</span>
+              <span className="text-3xl font-bold text-gray-900 dark:text-white tabular-nums">
+                {stats.total > 0 ? ((stats.matched / stats.total) * 100).toFixed(1) : '0'}%
+              </span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {t.catalog.matchedCount} {formatNumber(stats.matched)} / {t.common.total} {formatNumber(stats.total)}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {Object.entries(stats.bySupplier).sort((a, b) => b[1] - a[1]).map(([code, n]) => (
+                <span
+                  key={code}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium text-white"
+                  style={{ backgroundColor: SUPPLIER_COLORS[code] ?? '#6b7280' }}
+                >
+                  {code} <span className="font-bold">{formatNumber(n)}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+          {/* 진행 바 */}
+          <div className="mt-3 h-2.5 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+            <div
+              className="h-full bg-green-500 rounded-full transition-all"
+              style={{ width: `${stats.total > 0 ? (stats.matched / stats.total) * 100 : 0}%` }}
+            />
+          </div>
+          <div className="mt-1.5 flex items-center gap-4 text-[11px]">
+            <span className="flex items-center gap-1 text-gray-600 dark:text-gray-300">
+              <span className="w-2 h-2 rounded-full bg-green-500" />
+              {t.catalog.matchedCount} {formatNumber(stats.matched)}
+            </span>
+            <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
+              <span className="w-2 h-2 rounded-full bg-gray-300 dark:bg-gray-600" />
+              {t.catalog.unmatchedCount} {formatNumber(stats.unmatched)}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* 자동 매칭 결과 */}
       {autoMatchResult && (

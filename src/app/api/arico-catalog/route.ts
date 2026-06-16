@@ -3,6 +3,30 @@ import { prisma } from '@/lib/prisma'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
+
+  // 매칭율 요약 통계 (stats=1)
+  if (searchParams.get('stats') === '1') {
+    try {
+      const [total, matched, matchedRows] = await Promise.all([
+        prisma.aricoCatalog.count(),
+        prisma.aricoCatalog.count({ where: { supplierProductId: { not: null } } }),
+        prisma.aricoCatalog.findMany({
+          where: { supplierProductId: { not: null } },
+          select: { supplierProduct: { select: { supplierCode: true } } },
+        }),
+      ])
+      const bySupplier: Record<string, number> = {}
+      for (const r of matchedRows) {
+        const c = r.supplierProduct?.supplierCode
+        if (c) bySupplier[c] = (bySupplier[c] ?? 0) + 1
+      }
+      return NextResponse.json({ total, matched, unmatched: total - matched, bySupplier })
+    } catch (err) {
+      console.error('arico-catalog stats error:', err)
+      return NextResponse.json({ total: 0, matched: 0, unmatched: 0, bySupplier: {} })
+    }
+  }
+
   const q = searchParams.get('q') ?? ''
   const limit = Number(searchParams.get('limit') ?? '50')
   const offset = Number(searchParams.get('offset') ?? '0')
