@@ -40,7 +40,7 @@ export function AricoMark({ size = 28, color = ARICO_GREEN, className = '' }: { 
 }
 
 export default function Logo({ size = 28, color = ARICO_GREEN, className = '' }: Props) {
-  const h = Math.round(size * 1.15)
+  const h = size
   const w = Math.round(h * LOGO_RATIO)
   return (
     // eslint-disable-next-line @next/next/no-img-element
@@ -53,7 +53,9 @@ export default function Logo({ size = 28, color = ARICO_GREEN, className = '' }:
       style={{
         height: h,
         width: 'auto',
+        maxWidth: '100%',
         objectFit: 'contain',
+        display: 'block',
         ...(isWhite(color) ? { filter: 'brightness(0) invert(1)' } : {}),
       }}
     />

@@ -62,9 +62,9 @@ export default function Sidebar() {
           <div className="md:hidden">
             <AricoMark size={32} />
           </div>
-          <div className="hidden md:flex items-center justify-between w-full">
-            <Logo size={30} />
-            <span className="text-gray-400 dark:text-slate-500 text-[10px] font-medium">Hub</span>
+          <div className="hidden md:flex items-center justify-between w-full gap-2 min-w-0">
+            <Logo size={22} className="min-w-0" />
+            <span className="text-gray-400 dark:text-slate-500 text-[10px] font-medium flex-shrink-0">Hub</span>
           </div>
         </div>
       </div>
