@@ -1,3 +1,4 @@
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@latest/dist/web/variable/pretendardvariable-dynamic-subset.css');
 @import "tailwindcss";
 
 /* ── 색상 토큰 (라이트 기본) ───────────────────────────
@@ -8,7 +9,7 @@
   --text:     #171717;   /* 본문 (대비 ~16:1) */
   --muted:    #4b5563;   /* 보조 텍스트 gray-600 (대비 ~7:1, AA 충족) */
   --border:   #e5e7eb;   /* 경계선 */
-  --link:     #2563eb;   /* 링크 blue-600 */
+  --link:     #2f7d55;   /* 링크 — ARICO 브랜드 그린 */
 
   /* 하위 호환 (기존 변수명 유지) */
   --background: var(--bg);
@@ -18,8 +19,39 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', 'Apple SD Gothic Neo', system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
+}
+
+/* ── 브랜드 토큰 (ARICO) — token-first 리테마 ─────────────
+   컴포넌트는 그대로 두고 색 램프만 재정의해 전역 일괄 적용.
+   ① blue 램프 → ARICO 브랜드 그린(#2f7d55, 로고색)
+   ② gray 램프 → 쿨 뉴트럴(slate)로 통일 (카드/페이지 톤 일치)
+   추후 blue / gray 유틸을 brand / neutral 로 점진 리네임 권장 */
+@theme {
+  --color-blue-50:  #eef7f2;
+  --color-blue-100: #d4ebdf;
+  --color-blue-200: #aad7bf;
+  --color-blue-300: #79bd9a;
+  --color-blue-400: #4ca478;
+  --color-blue-500: #3a8d62;
+  --color-blue-600: #2f7d55;
+  --color-blue-700: #265f43;
+  --color-blue-800: #1f4c36;
+  --color-blue-900: #18382a;
+  --color-blue-950: #0c2418;
+
+  --color-gray-50:  #f8fafc;
+  --color-gray-100: #f1f5f9;
+  --color-gray-200: #e2e8f0;
+  --color-gray-300: #cbd5e1;
+  --color-gray-400: #94a3b8;
+  --color-gray-500: #64748b;
+  --color-gray-600: #475569;
+  --color-gray-700: #334155;
+  --color-gray-800: #1e293b;
+  --color-gray-900: #0f172a;
+  --color-gray-950: #020617;
 }
 
 /* ── 다크 모드 토큰 (시스템 설정 연동) ──────────────────
@@ -31,14 +63,17 @@
     --text:    #f1f5f9;   /* slate-100 (대비 ~15:1) */
     --muted:   #cbd5e1;   /* slate-300 (보조 텍스트도 밝게 — 묻힘 방지) */
     --border:  #334155;   /* slate-700 */
-    --link:    #60a5fa;   /* blue-400 (어두운 배경에서 대비 확보) */
+    --link:    #79bd9a;   /* 밝은 브랜드 그린 (어두운 배경 대비 확보) */
   }
 }
 
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', 'Apple SD Gothic Neo', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
 }
 
 /* ── 반응형: 가로 스크롤·넘침 방지 ─────────────────────── */
