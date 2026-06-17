@@ -12,15 +12,14 @@ type Props = {
 export const ARICO_GREEN = '#2f7d55'
 
 export function AricoMark({ size = 28, color = ARICO_GREEN, className = '' }: { size?: number; color?: string; className?: string }) {
-  // 중심(50,50) 기준 3개 블레이드를 120°씩 회전 → 회전 핀휠(중앙 열림)
-  // 베이스가 중심에서 약간 떨어져(≈8px) 중앙에 빈 공간을 남기고, 한쪽으로 휘어 회전감
-  const blade = 'M50 42 C35 39 35 18 52 8 C63 21 60 37 50 42 Z'
+  // 자사몰 로고 재현: 두툼한 둥근 호 3개가 120°씩 휘감겨 원형 핀휠을 이룸(중앙 작은 구멍)
+  const arc = 'M52.44 22.11 A28 28 0 0 1 74.25 36.00'
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" className={className} aria-label="ARICO" role="img">
-      <g fill={color}>
-        <path d={blade} transform="rotate(0 50 50)" />
-        <path d={blade} transform="rotate(120 50 50)" />
-        <path d={blade} transform="rotate(240 50 50)" />
+      <g fill="none" stroke={color} strokeWidth={22} strokeLinecap="round">
+        <path d={arc} transform="rotate(0 50 50)" />
+        <path d={arc} transform="rotate(120 50 50)" />
+        <path d={arc} transform="rotate(240 50 50)" />
       </g>
     </svg>
   )

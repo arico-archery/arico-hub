@@ -285,49 +285,47 @@ export default function CatalogPage() {
       </div>
 
       {/* 매칭율 요약 */}
-      {stats && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 mb-3">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-baseline gap-2">
-              <span className="text-sm text-gray-500 dark:text-gray-400 font-medium">{t.catalog.matchRate}</span>
-              <span className="text-3xl font-bold text-gray-900 dark:text-white tabular-nums">
-                {stats.total > 0 ? ((stats.matched / stats.total) * 100).toFixed(1) : '0'}%
-              </span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {t.catalog.matchedCount} {formatNumber(stats.matched)} / {t.common.total} {formatNumber(stats.total)}
-              </span>
+      {stats && (() => {
+        const pct = stats.total > 0 ? (stats.matched / stats.total) * 100 : 0
+        const sorted = Object.entries(stats.bySupplier).sort((a, b) => b[1] - a[1])
+        return (
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 p-5 mb-3">
+            <div className="flex items-end justify-between gap-4 flex-wrap">
+              <div>
+                <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-1">{t.catalog.matchRate}</p>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-4xl font-semibold text-gray-900 dark:text-white tabular-nums leading-none">{pct.toFixed(1)}</span>
+                  <span className="text-lg text-gray-500 dark:text-gray-400">%</span>
+                </div>
+              </div>
+              <div className="text-right text-sm text-gray-500 dark:text-gray-400 tabular-nums">
+                <p>
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">{formatNumber(stats.matched)}</span> {t.catalog.matchedCount}
+                  {' · '}
+                  <span className="font-medium">{formatNumber(stats.unmatched)}</span> {t.catalog.unmatchedCount}
+                </p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{t.common.total} {formatNumber(stats.total)}{t.common.items}</p>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {Object.entries(stats.bySupplier).sort((a, b) => b[1] - a[1]).map(([code, n]) => (
-                <span
-                  key={code}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium text-white"
-                  style={{ backgroundColor: SUPPLIER_COLORS[code] ?? '#6b7280' }}
-                >
-                  {code} <span className="font-bold">{formatNumber(n)}</span>
+            {/* 누적 구성 바 — 공급사별 비율 + 미매칭(회색) */}
+            <div className="mt-4 h-2 w-full rounded-full overflow-hidden flex bg-gray-100 dark:bg-gray-700">
+              {sorted.map(([code, n]) => (
+                <div key={code} style={{ width: `${(n / stats.total) * 100}%`, backgroundColor: SUPPLIER_COLORS[code] ?? '#6b7280' }} title={`${code} ${n}`} />
+              ))}
+            </div>
+            {/* 레전드 */}
+            <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-x-4 gap-y-1.5">
+              {sorted.map(([code, n]) => (
+                <span key={code} className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: SUPPLIER_COLORS[code] ?? '#6b7280' }} />
+                  {code}
+                  <b className="ml-auto font-medium text-gray-900 dark:text-gray-100 tabular-nums">{formatNumber(n)}</b>
                 </span>
               ))}
             </div>
           </div>
-          {/* 진행 바 */}
-          <div className="mt-3 h-2.5 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-            <div
-              className="h-full bg-green-500 rounded-full transition-all"
-              style={{ width: `${stats.total > 0 ? (stats.matched / stats.total) * 100 : 0}%` }}
-            />
-          </div>
-          <div className="mt-1.5 flex items-center gap-4 text-[11px]">
-            <span className="flex items-center gap-1 text-gray-600 dark:text-gray-300">
-              <span className="w-2 h-2 rounded-full bg-green-500" />
-              {t.catalog.matchedCount} {formatNumber(stats.matched)}
-            </span>
-            <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400">
-              <span className="w-2 h-2 rounded-full bg-gray-300 dark:bg-gray-600" />
-              {t.catalog.unmatchedCount} {formatNumber(stats.unmatched)}
-            </span>
-          </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* 자동 매칭 결과 */}
       {autoMatchResult && (
