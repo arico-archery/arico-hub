@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, RefreshCw, ChevronLeft, ChevronRight, Link2, Link2Off, X, Check, Wand2 } from 'lucide-react'
+import { Search, RefreshCw, ChevronLeft, ChevronRight, Link2, Link2Off, X, Check, Wand2, ImageOff } from 'lucide-react'
 import { formatNumber, SUPPLIER_COLORS } from '@/lib/utils'
 import Image from 'next/image'
 import { useT } from '@/lib/i18n'
@@ -32,6 +32,24 @@ type CatalogStats = {
 }
 
 const PAGE_SIZE = 96
+
+// 카탈로그 상품 이미지 — URL이 없거나 로딩 실패 시 "이미지 없음" placeholder
+function CatalogImage({ src, alt, label }: { src?: string; alt: string; label: string }) {
+  const [err, setErr] = useState(false)
+  if (!src || err) {
+    return (
+      <div className="aspect-[1/1] bg-gray-50 dark:bg-gray-700/40 flex flex-col items-center justify-center gap-1 text-gray-300 dark:text-gray-600">
+        <ImageOff className="w-1/4 h-1/4" strokeWidth={1.5} />
+        <span className="text-[10px] text-gray-400 dark:text-gray-500">{label}</span>
+      </div>
+    )
+  }
+  return (
+    <div className="aspect-[1/1] bg-gray-50 dark:bg-gray-700 relative overflow-hidden">
+      <Image src={src} alt={alt} fill className="object-contain p-1" unoptimized onError={() => setErr(true)} />
+    </div>
+  )
+}
 
 // ── 매칭 모달 ─────────────────────────────────────────
 function MatchModal({
@@ -404,14 +422,8 @@ export default function CatalogPage() {
           const matched = item.matchedProduct
           return (
             <div key={item.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow flex flex-col group">
-              {/* 이미지 (축소) */}
-              {img ? (
-                <div className="aspect-[1/1] bg-gray-50 dark:bg-gray-700 relative overflow-hidden">
-                  <Image src={img} alt={item.name} fill className="object-contain p-1" unoptimized />
-                </div>
-              ) : (
-                <div className="aspect-[1/1] bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-300 text-2xl">□</div>
-              )}
+              {/* 이미지 — 없거나 로딩 실패 시 "이미지 없음" placeholder */}
+              <CatalogImage src={img} alt={item.name} label={t.catalog.noImage} />
 
               {/* 정보 (컴팩트) */}
               <div className="p-1.5 flex flex-col flex-1">
