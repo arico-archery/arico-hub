@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Package, ShoppingCart, CreditCard,
-  Users, BarChart3, Settings, RefreshCw, ChevronRight, Globe, Truck, ClipboardList, BookOpen, LogOut
+  Users, BarChart3, Settings, RefreshCw, ChevronRight, Globe, Truck, ClipboardList, BookOpen, LogOut,
+  Sun, Moon
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -17,10 +18,19 @@ export default function Sidebar() {
   const { lang, toggle, t } = useI18n()
   const [role, setRole] = useState<string>('')
   const isSuper = role === 'super_admin'
+  const [dark, setDark] = useState(false)
 
   useEffect(() => {
     fetch('/api/me').then(r => r.ok ? r.json() : null).then(d => { if (d?.role) setRole(d.role) }).catch(() => {})
+    setDark(document.documentElement.classList.contains('dark'))
   }, [])
+
+  const toggleTheme = () => {
+    const next = !document.documentElement.classList.contains('dark')
+    document.documentElement.classList.toggle('dark', next)
+    try { localStorage.setItem('theme', next ? 'dark' : 'light') } catch { /* 무시 */ }
+    setDark(next)
+  }
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' })
@@ -81,6 +91,20 @@ export default function Sidebar() {
           )
         })}
       </nav>
+
+      {/* 테마 전환 버튼 */}
+      <div className="px-2 md:px-3 pb-2">
+        <button
+          onClick={toggleTheme}
+          title={lang === 'ko' ? (dark ? '라이트 모드로' : '다크 모드로') : (dark ? 'ライトモードへ' : 'ダークモードへ')}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors justify-center md:justify-start"
+        >
+          {dark ? <Sun className="w-4 h-4 flex-shrink-0" /> : <Moon className="w-4 h-4 flex-shrink-0" />}
+          <span className="hidden md:inline">
+            {lang === 'ko' ? (dark ? '라이트 모드' : '다크 모드') : (dark ? 'ライトモード' : 'ダークモード')}
+          </span>
+        </button>
+      </div>
 
       {/* 언어 전환 버튼 */}
       <div className="px-2 md:px-3 pb-3">

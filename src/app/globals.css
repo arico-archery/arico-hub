@@ -1,6 +1,9 @@
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@latest/dist/web/variable/pretendardvariable-dynamic-subset.css');
 @import "tailwindcss";
 
+/* 다크모드를 .dark 클래스 기반으로 전환 (시스템 설정 대신 수동 토글 지원) */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ── 색상 토큰 (라이트 기본) ───────────────────────────
    순수 흰/검정 대신 눈이 편한 톤. 본문 대비 WCAG AA(4.5:1) 충족. */
 :root {
@@ -56,15 +59,14 @@
 
 /* ── 다크 모드 토큰 (시스템 설정 연동) ──────────────────
    순수 검정 대신 slate 톤, 본문은 밝은 회색으로 묻힘 방지. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg:      #0f172a;   /* slate-900 */
-    --surface: #1e293b;   /* slate-800 */
-    --text:    #f1f5f9;   /* slate-100 (대비 ~15:1) */
-    --muted:   #cbd5e1;   /* slate-300 (보조 텍스트도 밝게 — 묻힘 방지) */
-    --border:  #334155;   /* slate-700 */
-    --link:    #79bd9a;   /* 밝은 브랜드 그린 (어두운 배경 대비 확보) */
-  }
+/* 다크 토큰 — .dark 클래스 토글 기반 (수동 전환) */
+.dark {
+  --bg:      #0f172a;   /* slate-900 */
+  --surface: #1e293b;   /* slate-800 */
+  --text:    #f1f5f9;   /* slate-100 (대비 ~15:1) */
+  --muted:   #cbd5e1;   /* slate-300 (보조 텍스트도 밝게 — 묻힘 방지) */
+  --border:  #334155;   /* slate-700 */
+  --link:    #79bd9a;   /* 밝은 브랜드 그린 */
 }
 
 body {
@@ -92,39 +94,33 @@ table, pre {
 
 /* ── 다크 모드 가독성 보정 (저대비로 묻히기 쉬운 요소) ─────
    Tailwind dark: 유틸을 안 쓴 곳까지 시스템 다크모드에서 보정. */
-@media (prefers-color-scheme: dark) {
-  /* 가장 흐린 보조 텍스트(gray-400/500)는 다크 배경에서 더 밝게 */
-  .text-gray-400 { color: #9ca3af !important; } /* gray-400 → 유지(대비 확보 수준) */
-  .text-gray-500 { color: #9ca3af !important; } /* gray-500 → gray-400 로 밝게 */
-  /* 링크 기본색이 너무 어두우면 밝게 */
-  a:not([class*="text-"]):not([class*="bg-"]) { color: var(--link); }
-}
+/* 다크 가독성 보정 (.dark 스코프) */
+.dark .text-gray-400 { color: #9ca3af !important; }
+.dark .text-gray-500 { color: #9ca3af !important; }
+.dark a:not([class*="text-"]):not([class*="bg-"]) { color: var(--link); }
 
 /* ── 다크모드 전역 폼 요소 ──────────────────────────── */
-@media (prefers-color-scheme: dark) {
-  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
-  select,
-  textarea {
-    background-color: #374151;
-    color: #f9fafb;
-    border-color: #4b5563;
-  }
-  input:not([type="checkbox"]):not([type="radio"]):not([type="file"])::placeholder,
-  textarea::placeholder {
-    color: #9ca3af;
-  }
-  input[type="date"]::-webkit-calendar-picker-indicator {
-    filter: invert(1);
-  }
-  /* 파일 입력 */
-  input[type="file"] {
-    color: #d1d5db;
-  }
-  /* 옵션 드롭다운 */
-  option {
-    background-color: #374151;
-    color: #f9fafb;
-  }
+/* 다크 전역 폼 요소 (.dark 스코프) */
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.dark select,
+.dark textarea {
+  background-color: #374151;
+  color: #f9fafb;
+  border-color: #4b5563;
+}
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="file"])::placeholder,
+.dark textarea::placeholder {
+  color: #9ca3af;
+}
+.dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+.dark input[type="file"] {
+  color: #d1d5db;
+}
+.dark option {
+  background-color: #374151;
+  color: #f9fafb;
 }
 
 @media print {
