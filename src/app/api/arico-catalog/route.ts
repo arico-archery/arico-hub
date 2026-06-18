@@ -80,20 +80,33 @@ export async function GET(req: Request) {
   }
 }
 
-// PATCH /api/arico-catalog — { id, supplierProductId: number | null }
+// PATCH /api/arico-catalog — { id, supplierProductId?: number | null, barcode?: string }
 export async function PATCH(req: Request) {
-  const { id, supplierProductId } = await req.json() as { id: number; supplierProductId: number | null }
+  const body = await req.json() as { id: number; supplierProductId?: number | null; barcode?: string }
+  const { id } = body
 
-  const catalog = await prisma.aricoCatalog.update({ where: { id }, data: { supplierProductId } })
+  const data: { supplierProductId?: number | null; barcode?: string } = {}
+  if ('supplierProductId' in body) data.supplierProductId = body.supplierProductId
+  if (body.barcode !== undefined) data.barcode = body.barcode.trim()
+
+  const catalog = await prisma.aricoCatalog.update({ where: { id }, data })
 
   // 매칭 시 ARICO 카탈로그 판매가를 공급사 상품 salePriceJpy에 자동 반영
   let priceJpyApplied = 0
-  if (supplierProductId && catalog.priceJpy > 0) {
+  if (data.supplierProductId && catalog.priceJpy > 0) {
     await prisma.product.update({
-      where: { id: supplierProductId },
+      where: { id: data.supplierProductId },
       data: { salePriceJpy: catalog.priceJpy },
     })
     priceJpyApplied = catalog.priceJpy
+  }
+
+  // 바코드(JAN)를 매칭된 공급사 상품에도 전파 → 양쪽에서 Smaregi 재고 조회 가능
+  if (body.barcode !== undefined && catalog.supplierProductId) {
+    await prisma.product.update({
+      where: { id: catalog.supplierProductId },
+      data: { barcode: body.barcode.trim() },
+    }).catch(() => { /* 삭제된 상품 등 무시 */ })
   }
 
   return NextResponse.json({ ok: true, priceJpyApplied })

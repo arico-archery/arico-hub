@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, RefreshCw, ChevronLeft, ChevronRight, Link2, Link2Off, X, Check, Wand2, ImageOff } from 'lucide-react'
+import { Search, RefreshCw, ChevronLeft, ChevronRight, Link2, Link2Off, X, Check, Wand2, ImageOff, Barcode, Languages } from 'lucide-react'
 import { formatNumber, SUPPLIER_COLORS } from '@/lib/utils'
 import Image from 'next/image'
 import { useT } from '@/lib/i18n'
@@ -17,6 +17,7 @@ type CatalogItem = {
   priceJpy: number; priceJpyNotax: number; msrpJpy: number
   imageUrl1: string; imageUrl2: string; url: string
   supplierProductId: number | null
+  barcode: string
   matchedProduct: MatchedProduct | null
 }
 
@@ -59,14 +60,40 @@ function MatchModal({
 }: {
   item: CatalogItem
   onClose: () => void
-  onMatch: (catalogId: number, product: SupplierProduct | null) => void
+  onMatch: (catalogId: number, product: SupplierProduct | null, barcode?: string) => void
 }) {
   const tr = useT()
   const [q, setQ] = useState(item.brand ? item.brand.split(' ')[0] : '')
   const [results, setResults] = useState<SupplierProduct[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [barcode, setBarcode] = useState(item.barcode ?? '')
+  const [translating, setTranslating] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const translateSearch = async () => {
+    if (!item.name) return
+    setTranslating(true)
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: item.name, from: 'ja', to: 'en' }),
+      })
+      const d = await res.json()
+      if (d.translated) setQ(d.translated)
+    } catch { /* 무시 */ }
+    setTranslating(false)
+  }
+
+  const saveBarcode = async () => {
+    setSaving(true)
+    await fetch('/api/arico-catalog', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: item.id, barcode }),
+    })
+    onMatch(item.id, item.matchedProduct, barcode)
+    setSaving(false)
+  }
 
   const search = useCallback(async (query: string) => {
     if (!query.trim()) { setResults([]); return }
@@ -88,9 +115,9 @@ function MatchModal({
     await fetch('/api/arico-catalog', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: item.id, supplierProductId: product?.id ?? null }),
+      body: JSON.stringify({ id: item.id, supplierProductId: product?.id ?? null, barcode }),
     })
-    onMatch(item.id, product)
+    onMatch(item.id, product, barcode)
     setSaving(false)
     onClose()
   }
@@ -120,9 +147,24 @@ function MatchModal({
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded"><X className="w-4 h-4" /></button>
         </div>
 
-        {/* 검색 */}
-        <div className="px-6 py-3 border-b border-gray-100 dark:border-gray-700">
-          <div className="relative">
+        {/* 바코드(JAN) 바인딩 — 스캐너 입력 또는 수기 */}
+        <div className="px-6 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center gap-2">
+          <Barcode className="w-4 h-4 text-gray-400 shrink-0" />
+          <input
+            value={barcode}
+            onChange={e => setBarcode(e.target.value)}
+            placeholder={tr.catalog.barcodePlaceholder}
+            className="flex-1 min-w-0 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button onClick={saveBarcode} disabled={saving}
+            className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50 shrink-0">
+            {tr.catalog.barcodeSave}
+          </button>
+        </div>
+
+        {/* 검색 (+ 일→영 번역 검색) */}
+        <div className="px-6 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center gap-2">
+          <div className="relative flex-1 min-w-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               ref={inputRef}
@@ -132,6 +174,11 @@ function MatchModal({
               className="w-full pl-9 pr-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          <button onClick={translateSearch} disabled={translating} title={tr.catalog.translateSearch}
+            className="flex items-center gap-1 px-2.5 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 shrink-0">
+            <Languages className={`w-3.5 h-3.5 ${translating ? 'animate-pulse' : ''}`} />
+            {tr.catalog.translateSearch}
+          </button>
         </div>
 
         {/* 결과 */}
@@ -238,10 +285,10 @@ export default function CatalogPage() {
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
-  const handleMatch = (catalogId: number, product: SupplierProduct | null) => {
+  const handleMatch = (catalogId: number, product: SupplierProduct | null, barcode?: string) => {
     setItems(prev => prev.map(item =>
       item.id === catalogId
-        ? { ...item, supplierProductId: product?.id ?? null, matchedProduct: product ?? null }
+        ? { ...item, supplierProductId: product?.id ?? null, matchedProduct: product ?? null, ...(barcode !== undefined ? { barcode } : {}) }
         : item
     ))
     fetchStats()
@@ -421,7 +468,12 @@ export default function CatalogPage() {
           const img = item.imageUrl2 || item.imageUrl1
           const matched = item.matchedProduct
           return (
-            <div key={item.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow flex flex-col group">
+            <div key={item.id} className="relative bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow flex flex-col group">
+              {item.barcode && (
+                <span className="absolute top-1 right-1 z-10 flex items-center justify-center w-5 h-5 rounded text-white" style={{ backgroundColor: '#2f7d55' }} title={`JAN ${item.barcode}`}>
+                  <Barcode className="w-3 h-3" />
+                </span>
+              )}
               {/* 이미지 — 없거나 로딩 실패 시 "이미지 없음" placeholder */}
               <CatalogImage src={img} alt={item.name} label={t.catalog.noImage} />
 
