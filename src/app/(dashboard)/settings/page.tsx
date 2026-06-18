@@ -103,6 +103,12 @@ export default function SettingsPage() {
   const [rateInput, setRateInput] = useState('')
   const [rateSaving, setRateSaving] = useState(false)
 
+  // SIBUYA 자동 동기화 (크롤링)
+  const [syncConfirm, setSyncConfirm] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [syncProg, setSyncProg] = useState<{ phase: string; page: number; maxPage: number; done: number; total: number; imported: number }>({ phase: '', page: 0, maxPage: 0, done: 0, total: 0, imported: 0 })
+  const [syncResult, setSyncResult] = useState<{ total: number; imported: number } | null>(null)
+
   // 계좌 설정
   const [bank, setBank] = useState<BankSettings>({
     bank_name: '', bank_branch: '', bank_account_type: '普通',
@@ -213,6 +219,54 @@ export default function SettingsPage() {
       setError(String(e))
     }
     setImporting(false)
+  }
+
+  // SIBUYA 크롤링 동기화 — 클라이언트 주도 배치 (타임아웃 방지)
+  const runSibuyaSync = async () => {
+    setSyncConfirm(false)
+    setSyncing(true)
+    setSyncResult(null)
+    setError('')
+    setSyncProg({ phase: 'list', page: 0, maxPage: 0, done: 0, total: 0, imported: 0 })
+    try {
+      // Phase 1: 목록 수집
+      type LI = { code: string; name: string; msrp: number; image: string; url: string }
+      const all: LI[] = []
+      let maxPage = 1
+      let page = 1
+      do {
+        const r = await fetch(`/api/import/sibuya-sync?page=${page}`)
+        const d = await r.json()
+        if (d.error) throw new Error(d.error)
+        maxPage = d.maxPage || 1
+        all.push(...(d.items || []))
+        setSyncProg(p => ({ ...p, phase: 'list', page, maxPage }))
+        page++
+      } while (page <= maxPage)
+
+      // 중복 제거
+      const seen = new Set<string>()
+      const items = all.filter(it => (seen.has(it.code) ? false : (seen.add(it.code), true)))
+
+      // Phase 2: 상세 + upsert (배치 20)
+      const BATCH = 20
+      let imported = 0
+      for (let i = 0; i < items.length; i += BATCH) {
+        const chunk = items.slice(i, i + BATCH)
+        const r = await fetch('/api/import/sibuya-sync', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: chunk }),
+        })
+        const d = await r.json()
+        imported += d.imported || 0
+        setSyncProg(p => ({ ...p, phase: 'detail', done: Math.min(i + BATCH, items.length), total: items.length, imported }))
+      }
+      setSyncResult({ total: items.length, imported })
+      loadStats()
+    } catch (e) {
+      setError('SIBUYA 동기화 오류: ' + String(e))
+    }
+    setSyncing(false)
   }
 
   const selected = SUPPLIERS.find(s => s.code === selectedSupplier)
@@ -417,6 +471,76 @@ export default function SettingsPage() {
           >
             {importing ? t.settings.importing : t.settings.importStart}
           </button>
+
+          {/* SIBUYA 전용 — 자동 크롤링 동기화 (확인 후 실행) */}
+          {selectedSupplier === 'SIBUYA' && (
+            <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 text-center mb-2">— {t.settings.sibuyaSyncOr} —</p>
+              <button
+                onClick={() => setSyncConfirm(true)}
+                disabled={syncing}
+                className="w-full flex items-center justify-center gap-2 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+              >
+                <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+                {syncing ? t.settings.sibuyaSyncing : t.settings.sibuyaSync}
+              </button>
+
+              {syncing && (
+                <div className="mt-2">
+                  <div className="flex justify-between text-[11px] text-gray-500 dark:text-gray-400 mb-1">
+                    <span>{syncProg.phase === 'list'
+                      ? `${t.settings.sibuyaSyncListing} ${syncProg.page}/${syncProg.maxPage || '?'}`
+                      : `${t.settings.sibuyaSyncDetail} ${syncProg.done}/${syncProg.total}`}</span>
+                    <span className="tabular-nums">✓ {syncProg.imported}</span>
+                  </div>
+                  <div className="h-1.5 w-full rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{
+                      width: `${syncProg.total > 0
+                        ? (syncProg.done / syncProg.total) * 100
+                        : (syncProg.maxPage ? (syncProg.page / syncProg.maxPage) * 25 : 5)}%`,
+                      backgroundColor: '#2f7d55',
+                    }} />
+                  </div>
+                </div>
+              )}
+
+              {syncResult && !syncing && (
+                <div className="mt-2 p-2.5 bg-green-50 dark:bg-green-900/20 rounded-lg flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
+                  <p className="text-xs text-green-700 dark:text-green-400">
+                    {t.settings.sibuyaSyncDone} — <strong>{syncResult.imported}</strong> / {syncResult.total}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 동기화 실행 전 확인 모달 (실수 클릭 방지) */}
+          {syncConfirm && (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSyncConfirm(false)}>
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertCircle className="w-5 h-5 text-yellow-500 shrink-0" />
+                  <h3 className="font-semibold text-gray-900 dark:text-white">{t.settings.sibuyaSyncConfirmTitle}</h3>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-5">{t.settings.sibuyaSyncConfirmBody}</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setSyncConfirm(false)}
+                    className="flex-1 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  >
+                    {t.common.cancel}
+                  </button>
+                  <button
+                    onClick={runSibuyaSync}
+                    className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
+                  >
+                    {t.settings.sibuyaSyncRun}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {result && (
             <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
