@@ -44,6 +44,7 @@ model Product {
   optionSize      String    @default("") // サイズ e.g., LH, RH, #1, 30-40#
   optionColor     String    @default("") // カラー e.g., シルバー, ブラック
   shopProductId   String    @default("") // 仕入先ショップの商品ID (SIBUYA 商品ID等)
+  barcode         String    @default("") // JAN 바코드 — Smaregi 재고 연결 키 (SKU 정체성)
   scrapedAt       DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -55,6 +56,7 @@ model Product {
   @@unique([supplierCode, productCode])
   @@index([brand])
   @@index([supplierCode])
+  @@index([barcode])
 }
 
 model ExchangeRate {
@@ -217,8 +219,10 @@ model AricoCatalog {
   supplierProduct Product? @relation(fields: [supplierProductId], references: [id], onDelete: SetNull)
   // ARICO 자사몰 옵션 (JSON: [{label, values:[...]}]) — 주문 시 옵션 선택용
   options         String   @default("") @map("options")
+  barcode         String   @default("") @map("barcode") // JAN 바코드 — Smaregi 재고 연결 키
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
 
+  @@index([barcode])
   @@map("arico_catalog")
 }
