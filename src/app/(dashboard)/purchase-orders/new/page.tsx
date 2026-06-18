@@ -11,7 +11,12 @@ import { useT } from '@/lib/i18n'
 type Supplier = { code: string; currency: string; taxRate: number; discount: number }
 type Product  = { id: number; name: string; brand: string; productCode: string; supplierCode: string; costPrice: number; supplier: Supplier; optionSize: string; optionColor: string }
 type ExchangeRate = { currency: string; rateToJpy: number }
-type POLine   = { product: Product; quantity: number; unitCostJpy: number }
+type VariantAxis = { label: string; values: string[] }
+type VItem = Product & { options: Record<string, string>; optionLabel: string }
+type POLine   = {
+  product: Product; quantity: number; unitCostJpy: number
+  variantAxes?: VariantAxis[]; variantList?: VItem[]; variantAxisSel?: Record<string, string>
+}
 
 export default function NewPurchaseOrderPage() {
   const router = useRouter()
@@ -54,6 +59,55 @@ export default function NewPurchaseOrderPage() {
     }
     setProductSearch('')
     setSearchResults([])
+    loadVariantsFor(p.id)
+  }
+
+  // 같은 그룹의 옵션 변형(JVD 코드접두부 / SIBUYA 베이스명)을 불러와 라인에 부착
+  const loadVariantsFor = (productId: number) => {
+    fetch(`/api/products/variants?productId=${productId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (!Array.isArray(d.variants) || d.variants.length < 2) return
+        if (!Array.isArray(d.axes) || d.axes.length === 0) return
+        const cur = (d.variants as VItem[]).find(v => v.id === productId)
+        setLines(prev => prev.map(l =>
+          l.product.id === productId && !l.variantAxes
+            ? { ...l, variantAxes: d.axes, variantList: d.variants, variantAxisSel: cur ? { ...cur.options } : {} }
+            : l))
+      })
+      .catch(() => {})
+  }
+
+  // 캐스케이드: 앞선 축 선택과 양립 가능한 변형 중 해당 축의 고를 수 있는 값
+  const availableAxisValues = (variants: VItem[], axisLabel: string, sel: Record<string, string>): string[] => {
+    const others = Object.keys(sel).filter(k => k !== axisLabel && sel[k])
+    const out: string[] = []
+    for (const v of variants) {
+      if (!others.every(k => v.options[k] === sel[k])) continue
+      const val = v.options[axisLabel]
+      if (val && !out.includes(val)) out.push(val)
+    }
+    return out
+  }
+
+  // 옵션 축 선택 → 변형 해결. 전체 축 지정 시 그 변형으로 라인 교체(원본 중복 시 첫 변형).
+  const changeVariantAxis = (idx: number, axisLabel: string, value: string) => {
+    setLines(prev => prev.map((l, i) => {
+      if (i !== idx || !l.variantList) return l
+      const sel = { ...(l.variantAxisSel || {}) }
+      if (value) sel[axisLabel] = value; else delete sel[axisLabel]
+      for (const ax of l.variantAxes || []) {
+        if (ax.label === axisLabel) continue
+        if (sel[ax.label] && !availableAxisValues(l.variantList, ax.label, sel).includes(sel[ax.label])) delete sel[ax.label]
+      }
+      const keys = Object.keys(sel).filter(k => sel[k])
+      const matches = l.variantList.filter(v => keys.every(k => v.options[k] === sel[k]))
+      if (matches.length >= 1 && keys.length >= (l.variantAxes?.length || 0)) {
+        const v = matches[0]
+        return { ...l, variantAxisSel: sel, product: v, unitCostJpy: calcCostJpy(v, rates) }
+      }
+      return { ...l, variantAxisSel: sel }
+    }))
   }
 
   const updateLine = (idx: number, field: 'quantity' | 'unitCostJpy', val: number) => {
@@ -179,13 +233,31 @@ export default function NewPurchaseOrderPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <SupplierBadge code={line.product.supplierCode} />
-                          <div>
+                          <div className="min-w-0">
                             <p className="font-medium text-gray-900 dark:text-gray-100 leading-tight">{line.product.name}</p>
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <p className="text-xs text-gray-400">{line.product.productCode}</p>
                               {line.product.optionSize && <span className="text-xs px-1 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 font-medium">{line.product.optionSize}</span>}
                               {line.product.optionColor && <span className="text-xs px-1 py-0.5 rounded bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 font-medium">{line.product.optionColor}</span>}
                             </div>
+                            {line.variantAxes && line.variantAxes.length > 0 && line.variantList && (
+                              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                {line.variantAxes.map(ax => {
+                                  const vals = availableAxisValues(line.variantList!, ax.label, line.variantAxisSel || {})
+                                  return (
+                                    <select
+                                      key={ax.label}
+                                      value={line.variantAxisSel?.[ax.label] ?? ''}
+                                      onChange={e => changeVariantAxis(idx, ax.label, e.target.value)}
+                                      className="border border-gray-200 dark:border-gray-600 rounded px-2 py-1 text-xs text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    >
+                                      <option value="">{ax.label}</option>
+                                      {vals.map(v => <option key={v} value={v}>{v}</option>)}
+                                    </select>
+                                  )
+                                })}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </td>
