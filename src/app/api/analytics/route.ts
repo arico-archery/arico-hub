@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server'
+import { unstable_cache } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url)
-  const rangeParam = searchParams.get('range') ?? '6m'  // 6m | 12m | ytd | all
-
+// 수익 분석 집계 — 60초 캐시(무거운 groupBy/스캔 반복 방지)
+async function buildAnalytics(rangeParam: string) {
   const now = new Date()
 
   // 기간 계산
@@ -156,7 +155,7 @@ export async function GET(req: Request) {
   const totalReceivable = receivables.reduce((s, r) => s + r.balance, 0)
   const totalOverdue = receivables.reduce((s, r) => s + r.overdue, 0)
 
-  return NextResponse.json({
+  return {
     monthlyData,
     allTime: {
       sales: allTime._sum.totalAmountJpy ?? 0,
@@ -183,5 +182,13 @@ export async function GET(req: Request) {
       paid: c._sum.paidAmountJpy ?? 0,
       customer: customerMap[c.customerId] ?? null,
     })),
-  })
+  }
+}
+
+const getCachedAnalytics = unstable_cache(buildAnalytics, ['analytics'], { revalidate: 60 })
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url)
+  const rangeParam = searchParams.get('range') ?? '6m'
+  return NextResponse.json(await getCachedAnalytics(rangeParam))
 }

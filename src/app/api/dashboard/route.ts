@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
+import { unstable_cache } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url)
-  const range = searchParams.get('range') ?? 'month'  // month | 6m | all
+// 집계 데이터 — 60초 캐시(Vercel Data Cache). 콜드스타트/반복 진입 시 즉시 응답.
+async function buildDashboard(range: string) {
   const now = new Date()
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
   const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
@@ -126,7 +126,7 @@ export async function GET(req: Request) {
   // 미결 중 연체 (dueDate 지남)
   const overdueOrders = unpaidOrders.filter(o => o.dueDate && new Date(o.dueDate) < now)
 
-  return NextResponse.json({
+  return {
     monthlySales,
     monthlyProfit,
     monthlyMargin,
@@ -149,5 +149,13 @@ export async function GET(req: Request) {
     totalProducts,
     pricedProducts,
     unpricedBySupplier: unpricedGroups.map(g => ({ supplierCode: g.supplierCode, _count: g._count })),
-  })
+  }
+}
+
+const getCachedDashboard = unstable_cache(buildDashboard, ['dashboard'], { revalidate: 60 })
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url)
+  const range = searchParams.get('range') ?? 'month'
+  return NextResponse.json(await getCachedDashboard(range))
 }
