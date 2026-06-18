@@ -1,6 +1,6 @@
 {
   "name": "arico-hub",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -17,6 +17,8 @@
   "dependencies": {
     "@prisma/client": "^5.22.0",
     "@types/better-sqlite3": "^7.6.13",
+    "@zxing/browser": "^0.2.0",
+    "@zxing/library": "^0.22.0",
     "better-sqlite3": "^12.10.0",
     "cheerio": "^1.2.0",
     "class-variance-authority": "^0.7.1",

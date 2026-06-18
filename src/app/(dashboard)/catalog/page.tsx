@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, RefreshCw, ChevronLeft, ChevronRight, Link2, Link2Off, X, Check, Wand2, ImageOff, Barcode, Languages } from 'lucide-react'
+import { Search, RefreshCw, ChevronLeft, ChevronRight, Link2, Link2Off, X, Check, Wand2, ImageOff, Barcode, Languages, ScanLine } from 'lucide-react'
+import BarcodeScanner from '@/components/BarcodeScanner'
 import { formatNumber, SUPPLIER_COLORS } from '@/lib/utils'
 import Image from 'next/image'
 import { useT } from '@/lib/i18n'
@@ -69,6 +70,7 @@ function MatchModal({
   const [saving, setSaving] = useState(false)
   const [barcode, setBarcode] = useState(item.barcode ?? '')
   const [translating, setTranslating] = useState(false)
+  const [showScanner, setShowScanner] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const translateSearch = async () => {
@@ -156,11 +158,18 @@ function MatchModal({
             placeholder={tr.catalog.barcodePlaceholder}
             className="flex-1 min-w-0 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-1.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+          <button onClick={() => setShowScanner(true)} title={tr.common.scanTitle}
+            className="px-2.5 py-1.5 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 shrink-0">
+            <ScanLine className="w-4 h-4" />
+          </button>
           <button onClick={saveBarcode} disabled={saving}
             className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50 shrink-0">
             {tr.catalog.barcodeSave}
           </button>
         </div>
+        {showScanner && (
+          <BarcodeScanner onResult={code => { setBarcode(code); setShowScanner(false) }} onClose={() => setShowScanner(false)} />
+        )}
 
         {/* 검색 (+ 일→영 번역 검색) */}
         <div className="px-6 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center gap-2">
