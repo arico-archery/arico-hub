@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, Package, RefreshCw, Save, CheckCircle, ChevronLeft, ChevronRight, Tag, Download, Percent, Plus, Pencil, Trash2, X } from 'lucide-react'
+import { Search, Package, RefreshCw, Save, CheckCircle, ChevronLeft, ChevronRight, Tag, Tags, Download, Percent, Plus, Pencil, Trash2, X, AlertTriangle } from 'lucide-react'
 import SupplierBadge from '@/components/SupplierBadge'
 import ProfitBar from '@/components/ProfitBar'
 import { formatJpy, formatNumber, calcProfitRate, calcCostJpy, SUPPLIER_COLORS, SUPPLIER_LIST } from '@/lib/utils'
@@ -34,6 +34,15 @@ export default function ProductsPage() {
   const [supplierFilter, setSupplierFilter] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [categories, setCategories] = useState<string[]>([])
+  const [brands, setBrands] = useState<string[]>([])
+  const [brandFilter, setBrandFilter] = useState('')
+  // 브랜드 관리 모달
+  const [brandModal, setBrandModal] = useState(false)
+  const [brandSel, setBrandSel] = useState('')
+  const [brandRenameTo, setBrandRenameTo] = useState('')
+  const [brandBusy, setBrandBusy] = useState(false)
+  const [brandMsg, setBrandMsg] = useState<string | null>(null)
+  const [brandDelConfirm, setBrandDelConfirm] = useState(false)
   const [noPriceOnly, setNoPriceOnly] = useState(false)
   const [products, setProducts] = useState<Product[]>([])
   const [rates, setRates] = useState<ExchangeRate[]>([])
@@ -114,9 +123,33 @@ export default function ProductsPage() {
     fetchProducts(page)
   }
 
+  // 브랜드 일괄 작업 (이름변경/병합/삭제) — 현재 선택된 공급사 범위
+  const runBrandOp = async (payload: { action: 'rename' | 'delete'; to?: string; mode?: 'clear' | 'products' }) => {
+    if (!brandSel) return
+    setBrandBusy(true); setBrandMsg(null)
+    try {
+      const res = await fetch('/api/products/brand', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ supplierCode: supplierFilter || undefined, brand: brandSel, ...payload }),
+      })
+      const d = await res.json()
+      if (!res.ok) { setBrandMsg('⚠️ ' + (d.error || res.status)); return }
+      if (payload.action === 'rename') setBrandMsg(`✅ ${d.updated}${t.common.items}`)
+      else if (payload.mode === 'clear') setBrandMsg(`✅ ${d.cleared}${t.common.items}`)
+      else setBrandMsg(`✅ ${d.deleted}${t.common.items} / skip ${d.skipped}`)
+      setBrandSel(''); setBrandRenameTo(''); setBrandDelConfirm(false)
+      loadBrands()
+      setPage(1); fetchProducts(1)
+    } catch (e) {
+      setBrandMsg('⚠️ ' + String(e))
+    } finally {
+      setBrandBusy(false)
+    }
+  }
+
   const fetchProducts = useCallback(async (currentPage = 1) => {
     setLoading(true)
-    const params = new URLSearchParams({ q, supplier: supplierFilter, category: categoryFilter, limit: String(PAGE_SIZE), page: String(currentPage), ...(noPriceOnly ? { noPrice: '1' } : {}) })
+    const params = new URLSearchParams({ q, supplier: supplierFilter, category: categoryFilter, brand: brandFilter, limit: String(PAGE_SIZE), page: String(currentPage), ...(noPriceOnly ? { noPrice: '1' } : {}) })
     const res = await fetch(`/api/products?${params}`)
     const data = await res.json()
     setProducts(data.products)
@@ -129,14 +162,21 @@ export default function ProductsPage() {
     setSalePrices(prev => ({ ...prev, ...init }))
     setDirty(new Set())
     setLoading(false)
-  }, [q, supplierFilter, categoryFilter, noPriceOnly])
+  }, [q, supplierFilter, categoryFilter, brandFilter, noPriceOnly])
 
-  // 공급사 변경 시 카테고리 목록 로드
+  const loadBrands = useCallback(() => {
+    if (!supplierFilter) { setBrands([]); return }
+    fetch(`/api/products?brandsOnly=1&supplier=${supplierFilter}`).then(r => r.json()).then(setBrands).catch(() => setBrands([]))
+  }, [supplierFilter])
+
+  // 공급사 변경 시 카테고리·브랜드 목록 로드
   useEffect(() => {
     setCategoryFilter('')
+    setBrandFilter('')
     const params = new URLSearchParams({ categoriesOnly: '1', supplier: supplierFilter })
     fetch(`/api/products?${params}`).then(r => r.json()).then((cats: string[]) => setCategories(cats))
-  }, [supplierFilter])
+    loadBrands()
+  }, [supplierFilter, loadBrands])
 
   // 검색어/필터 변경 시 1페이지로
   useEffect(() => {
@@ -431,6 +471,34 @@ export default function ProductsPage() {
             )}
           </div>
         )}
+        {supplierFilter && brands.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <Tags className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <button
+              onClick={() => setBrandFilter('')}
+              className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${brandFilter === '' ? 'bg-purple-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+            >{t.common.all}</button>
+            {brands.slice(0, MAX_CATEGORY_BUTTONS).map(b => (
+              <button key={b}
+                onClick={() => setBrandFilter(b === brandFilter ? '' : b)}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${brandFilter === b ? 'bg-purple-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+              >{b}</button>
+            ))}
+            {brands.length > MAX_CATEGORY_BUTTONS && (
+              <select value={brandFilter} onChange={e => setBrandFilter(e.target.value)}
+                className="px-2 py-1 border border-gray-200 dark:border-gray-600 rounded text-xs text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                <option value="">{t.products.showMore}</option>
+                {brands.slice(MAX_CATEGORY_BUTTONS).map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+            )}
+            <button
+              onClick={() => { setBrandModal(true); setBrandMsg(null); setBrandSel(brandFilter || ''); setBrandRenameTo(''); setBrandDelConfirm(false) }}
+              className="ml-auto flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+            >
+              <Pencil className="w-3 h-3" /> {t.products.manageBrands}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Table */}
@@ -478,10 +546,15 @@ export default function ProductsPage() {
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                         </a>
                       )}
-                      {/* 수동 등록(기타) 상품: 편집·삭제 */}
-                      {p.supplierCode === 'ETC' && (
+                      {/* 편집·삭제 (전 상품). 크롤 상품은 경고 표시 */}
+                      {(
                         <span className="shrink-0 flex items-center gap-0.5 ml-1">
-                          <button onClick={() => openEdit(p)} title={t.common.edit}
+                          {p.supplierCode !== 'ETC' && (
+                            <span title={t.products.crawlEditWarn} className="flex items-center">
+                              <AlertTriangle className="w-3 h-3 text-amber-400" />
+                            </span>
+                          )}
+                          <button onClick={() => openEdit(p)} title={p.supplierCode !== 'ETC' ? t.products.crawlEditWarn : t.common.edit}
                             className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
@@ -708,6 +781,11 @@ export default function ProductsPage() {
               {form.supplierCode === 'ETC' && (
                 <p className="text-xs text-gray-500 dark:text-gray-400">{t.products.etcHint}</p>
               )}
+              {editId && form.supplierCode !== 'ETC' && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded px-2 py-1.5 flex items-start gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" /> {t.products.crawlEditWarn}
+                </p>
+              )}
               {formError && <p className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 rounded px-2 py-1.5">{formError}</p>}
             </div>
             <div className="flex gap-2 px-5 py-4 border-t border-gray-100 dark:border-gray-700">
@@ -719,6 +797,65 @@ export default function ProductsPage() {
                 className="px-4 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600">
                 {t.common.cancel}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 브랜드 관리 모달 */}
+      {brandModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setBrandModal(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+              <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <Tags className="w-4 h-4 text-purple-500" /> {t.products.manageBrands}
+                <span className="text-xs font-normal text-gray-400">{SUPPLIER_NAMES[supplierFilter] ?? supplierFilter}</span>
+              </h2>
+              <button onClick={() => setBrandModal(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 block">{t.products.brandLabel}</label>
+                <select value={brandSel} onChange={e => { setBrandSel(e.target.value); setBrandRenameTo(''); setBrandDelConfirm(false); setBrandMsg(null) }}
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">—</option>
+                  {brands.map(b => <option key={b} value={b}>{b}</option>)}
+                </select>
+              </div>
+              {brandSel && (
+                <>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 block">{t.products.brandRename}</label>
+                    <div className="flex gap-2">
+                      <input value={brandRenameTo} onChange={e => setBrandRenameTo(e.target.value)}
+                        placeholder={t.products.brandRenameTo}
+                        className="flex-1 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      <button onClick={() => runBrandOp({ action: 'rename', to: brandRenameTo })} disabled={brandBusy || !brandRenameTo.trim()}
+                        className="px-3 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">{t.common.save}</button>
+                    </div>
+                  </div>
+                  <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
+                    {!brandDelConfirm ? (
+                      <button onClick={() => setBrandDelConfirm(true)} disabled={brandBusy}
+                        className="flex items-center gap-1.5 text-sm text-red-600 hover:text-red-700 font-medium">
+                        <Trash2 className="w-4 h-4" /> {t.products.brandDelete}
+                      </button>
+                    ) : (
+                      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-lg p-3">
+                        <p className="text-xs text-red-700 dark:text-red-400 font-medium mb-2">{t.products.brandDeleteConfirm}</p>
+                        <div className="flex flex-col gap-2">
+                          <button onClick={() => runBrandOp({ action: 'delete', mode: 'clear' })} disabled={brandBusy}
+                            className="w-full py-1.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600">{t.products.brandDeleteClear}</button>
+                          <button onClick={() => runBrandOp({ action: 'delete', mode: 'products' })} disabled={brandBusy}
+                            className="w-full py-1.5 rounded text-xs font-semibold bg-red-600 text-white hover:bg-red-700">{t.products.brandDeleteProducts}</button>
+                          <button onClick={() => setBrandDelConfirm(false)} className="w-full py-1 text-xs text-gray-500 hover:text-gray-700">{t.common.cancel}</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+              {brandMsg && <p className="text-xs text-gray-600 dark:text-gray-300">{brandMsg}</p>}
             </div>
           </div>
         </div>

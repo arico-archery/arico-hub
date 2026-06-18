@@ -6,7 +6,9 @@ export async function GET(req: Request) {
   const q = searchParams.get('q') ?? ''
   const supplier = searchParams.get('supplier') ?? ''
   const category = searchParams.get('category') ?? ''
+  const brand = searchParams.get('brand') ?? ''
   const categoriesOnly = searchParams.get('categoriesOnly') === '1'
+  const brandsOnly = searchParams.get('brandsOnly') === '1'
   const page = Number(searchParams.get('page') ?? '1')
   const limit = Number(searchParams.get('limit') ?? '50')
   const skip = (page - 1) * limit
@@ -37,6 +39,17 @@ export async function GET(req: Request) {
     return NextResponse.json(cats)
   }
 
+  // 브랜드 목록 전용 요청 (공급사별 distinct)
+  if (brandsOnly) {
+    const rows = await prisma.product.findMany({
+      where: supplier ? { supplierCode: supplier } : {},
+      select: { brand: true },
+      distinct: ['brand'],
+      orderBy: { brand: 'asc' },
+    })
+    return NextResponse.json(rows.map(r => r.brand).filter(Boolean))
+  }
+
   const noPrice = searchParams.get('noPrice') === '1'
 
   const where = {
@@ -51,6 +64,7 @@ export async function GET(req: Request) {
     } : {}),
     ...(supplier ? { supplierCode: supplier } : {}),
     ...(category ? { category } : {}),
+    ...(brand ? { brand } : {}),
     ...(noPrice ? { salePriceJpy: 0 } : {}),
   }
 
