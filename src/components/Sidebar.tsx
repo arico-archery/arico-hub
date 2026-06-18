@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/lib/i18n'
 import Logo, { AricoMark } from '@/components/Logo'
+import { APP_VERSION, APP_BUILD_DATE } from '@/lib/version'
 import { UserCircle, ShieldCheck } from 'lucide-react'
 
 export default function Sidebar() {
@@ -143,7 +144,7 @@ export default function Sidebar() {
       </div>
 
       <div className="px-4 py-3 border-t border-gray-200 dark:border-slate-700 hidden md:block">
-        <p className="text-gray-400 dark:text-slate-400 text-xs text-center">v1.0.0</p>
+        <p className="text-gray-400 dark:text-slate-400 text-xs text-center" title={`build ${APP_BUILD_DATE}`}>v{APP_VERSION}</p>
       </div>
     </aside>
   )
