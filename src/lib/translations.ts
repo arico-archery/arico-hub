@@ -18,6 +18,11 @@ const T = {
       mypage: '마이페이지',
       userMgmt: '사용자 관리',
       logout: '로그아웃',
+      groupOps: '운영',
+      groupData: '데이터',
+      groupInsight: '인사이트',
+      groupConfig: '설정',
+      groupAccount: '도움·계정',
     },
     common: {
       save: '저장',
@@ -635,6 +640,11 @@ const T = {
       mypage: 'マイページ',
       userMgmt: 'ユーザー管理',
       logout: 'ログアウト',
+      groupOps: '運営',
+      groupData: 'データ',
+      groupInsight: 'インサイト',
+      groupConfig: '設定',
+      groupAccount: 'ヘルプ・アカウント',
     },
     common: {
       save: '保存',
