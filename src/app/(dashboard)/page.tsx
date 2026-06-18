@@ -126,10 +126,10 @@ export default function DashboardPage() {
   const periodLabel = range === 'all' ? t.dashboard.periodAll : range === '6m' ? t.dashboard.period6m : t.dashboard.periodMonth
 
   const kpis = [
-    { label: `${periodLabel} ${t.dashboard.salesShort}`, value: formatJpy(monthlySales), icon: DollarSign, accent: 'text-blue-500', mom: momText(salesMoM), sub: `${monthlyOrderCount}${t.common.cases}`, spark: salesSeries, color: '#3b82f6', href: '/analytics' },
-    { label: `${periodLabel} ${t.dashboard.profitShort}`, value: formatJpy(monthlyProfit), icon: TrendingUp, accent: 'text-green-500', mom: momText(profitMoM), sub: `${t.dashboard.marginRate} ${monthlyMargin.toFixed(1)}%`, spark: profitSeries, color: '#22c55e', href: '/analytics' },
-    { label: t.dashboard.marginRate, value: `${monthlyMargin.toFixed(1)}%`, icon: Percent, accent: 'text-emerald-500', mom: momText(marginMoMPts, '%p'), sub: periodLabel, spark: marginSeries, color: '#10b981', href: '/analytics' },
-    { label: t.dashboard.unpaidTotal, value: formatJpy(totalUnpaid), icon: AlertCircle, accent: 'text-red-500', mom: null, sub: overdueCount > 0 ? `${t.dashboard.overdue} ${overdueCount}${t.common.cases}` : `${unpaidOrders.length}${t.dashboard.unpaidCount}`, spark: null, color: '#ef4444', href: '/payments' },
+    { label: `${periodLabel} ${t.dashboard.salesShort}`, value: formatJpy(monthlySales), icon: DollarSign, mom: momText(salesMoM), sub: `${monthlyOrderCount}${t.common.cases}`, spark: salesSeries, color: '#2f7d55', href: '/analytics' },
+    { label: `${periodLabel} ${t.dashboard.profitShort}`, value: formatJpy(monthlyProfit), icon: TrendingUp, mom: momText(profitMoM), sub: `${t.dashboard.marginRate} ${monthlyMargin.toFixed(1)}%`, spark: profitSeries, color: '#2f7d55', href: '/analytics' },
+    { label: t.dashboard.marginRate, value: `${monthlyMargin.toFixed(1)}%`, icon: Percent, mom: momText(marginMoMPts, '%p'), sub: periodLabel, spark: marginSeries, color: '#2f7d55', href: '/analytics' },
+    { label: t.dashboard.unpaidTotal, value: formatJpy(totalUnpaid), icon: AlertCircle, mom: null, sub: overdueCount > 0 ? `${t.dashboard.overdue} ${overdueCount}${t.common.cases}` : `${unpaidOrders.length}${t.dashboard.unpaidCount}`, spark: null, color: '#ef4444', href: '/payments' },
   ]
 
   // 운영 현황 / 할 일 타일
@@ -149,7 +149,7 @@ export default function DashboardPage() {
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t.dashboard.title}</h1>
-        <p className="text-gray-600 text-sm mt-1 font-medium">
+        <p className="text-gray-600 dark:text-gray-400 text-sm mt-1 font-medium">
           {now.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })} {t.dashboard.subtitle}
         </p>
       </div>
@@ -169,28 +169,28 @@ export default function DashboardPage() {
 
       {/* A. 핵심 KPI 4 + 스파크라인 */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map(({ label, value, icon: Icon, accent, mom, sub, spark, color, href }) => (
-          <Link key={label} href={href} className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow group block border-l-4" style={{ borderLeftColor: color }}>
-            <div className="flex items-start justify-between">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{label}</p>
-                <div className="mt-1 flex items-baseline gap-1.5 flex-wrap">
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">{value}</p>
-                  {mom && (
-                    <span className={`text-xs font-semibold ${mom.up ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>{mom.label}</span>
-                  )}
-                </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 font-medium">{sub}</p>
-              </div>
-              <Icon className={`w-5 h-5 ${accent} shrink-0`} />
+        {kpis.map(({ label, value, icon: Icon, mom, sub, spark, color, href }) => (
+          <Link key={label} href={href} className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-100 dark:border-gray-700/60 hover:border-gray-200 dark:hover:border-gray-600 transition-colors group block">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider truncate">{label}</p>
+              <span className="flex items-center justify-center w-7 h-7 rounded-lg shrink-0" style={{ backgroundColor: `${color}1a`, color }}>
+                <Icon className="w-4 h-4" />
+              </span>
             </div>
+            <div className="mt-2 flex items-baseline gap-1.5 flex-wrap">
+              <p className="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">{value}</p>
+              {mom && (
+                <span className={`text-xs font-semibold ${mom.up ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>{mom.label}</span>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 font-medium">{sub}</p>
             {spark ? <Sparkline values={spark} color={color} /> : <div className="h-8 mt-2" />}
           </Link>
         ))}
       </div>
 
       {/* C+D. 운영 현황 / 할 일 (액션 타일) */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
             <ClipboardList className="w-4 h-4 text-gray-400" />
@@ -217,7 +217,7 @@ export default function DashboardPage() {
       </div>
 
       {/* B. 매출 추세 차트 */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-gray-400" />
@@ -225,7 +225,7 @@ export default function DashboardPage() {
           </h2>
           <div className="flex items-center gap-3 text-xs">
             <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400"><span className="w-2.5 h-2.5 rounded-sm bg-gray-300 dark:bg-gray-600 inline-block" />{t.common.cost}</span>
-            <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400"><span className="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block" />{t.dashboard.monthlyProfit}</span>
+            <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#2f7d55' }} />{t.dashboard.monthlyProfit}</span>
             <Link href="/analytics" className="text-blue-600 hover:underline font-medium">{t.common.detail}</Link>
           </div>
         </div>
@@ -246,7 +246,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <div className="w-full max-w-[40px] flex flex-col justify-end" style={{ height: '100%' }}>
-                    <div className="w-full rounded-t bg-green-500" style={{ height: `${hProfit}%` }} title={`${t.dashboard.monthlyProfit} ${formatJpy(profit)}`} />
+                    <div className="w-full rounded-t" style={{ height: `${hProfit}%`, backgroundColor: '#2f7d55' }} title={`${t.dashboard.monthlyProfit} ${formatJpy(profit)}`} />
                     <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-b" style={{ height: `${hCost}%` }} title={`${t.common.cost} ${formatJpy(m.cost)}`} />
                   </div>
                   <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1.5 font-medium">{m.month}{t.analytics.monthUnit}</p>
@@ -258,7 +258,7 @@ export default function DashboardPage() {
       </div>
 
       {/* E. 공급사별 상품 현황 (압축) */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
             <Package className="w-4 h-4 text-gray-400" />
@@ -295,7 +295,7 @@ export default function DashboardPage() {
 
       {/* 미입금 알림 + 최근 주문 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5">
           <h2 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-red-500" />
             {t.dashboard.unpaidAlert}
@@ -331,7 +331,7 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
               <ShoppingCart className="w-4 h-4 text-gray-400" />
