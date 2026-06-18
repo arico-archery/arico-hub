@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Package, ShoppingCart, CreditCard,
-  Users, BarChart3, Settings, RefreshCw, ChevronRight, Globe, Truck, ClipboardList, BookOpen, LogOut,
+  Users, BarChart3, Settings, RefreshCw, Globe, Truck, ClipboardList, BookOpen, LogOut,
   Sun, Moon
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -56,11 +56,6 @@ export default function Sidebar() {
         { href: '/customers',        label: t.nav.customers,       icon: Users },
         { href: '/catalog',          label: t.nav.catalog,         icon: Globe },
         { href: '/products',         label: t.nav.products,        icon: Package },
-      ],
-    },
-    {
-      label: t.nav.groupInsight,
-      items: [
         { href: '/analytics',        label: t.nav.analytics,       icon: BarChart3 },
       ],
     },
@@ -98,9 +93,9 @@ export default function Sidebar() {
 
       <nav className="flex-1 py-4 px-2 md:px-3 overflow-y-auto">
         {navGroups.map((group, gi) => (
-          <div key={group.label} className={gi > 0 ? 'mt-4' : ''}>
+          <div key={group.label} className={gi > 0 ? 'mt-5' : ''}>
             {/* 데스크톱: 그룹 소제목 / 모바일: 구분선 */}
-            <p className="hidden md:block px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.label}</p>
+            <p className="hidden md:block px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">{group.label}</p>
             {gi > 0 && <div className="md:hidden border-t border-gray-200 dark:border-slate-800 mx-2 mb-2" />}
             {group.items.map(({ href, label, icon: Icon }) => {
               const active = pathname === href || (href !== '/' && pathname.startsWith(href))
@@ -110,15 +105,14 @@ export default function Sidebar() {
                   href={href}
                   title={label}
                   className={cn(
-                    'flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 text-sm transition-colors justify-center md:justify-start',
+                    'relative flex items-center gap-3 px-3 py-2.5 rounded-lg mb-0.5 text-sm transition-colors justify-center md:justify-start',
                     active
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800'
+                      ? 'bg-blue-600/10 text-blue-700 dark:text-blue-300 font-semibold md:before:absolute md:before:left-0 md:before:top-1.5 md:before:bottom-1.5 md:before:w-1 md:before:rounded-full md:before:bg-blue-600'
+                      : 'text-gray-600 dark:text-slate-400 font-medium hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800'
                   )}
                 >
-                  <Icon className="w-4 h-4 flex-shrink-0" />
+                  <Icon className={cn('w-4 h-4 flex-shrink-0', active ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-slate-500')} />
                   <span className="hidden md:inline">{label}</span>
-                  {active && <ChevronRight className="w-3 h-3 ml-auto hidden md:block" />}
                 </Link>
               )
             })}
