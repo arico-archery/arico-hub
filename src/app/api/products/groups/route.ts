@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { unstable_cache } from 'next/cache'
 import { prisma } from '@/lib/prisma'
-import { groupCodeOf, commonBaseName } from '@/lib/variants'
+import { groupKeyOf, commonBaseName, sibuyaBaseName } from '@/lib/variants'
 
 const PAGE_SIZE = 50
 
@@ -24,14 +24,14 @@ async function buildGroups(supplier: string, category: string, brand: string, q:
     },
     select: {
       id: true, productCode: true, name: true, brand: true, category: true,
-      supplierCode: true, salePriceJpy: true, availability: true,
+      supplierCode: true, salePriceJpy: true, availability: true, optionSize: true, optionColor: true,
     },
     orderBy: { name: 'asc' },
   })
 
   const map = new Map<string, typeof rows>()
   for (const r of rows) {
-    const gc = groupCodeOf(r.supplierCode, r.productCode)
+    const gc = groupKeyOf(r)
     if (!map.has(gc)) map.set(gc, [])
     map.get(gc)!.push(r)
   }
@@ -39,9 +39,12 @@ async function buildGroups(supplier: string, category: string, brand: string, q:
   const groups: GroupRow[] = []
   for (const [gc, vs] of map) {
     const sales = vs.map(v => v.salePriceJpy).filter(p => p > 0)
+    const base = vs[0].supplierCode === 'SIBUYA'
+      ? sibuyaBaseName(vs[0].name, vs[0].optionSize, vs[0].optionColor)
+      : (commonBaseName(vs.map(v => v.name)) || vs[0].name)
     groups.push({
       groupCode: gc,
-      base: commonBaseName(vs.map(v => v.name)) || vs[0].name,
+      base: base || vs[0].name,
       brand: vs[0].brand,
       category: vs[0].category,
       supplierCode: vs[0].supplierCode,

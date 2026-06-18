@@ -8,8 +8,8 @@
 export type Axis = { label: string; values: string[] }
 export type VariantOption = Record<string, string>
 
-// 축 표시 순서 (방향 → 파운드 → 길이 → 렛오프 → 사이즈 → 색상/기타)
-const AXIS_ORDER = ['방향', '파운드', '길이', '렛오프', '사이즈', '색상']
+// 축 표시 순서 (방향 → 파운드 → 길이 → 렛오프 → 사이즈 → 색상 → 옵션/기타)
+const AXIS_ORDER = ['방향', '파운드', '길이', '렛오프', '사이즈', '색상', '옵션']
 
 // 변형 그룹 키. JVD는 코드 접두부, 그 외는 자기 코드(그룹핑 안 함).
 export function groupCodeOf(supplierCode: string, productCode: string): string {
@@ -54,6 +54,44 @@ export function parseOption(optStr: string): VariantOption {
   return o
 }
 
+// SIBUYA 베이스명 = 이름에서 옵션값(사이즈/색상)을 제거한 것
+export function sibuyaBaseName(name: string, size: string, color: string): string {
+  let s = name || ''
+  if (size) s = s.split(size).join('')
+  if (color) s = s.split(color).join('')
+  return s.replace(/\s+/g, ' ').trim()
+}
+
+// SIBUYA는 옵션이 필드(optionSize/optionColor)로 분리돼 있다. 필드값을 축으로 변환.
+// optionSize는 방향(LH/RH)·사이즈(S/M/L)일 때도, "/50-60#/32.0"처럼 파운드+길이 묶음일 때도,
+// 색상·스파인·규격 등 자유값일 때도 있다 → 인식되는 건 분리하고 나머지는 통째로 '옵션' 축에 보존.
+export function parseSibuyaOption(size: string, color: string): VariantOption {
+  const o: VariantOption = {}
+  const s = (size || '').trim()
+  if (/^(LH|RH)$/.test(s)) {
+    o['방향'] = s
+  } else if (/^(XS|S|M|L|XL|XXL|XXXL)$/.test(s)) {
+    o['사이즈'] = s
+  } else if (s) {
+    let rest = ' ' + s + ' '
+    let m: RegExpMatchArray | null
+    if ((m = rest.match(/(\d+-\d+#|\d+#)/))) { o['파운드'] = m[1]; rest = rest.replace(m[0], ' ') }
+    if ((m = rest.match(/(\d+\.\d+)/))) { o['길이'] = m[1] + '"'; rest = rest.replace(m[0], ' ') }
+    rest = rest.replace(/[/\s]+/g, ' ').trim()
+    if (!o['파운드'] && !o['길이']) o['옵션'] = s            // 파운드·길이 못 뽑음 → 원본 통째로
+    else if (rest && /[가-힣A-Za-z]/.test(rest)) o['옵션'] = rest  // 묶음 분리 후 남은 의미값
+  }
+  if (color && color.trim()) o['색상'] = color.trim()
+  return o
+}
+
+// 공급사별 변형 그룹 키. JVD=코드접두부, SIBUYA=베이스명, 그 외=자기 코드(그룹핑 안 함).
+export function groupKeyOf(p: { supplierCode: string; productCode: string; name: string; optionSize: string; optionColor: string }): string {
+  if (p.supplierCode === 'JVD') return groupCodeOf('JVD', p.productCode)
+  if (p.supplierCode === 'SIBUYA') return 'SBY:' + sibuyaBaseName(p.name, p.optionSize, p.optionColor)
+  return p.productCode
+}
+
 export type RawVariant = {
   id: number; productCode: string; name: string; brand: string; supplierCode: string
   costPrice: number; salePriceJpy: number; unit: string
@@ -67,14 +105,24 @@ export type VariantGroup = { base: string; axes: Axis[]; variants: BuiltVariant[
 // 코드 접두부 그룹(JVD)을 베이스명/축/변형으로 구조화
 export function buildVariantGroup(rows: RawVariant[]): VariantGroup {
   const base = commonBaseName(rows.map(r => r.name))
+  return assembleGroup(rows, base, r => parseOption(optionStrOf(r.name, base)))
+}
+
+// SIBUYA: 옵션 필드(optionSize/optionColor) 기반 그룹 구조화
+export function buildSibuyaGroup(rows: RawVariant[]): VariantGroup {
+  const base = sibuyaBaseName(rows[0].name, rows[0].optionSize, rows[0].optionColor)
+  return assembleGroup(rows, base, r => parseSibuyaOption(r.optionSize, r.optionColor))
+}
+
+// 공용: 변형들을 옵션 파싱 → 라벨/충돌처리/축목록으로 구조화
+function assembleGroup(rows: RawVariant[], base: string, getOpt: (r: RawVariant) => VariantOption): VariantGroup {
   const variants: BuiltVariant[] = rows.map(r => {
-    const opt = optionStrOf(r.name, base)
-    const options = parseOption(opt)
-    const optionLabel = AXIS_ORDER.map(a => options[a]).filter(Boolean).join(' / ') || opt || r.productCode
+    const options = getOpt(r)
+    const optionLabel = AXIS_ORDER.map(a => options[a]).filter(Boolean).join(' / ') || r.productCode
     return { ...r, options, optionLabel }
   })
 
-  // 라벨 충돌(원본 이름 동일) 시 코드 접미부로 구분
+  // 라벨 충돌(원본 옵션 동일) 시 코드 접미부로 구분
   const seen = new Map<string, number>()
   for (const v of variants) seen.set(v.optionLabel, (seen.get(v.optionLabel) || 0) + 1)
   for (const v of variants) {

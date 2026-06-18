@@ -223,8 +223,8 @@ export default function NewOrderPage() {
       }
       const keys = Object.keys(sel).filter(k => sel[k])
       const matches = l.variantList.filter(v => keys.every(k => v.options[k] === sel[k]))
-      // 모든 축을 지정해 유일 변형이 정해지면 그 변형으로 라인 교체
-      if (matches.length === 1 && keys.length >= (l.variantAxes?.length || 0)) {
+      // 모든 축을 지정하면 그 변형으로 라인 교체 (원본 중복 시 첫 변형 채택)
+      if (matches.length >= 1 && keys.length >= (l.variantAxes?.length || 0)) {
         const v = matches[0]
         const newProduct: Product = {
           id: v.id, name: v.name, brand: v.brand, productCode: v.productCode,
