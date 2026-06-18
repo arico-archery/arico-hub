@@ -1,6 +1,17 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+// GET /api/products/[id] — 단일 상품 조회 (통합 보기에서 편집 모달 채우기용)
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const product = await prisma.product.findUnique({
+    where: { id: Number(id) },
+    include: { supplier: true },
+  })
+  if (!product) return NextResponse.json({ error: 'not_found' }, { status: 404 })
+  return NextResponse.json(product)
+}
+
 // PATCH /api/products/[id] — 단일 상품 수정 (수동 등록 상품 편집)
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

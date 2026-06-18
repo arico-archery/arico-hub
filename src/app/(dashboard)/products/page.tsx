@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { Search, Package, RefreshCw, Save, CheckCircle, ChevronLeft, ChevronRight, Tag, Tags, Download, Percent, Plus, Pencil, Trash2, X, AlertTriangle, ScanLine } from 'lucide-react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
+import { Search, Package, RefreshCw, Save, CheckCircle, ChevronLeft, ChevronRight, ChevronDown, Tag, Tags, Download, Percent, Plus, Pencil, Trash2, X, AlertTriangle, ScanLine, Layers } from 'lucide-react'
 import SupplierBadge from '@/components/SupplierBadge'
 import BarcodeScanner from '@/components/BarcodeScanner'
 import ProfitBar from '@/components/ProfitBar'
@@ -16,6 +16,17 @@ type Product = {
   optionSize: string; optionColor: string; shopProductId: string; barcode: string
 }
 type ExchangeRate = { currency: string; rateToJpy: number }
+// 통합 보기: 코드 접두부로 묶은 상품 그룹
+type GroupRow = {
+  groupCode: string; base: string; brand: string; category: string; supplierCode: string
+  count: number; repId: number; minSale: number; maxSale: number
+  pricedCount: number; inStockCount: number
+}
+type GroupVariant = {
+  id: number; name: string; brand: string; productCode: string; supplierCode: string
+  costPrice: number; salePriceJpy: number; unit: string; optionSize: string; optionColor: string
+  optionLabel?: string; supplier: { currency: string; taxRate: number; discount: number }
+}
 
 const SUPPLIERS = ['', ...SUPPLIER_LIST]
 const SUPPLIER_NAMES: Record<string, string> = {
@@ -75,6 +86,14 @@ export default function ProductsPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [scanOpen, setScanOpen] = useState(false)
+
+  // 통합 보기 (변형 그룹)
+  const [viewMode, setViewMode] = useState<'flat' | 'grouped'>('flat')
+  const [groups, setGroups] = useState<GroupRow[]>([])
+  const [groupsTotal, setGroupsTotal] = useState(0)
+  const [groupsLoading, setGroupsLoading] = useState(false)
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [expVariants, setExpVariants] = useState<Record<string, GroupVariant[]>>({})
 
   useEffect(() => {
     fetch('/api/exchange-rates').then(r => r.json()).then(setRates)
@@ -171,6 +190,43 @@ export default function ProductsPage() {
     fetch(`/api/products?brandsOnly=1&supplier=${supplierFilter}`).then(r => r.json()).then(setBrands).catch(() => setBrands([]))
   }, [supplierFilter])
 
+  // 통합 보기: 코드 접두부 그룹 목록 로드
+  const fetchGroups = useCallback(async (pageArg: number) => {
+    setGroupsLoading(true)
+    const params = new URLSearchParams({
+      supplier: supplierFilter, q, category: categoryFilter, brand: brandFilter, page: String(pageArg),
+    })
+    if (noPriceOnly) params.set('noPrice', '1')
+    try {
+      const res = await fetch(`/api/products/groups?${params}`)
+      const data = await res.json()
+      setGroups(data.groups || [])
+      setGroupsTotal(data.total || 0)
+    } catch { setGroups([]); setGroupsTotal(0) }
+    setGroupsLoading(false)
+  }, [supplierFilter, q, categoryFilter, brandFilter, noPriceOnly])
+
+  // 그룹 펼치기 → 변형 목록 lazy 로드
+  const toggleExpand = async (g: GroupRow) => {
+    if (expanded === g.groupCode) { setExpanded(null); return }
+    setExpanded(g.groupCode)
+    if (g.count > 1 && !expVariants[g.groupCode]) {
+      try {
+        const res = await fetch(`/api/products/variants?productId=${g.repId}`)
+        const d = await res.json()
+        if (Array.isArray(d.variants)) setExpVariants(prev => ({ ...prev, [g.groupCode]: d.variants }))
+      } catch { /* noop */ }
+    }
+  }
+
+  // 통합 보기에서 편집: 단일 상품 조회 후 모달 채우기
+  const openEditById = async (id: number) => {
+    try {
+      const p: Product = await fetch(`/api/products/${id}`).then(r => r.json())
+      if (p && p.id) openEdit(p)
+    } catch { /* noop */ }
+  }
+
   // 공급사 변경 시 카테고리·브랜드 목록 로드
   useEffect(() => {
     setCategoryFilter('')
@@ -183,13 +239,16 @@ export default function ProductsPage() {
   // 검색어/필터 변경 시 1페이지로
   useEffect(() => {
     setPage(1)
-    const timer = setTimeout(() => fetchProducts(1), 300)
+    setExpanded(null)
+    const timer = setTimeout(() => {
+      if (viewMode === 'grouped') fetchGroups(1); else fetchProducts(1)
+    }, 300)
     return () => clearTimeout(timer)
-  }, [fetchProducts])
+  }, [fetchProducts, fetchGroups, viewMode])
 
   // 페이지 변경 시
   useEffect(() => {
-    fetchProducts(page)
+    if (viewMode === 'grouped') fetchGroups(page); else fetchProducts(page)
   }, [page]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePriceChange = (id: number, val: string) => {
@@ -295,7 +354,8 @@ export default function ProductsPage() {
     if (bulkAllPages) setShowBulk(false)
   }
 
-  const totalPages = Math.ceil(total / PAGE_SIZE)
+  const displayTotal = viewMode === 'grouped' ? groupsTotal : total
+  const totalPages = Math.ceil(displayTotal / PAGE_SIZE)
   const dirtyCount = dirty.size
 
   return (
@@ -390,6 +450,16 @@ export default function ProductsPage() {
               </div>
             )}
           </div>
+          <button
+            onClick={() => { setViewMode(v => v === 'flat' ? 'grouped' : 'flat'); setPage(1); setExpanded(null) }}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              viewMode === 'grouped' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+            title={t.products.groupedViewHint}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            {t.products.groupedView}
+          </button>
           <a
             href={`/api/products?format=csv&supplier=${encodeURIComponent(supplierFilter)}&q=${encodeURIComponent(q)}&category=${encodeURIComponent(categoryFilter)}${noPriceOnly ? '&noPrice=1' : ''}`}
             className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
@@ -505,6 +575,7 @@ export default function ProductsPage() {
 
       {/* Table */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 overflow-x-auto">
+        {viewMode === 'flat' ? (
         <table className="w-full text-sm min-w-[760px]">
           <thead>
             <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700">
@@ -653,12 +724,103 @@ export default function ProductsPage() {
             })}
           </tbody>
         </table>
+        ) : (
+        <table className="w-full text-sm min-w-[640px]">
+          <thead>
+            <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700">
+              <th className="px-3 py-3 w-10"></th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.products.colSupplier}</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.products.colName}</th>
+              <th className="text-center px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.products.colVariants}</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.products.colPriceRange}</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.products.colStock}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
+            {groupsLoading && groups.length === 0 ? (
+              <tr><td colSpan={6} className="text-center py-16 text-gray-400">{t.common.loading}</td></tr>
+            ) : groups.length === 0 ? (
+              <tr><td colSpan={6} className="text-center py-16 text-gray-400">
+                <Package className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                <p>{t.products.noProducts}</p>
+              </td></tr>
+            ) : groups.map(g => {
+              const isOpen = expanded === g.groupCode
+              const vs = expVariants[g.groupCode] || []
+              const sym = (c: string) => c === 'USD' ? '$' : c === 'JPY' ? '¥' : '€'
+              return (
+                <Fragment key={g.groupCode}>
+                  <tr
+                    className={`transition-colors cursor-pointer ${isOpen ? 'bg-blue-50/40 dark:bg-blue-900/10' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}
+                    onClick={() => g.count > 1 ? toggleExpand(g) : openEditById(g.repId)}
+                  >
+                    <td className="px-3 py-3 text-gray-400">
+                      {g.count > 1 ? (isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />) : null}
+                    </td>
+                    <td className="px-4 py-3"><SupplierBadge code={g.supplierCode} name={SUPPLIER_NAMES[g.supplierCode] ?? g.supplierCode} /></td>
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-gray-900 dark:text-gray-100 leading-tight">{g.base}</p>
+                      <p className="text-gray-500 dark:text-gray-400 text-xs font-medium">{g.groupCode} · {g.category || '—'}{g.brand ? ` · ${g.brand}` : ''}</p>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {g.count > 1 ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                          <Layers className="w-3 h-3" />{g.count}{t.products.variantsUnit}
+                        </span>
+                      ) : <span className="text-xs text-gray-400">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums text-gray-900 dark:text-gray-100 font-medium">
+                      {g.pricedCount === 0 ? <span className="text-xs text-gray-400">{t.products.needInput}</span>
+                        : g.minSale === g.maxSale ? formatJpy(g.minSale)
+                        : <span className="text-xs">{formatJpy(g.minSale)} ~ {formatJpy(g.maxSale)}</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {g.inStockCount > 0
+                        ? <span className="text-xs font-medium text-green-600">{g.inStockCount}/{g.count}</span>
+                        : <span className="text-xs text-gray-400">0/{g.count}</span>}
+                    </td>
+                  </tr>
+                  {isOpen && g.count > 1 && (
+                    vs.length === 0 ? (
+                      <tr className="bg-gray-50/50 dark:bg-gray-900/20"><td></td><td colSpan={5} className="px-4 py-3 text-xs text-gray-400">{t.common.loading}</td></tr>
+                    ) : vs.map(v => {
+                      const cv = calcCostJpy({ costPrice: v.costPrice, brand: v.brand, supplierCode: v.supplierCode, name: v.name, supplier: v.supplier }, rates)
+                      return (
+                        <tr key={v.id} className="bg-gray-50/50 dark:bg-gray-900/20 hover:bg-gray-100/60 dark:hover:bg-gray-800/40">
+                          <td></td>
+                          <td></td>
+                          <td className="px-4 py-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-700 dark:text-gray-200 text-sm">{v.optionLabel || [v.optionSize, v.optionColor].filter(Boolean).join(' / ') || '기본'}</span>
+                              <span className="text-[10px] text-gray-400 font-mono">{v.productCode}</span>
+                              <button onClick={(e) => { e.stopPropagation(); openEditById(v.id) }} title={t.common.edit}
+                                className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors">
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </td>
+                          <td></td>
+                          <td className="px-4 py-2 text-right tabular-nums">
+                            <span className="text-gray-900 dark:text-gray-100 text-sm">{v.salePriceJpy > 0 ? formatJpy(v.salePriceJpy) : <span className="text-gray-400 text-xs">{t.products.needInput}</span>}</span>
+                            <p className="text-gray-400 text-[10px]">{t.products.colCost} {sym(v.supplier.currency)}{formatNumber(v.costPrice)} ≈ {formatJpy(cv)}</p>
+                          </td>
+                          <td></td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </Fragment>
+              )
+            })}
+          </tbody>
+        </table>
+        )}
 
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} / {formatNumber(total)}개
+              {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, displayTotal)} / {formatNumber(displayTotal)}{viewMode === 'grouped' ? ' 그룹' : '개'}
             </p>
             <div className="flex items-center gap-1">
               <button

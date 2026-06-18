@@ -20,6 +20,9 @@ type CatalogMatchedProduct = {
   costPrice: number; salePriceJpy: number; unit: string; optionSize: string; optionColor: string
   supplier: { currency: string; taxRate: number; discount: number }
 }
+// JVD 코드-접두부 변형 (옵션 축 파싱 포함)
+type JvdVariant = CatalogMatchedProduct & { options: Record<string, string>; optionLabel: string }
+type VariantAxis = { label: string; values: string[] }
 type CatalogOption = { label: string; values: string[] }
 type CatalogItem = {
   id: number; productCode: string; name: string; brand: string
@@ -38,6 +41,9 @@ type OrderLine = {
   catalogOptions?: CatalogOption[]            // ARICO 자사몰 옵션 (축별 드롭다운)
   catalogOptionSel?: Record<string, string>   // 선택된 옵션 {label: value}
   variants?: CatalogMatchedProduct[]   // 같은 베이스 제품의 옵션 변형 (있으면 드롭다운 선택)
+  variantAxes?: VariantAxis[]                  // JVD 옵션 축 (방향/파운드/길이/색상…)
+  variantList?: JvdVariant[]                   // JVD 변형 전체 (축 선택 → 해결용)
+  variantAxisSel?: Record<string, string>      // 선택된 축 {label: value}
 }
 
 // 카탈로그 상품 썸네일 (이미지 없거나 로딩 실패 시 플레이스홀더)
@@ -186,12 +192,62 @@ export default function NewOrderPage() {
     fetch(`/api/products/variants?productId=${productId}`)
       .then(r => r.json())
       .then(d => {
-        if (Array.isArray(d.variants) && d.variants.length >= 2) {
+        if (!Array.isArray(d.variants) || d.variants.length < 2) return
+        // JVD: 옵션 축 드롭다운. 그 외(SIBUYA 등): 단일 변형 드롭다운.
+        if (Array.isArray(d.axes) && d.axes.length > 0) {
+          const cur = (d.variants as JvdVariant[]).find(v => v.id === productId)
+          setLines(prev => prev.map(l =>
+            l.product.id === productId && !l.variantAxes
+              ? { ...l, variantAxes: d.axes, variantList: d.variants, variantAxisSel: cur ? { ...cur.options } : {} }
+              : l))
+        } else {
           setLines(prev => prev.map(l =>
             l.product.id === productId && !l.variants ? { ...l, variants: d.variants } : l))
         }
       })
       .catch(() => {})
+  }
+
+  // JVD 옵션 축 선택 → 캐스케이드로 변형 해결. 유일 변형이면 그 변형으로 라인 교체.
+  const changeVariantAxis = (idx: number, axisLabel: string, value: string) => {
+    setLines(prev => prev.map((l, i) => {
+      if (i !== idx || !l.variantList) return l
+      const sel = { ...(l.variantAxisSel || {}) }
+      if (value) sel[axisLabel] = value; else delete sel[axisLabel]
+      // 앞선 선택과 양립 안 되는 뒤축 값은 정리
+      for (const ax of l.variantAxes || []) {
+        if (ax.label === axisLabel) continue
+        if (sel[ax.label] && !availableAxisValues(l.variantList, ax.label, sel).includes(sel[ax.label])) {
+          delete sel[ax.label]
+        }
+      }
+      const keys = Object.keys(sel).filter(k => sel[k])
+      const matches = l.variantList.filter(v => keys.every(k => v.options[k] === sel[k]))
+      // 모든 축을 지정해 유일 변형이 정해지면 그 변형으로 라인 교체
+      if (matches.length === 1 && keys.length >= (l.variantAxes?.length || 0)) {
+        const v = matches[0]
+        const newProduct: Product = {
+          id: v.id, name: v.name, brand: v.brand, productCode: v.productCode,
+          supplierCode: v.supplierCode, costPrice: v.costPrice, salePriceJpy: v.salePriceJpy, unit: v.unit,
+          supplier: { code: v.supplierCode, currency: v.supplier.currency, taxRate: v.supplier.taxRate, discount: v.supplier.discount },
+          optionSize: v.optionSize, optionColor: v.optionColor,
+        }
+        return { ...l, variantAxisSel: sel, product: newProduct, costPriceJpy: calcCostJpy(newProduct, rates), optionMemo: v.optionLabel }
+      }
+      return { ...l, variantAxisSel: sel }
+    }))
+  }
+
+  // 캐스케이드: 앞선 축 선택과 양립 가능한 변형 중, 주어진 축에서 고를 수 있는 값들
+  const availableAxisValues = (variants: JvdVariant[], axisLabel: string, sel: Record<string, string>): string[] => {
+    const others = Object.keys(sel).filter(k => k !== axisLabel && sel[k])
+    const out: string[] = []
+    for (const v of variants) {
+      if (!others.every(k => v.options[k] === sel[k])) continue
+      const val = v.options[axisLabel]
+      if (val && !out.includes(val)) out.push(val)
+    }
+    return out
   }
 
   // 옵션 변형 선택 → 그 변형 상품으로 라인 교체 (원가/옵션메모 갱신)
@@ -637,6 +693,24 @@ export default function NewOrderPage() {
                                   {opt.values.map(v => <option key={v} value={v}>{v}</option>)}
                                 </select>
                               ))}
+                            </div>
+                          ) : line.variantAxes && line.variantAxes.length > 0 && line.variantList ? (
+                            <div className="space-y-1">
+                              {line.variantAxes.map(ax => {
+                                const vals = availableAxisValues(line.variantList!, ax.label, line.variantAxisSel || {})
+                                return (
+                                  <select
+                                    key={ax.label}
+                                    value={line.variantAxisSel?.[ax.label] ?? ''}
+                                    onChange={e => changeVariantAxis(idx, ax.label, e.target.value)}
+                                    className="w-full border border-gray-200 dark:border-gray-600 rounded px-2 py-1 text-xs text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                  >
+                                    <option value="">{ax.label}</option>
+                                    {vals.map(v => <option key={v} value={v}>{v}</option>)}
+                                  </select>
+                                )
+                              })}
+                              <p className="text-[10px] text-gray-400 font-mono">{line.product.productCode}</p>
                             </div>
                           ) : line.variants && line.variants.length >= 2 ? (
                             <select
