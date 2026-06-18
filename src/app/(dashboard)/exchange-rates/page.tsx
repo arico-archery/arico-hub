@@ -23,9 +23,13 @@ export default function ExchangeRatesPage() {
 
   const CURRENCY_INFO: Record<string, { name: string; flag: string; color: string }> = {
     USD: { name: t.exchangeRates.currencyUSD, flag: '🇺🇸', color: 'border-blue-500' },
-    JPY: { name: t.exchangeRates.currencyJPY, flag: '🇯🇵', color: 'border-red-500' },
+    KRW: { name: t.exchangeRates.currencyKRW, flag: '🇰🇷', color: 'border-purple-500' },
     EUR: { name: t.exchangeRates.currencyEUR, flag: '🇪🇺', color: 'border-yellow-500' },
   }
+  // 표시 순서: 달러 → 원(엔=원) → 유로. JPY=JPY(1.0)는 무의미하여 제외.
+  // KRW는 "1엔 = ? 원"(won per yen) 의미로, rateToJpy 필드를 원/엔 값으로 사용(원가계산엔 미사용).
+  const DISPLAY_CURRENCIES = ['USD', 'KRW', 'EUR'] as const
+  const KRW_DEFAULT = 9.5
   const [rates, setRates] = useState<Rate[]>([])
   const [editing, setEditing] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState<Record<string, boolean>>({})
@@ -38,6 +42,7 @@ export default function ExchangeRatesPage() {
       setRates(data)
       const init: Record<string, string> = {}
       data.forEach((r: Rate) => { init[r.currency] = String(r.rateToJpy) })
+      if (init.KRW === undefined) init.KRW = String(KRW_DEFAULT)
       setEditing(init)
     })
   }, [])
@@ -55,6 +60,7 @@ export default function ExchangeRatesPage() {
         setRates(fresh)
         const init: Record<string, string> = {}
         fresh.forEach((r: Rate) => { init[r.currency] = String(r.rateToJpy) })
+        if (init.KRW === undefined) init.KRW = String(KRW_DEFAULT)
         setEditing(init)
       } else {
         setNaverResult(`❌ ${data.error}`)
@@ -106,43 +112,49 @@ export default function ExchangeRatesPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        {rates.map(rate => {
-          const info = CURRENCY_INFO[rate.currency]
-          const suppliers = SUPPLIERS_BY_CURRENCY[rate.currency] ?? []
+        {DISPLAY_CURRENCIES.map(cur => {
+          const info = CURRENCY_INFO[cur]
+          const isKrw = cur === 'KRW'
+          const rateRow = rates.find(r => r.currency === cur)
+          const suppliers = SUPPLIERS_BY_CURRENCY[cur] ?? []
           return (
-            <div key={rate.currency} className={`bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-6 border-l-4 ${info?.color}`}>
+            <div key={cur} className={`bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-6 border-l-4 ${info?.color}`}>
               <div className="flex items-center gap-3 mb-4">
                 <span className="text-3xl">{info?.flag}</span>
                 <div>
-                  <p className="font-bold text-gray-900 dark:text-gray-100">{rate.currency}</p>
+                  <p className="font-bold text-gray-900 dark:text-gray-100">{cur}</p>
                   <p className="text-gray-600 dark:text-gray-400 text-sm">{info?.name}</p>
                 </div>
               </div>
               <div className="mb-4">
-                <label className="text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1 block">1 {rate.currency} = ? JPY</label>
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1 block">
+                  {isKrw ? '1 JPY = ? KRW' : `1 ${cur} = ? JPY`}
+                </label>
                 <div className="flex gap-2">
                   <input
                     type="number"
                     className="flex-1 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2.5 text-lg font-bold text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={editing[rate.currency] ?? ''}
-                    onChange={e => setEditing(p => ({ ...p, [rate.currency]: e.target.value }))}
-                    onKeyDown={e => e.key === 'Enter' && handleSave(rate.currency)}
+                    value={editing[cur] ?? ''}
+                    onChange={e => setEditing(p => ({ ...p, [cur]: e.target.value }))}
+                    onKeyDown={e => e.key === 'Enter' && handleSave(cur)}
                   />
                   <button
-                    onClick={() => handleSave(rate.currency)}
-                    disabled={saving[rate.currency]}
+                    onClick={() => handleSave(cur)}
+                    disabled={saving[cur]}
                     className={`px-3 py-2.5 rounded-lg font-medium text-sm transition-colors ${
-                      saved[rate.currency]
+                      saved[cur]
                         ? 'bg-green-500 text-white'
                         : 'bg-blue-600 text-white hover:bg-blue-700'
                     }`}
                   >
-                    {saving[rate.currency] ? <RefreshCw className="w-4 h-4 animate-spin" /> :
-                     saved[rate.currency] ? t.common.saved : <Save className="w-4 h-4" />}
+                    {saving[cur] ? <RefreshCw className="w-4 h-4 animate-spin" /> :
+                     saved[cur] ? t.common.saved : <Save className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
-              {suppliers.length > 0 && (
+              {isKrw ? (
+                <p className="text-xs text-gray-500 dark:text-gray-400">{t.exchangeRates.krwNote}</p>
+              ) : suppliers.length > 0 && (
                 <div>
                   <p className="text-xs text-gray-600 dark:text-gray-400 font-medium mb-1">{t.exchangeRates.appliedSuppliers}</p>
                   <div className="flex flex-wrap gap-1">
@@ -150,9 +162,11 @@ export default function ExchangeRatesPage() {
                   </div>
                 </div>
               )}
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
-                {t.exchangeRates.lastUpdated}: {new Date(rate.updatedAt).toLocaleString('ja-JP')}
-              </p>
+              {rateRow && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
+                  {t.exchangeRates.lastUpdated}: {new Date(rateRow.updatedAt).toLocaleString('ja-JP')}
+                </p>
+              )}
             </div>
           )
         })}
