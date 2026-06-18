@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, RefreshCw, ChevronLeft, ChevronRight, Link2, Link2Off, X, Check, Wand2, ImageOff, Barcode, Languages, ScanLine } from 'lucide-react'
+import { Search, RefreshCw, ChevronLeft, ChevronRight, Link2, Link2Off, X, Check, Wand2, ImageOff, Barcode, Languages, ScanLine, Layers } from 'lucide-react'
 import BarcodeScanner from '@/components/BarcodeScanner'
 import { formatNumber, SUPPLIER_COLORS } from '@/lib/utils'
 import Image from 'next/image'
@@ -26,6 +26,11 @@ type SupplierProduct = {
   id: number; name: string; brand: string; productCode: string
   supplierCode: string; costPrice: number; salePriceJpy: number
   supplier: { currency: string }
+}
+// 통합(그룹) 검색 결과 — JVD는 코드접두부로 묶임, 그 외는 1개씩
+type GroupResult = {
+  groupCode: string; base: string; brand: string; supplierCode: string
+  count: number; repId: number; minSale: number; maxSale: number; pricedCount: number
 }
 
 type CatalogStats = {
@@ -65,7 +70,7 @@ function MatchModal({
 }) {
   const tr = useT()
   const [q, setQ] = useState(item.brand ? item.brand.split(' ')[0] : '')
-  const [results, setResults] = useState<SupplierProduct[]>([])
+  const [results, setResults] = useState<GroupResult[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [barcode, setBarcode] = useState(item.barcode ?? '')
@@ -100,9 +105,10 @@ function MatchModal({
   const search = useCallback(async (query: string) => {
     if (!query.trim()) { setResults([]); return }
     setLoading(true)
-    const res = await fetch(`/api/products?q=${encodeURIComponent(query)}&limit=30`)
+    // 통합(그룹) 검색 — JVD는 변형이 한 그룹으로 묶여서 나옴
+    const res = await fetch(`/api/products/groups?q=${encodeURIComponent(query)}&page=1`)
     const data = await res.json()
-    setResults(data.products ?? [])
+    setResults(data.groups ?? [])
     setLoading(false)
   }, [])
 
@@ -112,14 +118,20 @@ function MatchModal({
     return () => clearTimeout(t)
   }, [q, search])
 
-  const handleSelect = async (product: SupplierProduct | null) => {
+  // 그룹 선택 → 대표 변형(repId)으로 매칭. 주문 시 옵션(변형)을 선택한다.
+  const handleSelect = async (group: GroupResult | null) => {
     setSaving(true)
+    const pid = group?.repId ?? null
     await fetch('/api/arico-catalog', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: item.id, supplierProductId: product?.id ?? null, barcode }),
+      body: JSON.stringify({ id: item.id, supplierProductId: pid, barcode }),
     })
-    onMatch(item.id, product, barcode)
+    const synth: SupplierProduct | null = group ? {
+      id: group.repId, name: group.base, brand: group.brand, productCode: group.groupCode,
+      supplierCode: group.supplierCode, costPrice: 0, salePriceJpy: group.minSale, supplier: { currency: 'JPY' },
+    } : null
+    onMatch(item.id, synth, barcode)
     setSaving(false)
     onClose()
   }
@@ -199,31 +211,37 @@ function MatchModal({
           {!loading && results.length === 0 && !q && (
             <div className="text-center py-8 text-gray-400 text-sm">{tr.catalog.enterSearch}</div>
           )}
-          {results.map(p => {
-            const isSelected = item.supplierProductId === p.id
-            const color = SUPPLIER_COLORS[p.supplierCode] ?? '#6b7280'
+          {results.map(g => {
+            const isSelected = item.supplierProductId === g.repId
+            const color = SUPPLIER_COLORS[g.supplierCode] ?? '#6b7280'
             return (
               <button
-                key={p.id}
-                onClick={() => handleSelect(p)}
+                key={g.groupCode}
+                onClick={() => handleSelect(g)}
                 disabled={saving}
                 className={`w-full flex items-center gap-4 px-6 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-left border-b border-gray-50 dark:border-gray-700 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
               >
                 <span
                   className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold text-white flex-shrink-0 w-14 justify-center"
                   style={{ backgroundColor: color }}
-                >{p.supplierCode}</span>
+                >{g.supplierCode}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{p.name}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{p.brand} · {p.productCode}</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{g.base}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+                    {g.brand ? `${g.brand} · ` : ''}{g.groupCode}
+                    {g.count > 1 && (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium">
+                        <Layers className="w-2.5 h-2.5" />{tr.catalog.variantsCount.replace('{n}', String(g.count))}
+                      </span>
+                    )}
+                  </p>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-                    {p.supplier.currency} {formatNumber(p.costPrice)}
-                  </p>
-                  {p.salePriceJpy > 0 && (
-                    <p className="text-xs text-blue-600">¥{formatNumber(p.salePriceJpy)}</p>
-                  )}
+                  {g.pricedCount > 0 ? (
+                    <p className="text-xs text-blue-600">
+                      {g.minSale === g.maxSale ? `¥${formatNumber(g.minSale)}` : `¥${formatNumber(g.minSale)}~${formatNumber(g.maxSale)}`}
+                    </p>
+                  ) : <p className="text-xs text-gray-400">—</p>}
                 </div>
                 {isSelected && <Check className="w-4 h-4 text-blue-600 flex-shrink-0" />}
               </button>

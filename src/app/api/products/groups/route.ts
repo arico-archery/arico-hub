@@ -11,13 +11,16 @@ type GroupRow = {
   pricedCount: number; inStockCount: number
 }
 
-// 공급사 한정으로 슬림하게 불러와 코드 접두부로 그룹핑. (무거운 단계만 캐시)
-async function buildGroups(supplier: string, category: string, brand: string): Promise<GroupRow[]> {
+// 슬림하게 불러와 코드 접두부로 그룹핑. (무거운 단계만 캐시)
+// q(검색어)는 DB 이름 필터로 먼저 줄인다 — JVD 변형은 베이스명을 공유하므로
+// 베이스/브랜드로 검색하면 그룹이 쪼개지지 않는다(전체 스캔 회피, 매칭 모달 속도↑).
+async function buildGroups(supplier: string, category: string, brand: string, q: string): Promise<GroupRow[]> {
   const rows = await prisma.product.findMany({
     where: {
       ...(supplier ? { supplierCode: supplier } : {}),
       ...(category ? { category } : {}),
       ...(brand ? { brand } : {}),
+      ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
     },
     select: {
       id: true, productCode: true, name: true, brand: true, category: true,
@@ -54,10 +57,10 @@ async function buildGroups(supplier: string, category: string, brand: string): P
   return groups
 }
 
-const getCachedGroups = (supplier: string, category: string, brand: string) =>
+const getCachedGroups = (supplier: string, category: string, brand: string, q: string) =>
   unstable_cache(
-    () => buildGroups(supplier, category, brand),
-    ['product-groups', supplier, category, brand],
+    () => buildGroups(supplier, category, brand, q),
+    ['product-groups', supplier, category, brand, q],
     { revalidate: 60 },
   )()
 
@@ -71,8 +74,7 @@ export async function GET(req: Request) {
   const noPrice = searchParams.get('noPrice') === '1'
   const page = Math.max(1, Number(searchParams.get('page')) || 1)
 
-  let groups = await getCachedGroups(supplier, category, brand)
-  if (q) groups = groups.filter(g => g.base.toLowerCase().includes(q) || g.groupCode.toLowerCase().includes(q))
+  let groups = await getCachedGroups(supplier, category, brand, q)
   if (noPrice) groups = groups.filter(g => g.pricedCount < g.count)
 
   const total = groups.length
