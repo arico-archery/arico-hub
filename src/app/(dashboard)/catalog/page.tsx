@@ -301,7 +301,7 @@ export default function CatalogPage() {
       const res = await fetch('/api/auto-match', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dryRun, threshold: 0.45 }),
+        body: JSON.stringify({ dryRun, threshold: 0.65 }),
       })
       const data = await res.json()
       setAutoMatchResult(data)
