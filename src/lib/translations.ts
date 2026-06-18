@@ -325,6 +325,10 @@ const T = {
     customers: {
       title: '거래처 관리',
       newCustomer: '거래처 추가',
+      excelImport: '엑셀 임포트',
+      importTitle: '거래처 엑셀/CSV 임포트',
+      importTemplate: '템플릿',
+      importHint: '이름은 필수. 이메일/전화 중복은 자동 건너뜀.',
       newTitle: '새 거래처 등록',
       searchPlaceholder: '이름, 회사 검색...',
       colName: '거래처명',
@@ -957,6 +961,10 @@ const T = {
     customers: {
       title: '取引先管理',
       newCustomer: '取引先追加',
+      excelImport: 'Excelインポート',
+      importTitle: '取引先 Excel/CSV インポート',
+      importTemplate: 'テンプレート',
+      importHint: '名前は必須。メール/電話の重複は自動スキップ。',
       newTitle: '新規取引先登録',
       searchPlaceholder: '名前、会社で検索...',
       colName: '取引先名',

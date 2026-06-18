@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Users, Plus, Phone, Mail, MapPin, Pencil, Check, X, Trash2, Search, ShoppingCart } from 'lucide-react'
+import { Users, Plus, Phone, Mail, MapPin, Pencil, Check, X, Trash2, Search, ShoppingCart, Upload, FileDown, FileSpreadsheet } from 'lucide-react'
 import { formatJpy } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
 
@@ -103,6 +103,37 @@ export default function CustomersPage() {
   const [editForm, setEditForm] = useState<FormState>(EMPTY_FORM)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
+  // 엑셀 임포트
+  const [importOpen, setImportOpen] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<string | null>(null)
+
+  const downloadCustomerTemplate = () => {
+    const headers = ['이름', '구분', '회사', '전화', '이메일', '우편번호', '주소', '등록번호', '담당자', '청구지', '메모']
+    const sample = ['홍길동', '기업', '○○양궁장', '090-0000-0000', 'a@b.com', '150-0001', '東京都…', 'T0000000000000', '田中', '', '']
+    const csv = '﻿' + headers.join(',') + '\n' + sample.join(',')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const a = document.createElement('a'); a.href = url; a.download = 'customers_template.csv'; a.click(); URL.revokeObjectURL(url)
+  }
+
+  const handleImport = async () => {
+    if (!importFile) return
+    setImporting(true); setImportResult(null)
+    try {
+      const fd = new FormData(); fd.append('file', importFile)
+      const res = await fetch('/api/customers/import', { method: 'POST', body: fd })
+      const d = await res.json()
+      if (!res.ok) { setImportResult('⚠️ ' + (d.error || res.status)); return }
+      setImportResult(`✅ ${d.imported}건 등록 / ${d.skipped} 스킵${d.errors ? ` / ${d.errors} 오류` : ''}`)
+      setImportFile(null)
+      loadCustomers()
+    } catch (e) {
+      setImportResult('⚠️ ' + String(e))
+    } finally {
+      setImporting(false)
+    }
+  }
 
   const loadCustomers = () => {
     setLoading(true)
@@ -180,6 +211,13 @@ export default function CustomersPage() {
             />
           </div>
           <button
+            onClick={() => { setImportOpen(o => !o); setImportResult(null) }}
+            className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          >
+            <Upload className="w-4 h-4" />
+            {t.customers.excelImport}
+          </button>
+          <button
             onClick={() => { setShowForm(true); setEditingId(null) }}
             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
           >
@@ -188,6 +226,25 @@ export default function CustomersPage() {
           </button>
         </div>
       </div>
+
+      {importOpen && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5 mb-4 border-l-4 border-green-500">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2"><FileSpreadsheet className="w-4 h-4 text-green-600" />{t.customers.importTitle}</h3>
+            <button onClick={downloadCustomerTemplate} className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600 px-2 py-1 rounded border border-gray-200 dark:border-gray-600"><FileDown className="w-3 h-3" />{t.customers.importTemplate}</button>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{t.customers.importHint}</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <input type="file" accept=".csv,.xlsx,.xls" onChange={e => { setImportFile(e.target.files?.[0] ?? null); setImportResult(null) }}
+              className="text-sm text-gray-700 dark:text-gray-200 file:mr-2 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-gray-100 dark:file:bg-gray-700 file:text-gray-700 dark:file:text-gray-200" />
+            <button onClick={handleImport} disabled={!importFile || importing}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+              {importing ? t.common.loading : t.customers.excelImport}
+            </button>
+            {importResult && <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{importResult}</span>}
+          </div>
+        </div>
+      )}
 
       {errorMsg && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 text-red-700 dark:text-red-400 text-sm px-4 py-3 rounded-lg mb-4 flex items-center justify-between">
