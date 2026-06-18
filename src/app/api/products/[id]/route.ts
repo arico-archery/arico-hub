@@ -17,6 +17,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (body.unit !== undefined)        data.unit        = String(body.unit || '1')
   if (body.optionSize !== undefined)  data.optionSize  = String(body.optionSize).trim()
   if (body.optionColor !== undefined) data.optionColor = String(body.optionColor).trim()
+  if (body.barcode !== undefined)     data.barcode     = String(body.barcode).trim()
   if (body.availability !== undefined)data.availability= String(body.availability)
 
   const product = await prisma.product.update({

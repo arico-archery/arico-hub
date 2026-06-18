@@ -129,6 +129,7 @@ export async function POST(req: Request) {
       unit: String(body.unit || '1'),
       optionSize: String(body.optionSize || '').trim(),
       optionColor: String(body.optionColor || '').trim(),
+      barcode: String(body.barcode || '').trim(),
       availability: String(body.availability || 'in_stock'),
     },
     include: { supplier: true },

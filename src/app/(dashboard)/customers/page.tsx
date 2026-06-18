@@ -222,17 +222,17 @@ export default function CustomersPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 md:p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t.customers.title}</h1>
           <p className="text-gray-600 font-medium text-sm mt-1">{t.common.total} {customers.length}{t.customers.subtitleCount}</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="relative">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
-              className="pl-9 pr-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 w-52"
+              className="pl-9 pr-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-52"
               placeholder={t.customers.searchPlaceholder}
               value={searchQ}
               onChange={e => setSearchQ(e.target.value)}
@@ -308,16 +308,16 @@ export default function CustomersPage() {
         <div className="text-center py-16 text-gray-400">{t.common.loading}</div>
       ) : (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm md:min-w-[640px]">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700">
                 <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300">{t.customers.colName}</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300 w-36">{t.customers.colPhone}</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300 w-48">{t.customers.colEmail}</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300">{t.customers.colAddress}</th>
-                <th className="text-right px-4 py-3 font-semibold text-gray-600 dark:text-gray-300 w-24">{t.customers.colOrders}</th>
+                <th className="hidden md:table-cell text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300 w-36">{t.customers.colPhone}</th>
+                <th className="hidden md:table-cell text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300 w-48">{t.customers.colEmail}</th>
+                <th className="hidden lg:table-cell text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300">{t.customers.colAddress}</th>
+                <th className="hidden sm:table-cell text-right px-4 py-3 font-semibold text-gray-600 dark:text-gray-300 w-24">{t.customers.colOrders}</th>
                 <th className="text-right px-4 py-3 font-semibold text-gray-600 dark:text-gray-300 w-28">{t.customers.colSales}</th>
-                <th className="text-right px-4 py-3 font-semibold text-gray-600 dark:text-gray-300 w-24">{t.customers.colUnpaid}</th>
+                <th className="hidden sm:table-cell text-right px-4 py-3 font-semibold text-gray-600 dark:text-gray-300 w-24">{t.customers.colUnpaid}</th>
                 <th className="w-20 px-4 py-3" />
               </tr>
             </thead>
@@ -370,17 +370,22 @@ export default function CustomersPage() {
                           </div>
                         </div>
                         {c.memo && <p className="text-xs text-gray-400 mt-0.5 truncate max-w-48">{c.memo}</p>}
+                        {/* 모바일: 전화/이메일을 이름칸에 노출 (컬럼 숨김 대체) */}
+                        <div className="md:hidden mt-1 space-y-0.5">
+                          {c.phone && <p className="flex items-center gap-1 text-gray-500 dark:text-gray-400 text-[11px]"><Phone className="w-2.5 h-2.5 shrink-0" />{c.phone}</p>}
+                          {c.email && <p className="flex items-center gap-1 text-gray-500 dark:text-gray-400 text-[11px] truncate max-w-44"><Mail className="w-2.5 h-2.5 shrink-0" />{c.email}</p>}
+                        </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="hidden md:table-cell px-4 py-3">
                         {c.phone && <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400 text-xs"><Phone className="w-3 h-3 shrink-0" />{c.phone}</div>}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="hidden md:table-cell px-4 py-3">
                         {c.email && <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400 text-xs"><Mail className="w-3 h-3 shrink-0" />{c.email}</div>}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="hidden lg:table-cell px-4 py-3">
                         {c.address && <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 text-xs"><MapPin className="w-3 h-3 shrink-0" /><span className="truncate max-w-40">{c.address}</span></div>}
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="hidden sm:table-cell px-4 py-3 text-right">
                         <Link href={`/orders?q=${encodeURIComponent(c.name)}`} className="font-medium text-blue-600 hover:underline text-xs flex items-center gap-1 justify-end">
                           <ShoppingCart className="w-3 h-3" />{c._count.orders}{t.common.cases}
                         </Link>
@@ -388,7 +393,7 @@ export default function CustomersPage() {
                       <td className="px-4 py-3 text-right">
                         <span className="text-xs font-medium text-gray-700 dark:text-gray-200 tabular-nums">{formatJpy(totalSales)}</span>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="hidden sm:table-cell px-4 py-3 text-right">
                         {unpaid > 0 && <span className="text-xs font-semibold text-red-600 tabular-nums">{formatJpy(unpaid)}</span>}
                       </td>
                       <td className="px-4 py-3 text-right">

@@ -175,6 +175,9 @@ const T = {
       fieldSize: '사이즈',
       fieldColor: '컬러',
       fieldUnit: '단위',
+      fieldBarcode: '바코드 (JAN/EAN)',
+      fieldBarcodePh: '스캔하거나 직접 입력',
+      scanBarcode: '스캔',
       etcHint: '기타 브랜드는 원가를 엔화(¥)로 입력하세요. 주문·발주·카탈로그 등 모든 기능을 동일하게 사용할 수 있습니다.',
     },
     orders: {
@@ -820,6 +823,9 @@ const T = {
       fieldSize: 'サイズ',
       fieldColor: 'カラー',
       fieldUnit: '単位',
+      fieldBarcode: 'バーコード (JAN/EAN)',
+      fieldBarcodePh: 'スキャンまたは手入力',
+      scanBarcode: 'スキャン',
       etcHint: 'その他ブランドは原価を円(¥)で入力してください。受注・発注・カタログなど全機能を同様に利用できます。',
     },
     orders: {

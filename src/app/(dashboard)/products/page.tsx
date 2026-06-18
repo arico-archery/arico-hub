@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Search, Package, RefreshCw, Save, CheckCircle, ChevronLeft, ChevronRight, Tag, Tags, Download, Percent, Plus, Pencil, Trash2, X, AlertTriangle } from 'lucide-react'
+import { Search, Package, RefreshCw, Save, CheckCircle, ChevronLeft, ChevronRight, Tag, Tags, Download, Percent, Plus, Pencil, Trash2, X, AlertTriangle, ScanLine } from 'lucide-react'
 import SupplierBadge from '@/components/SupplierBadge'
+import BarcodeScanner from '@/components/BarcodeScanner'
 import ProfitBar from '@/components/ProfitBar'
 import { formatJpy, formatNumber, calcProfitRate, calcCostJpy, SUPPLIER_COLORS, SUPPLIER_LIST } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
@@ -12,7 +13,7 @@ type Product = {
   id: number; productCode: string; name: string; brand: string; category: string
   costPrice: number; msrp: number; salePriceJpy: number; unit: string; availability: string
   imageUrl1: string; url: string; supplierCode: string; supplier: Supplier
-  optionSize: string; optionColor: string; shopProductId: string
+  optionSize: string; optionColor: string; shopProductId: string; barcode: string
 }
 type ExchangeRate = { currency: string; rateToJpy: number }
 
@@ -65,7 +66,7 @@ export default function ProductsPage() {
   // 수동 상품 등록/편집
   const emptyForm = {
     supplierCode: 'ETC', brand: '', name: '', productCode: '', category: '',
-    costPrice: '', salePriceJpy: '', optionSize: '', optionColor: '', unit: '1',
+    costPrice: '', salePriceJpy: '', optionSize: '', optionColor: '', unit: '1', barcode: '',
   }
   const [formOpen, setFormOpen] = useState(false)
   const [editId, setEditId] = useState<number | null>(null)
@@ -73,6 +74,7 @@ export default function ProductsPage() {
   const [formSaving, setFormSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [scanOpen, setScanOpen] = useState(false)
 
   useEffect(() => {
     fetch('/api/exchange-rates').then(r => r.json()).then(setRates)
@@ -89,7 +91,7 @@ export default function ProductsPage() {
     setForm({
       supplierCode: p.supplierCode, brand: p.brand, name: p.name, productCode: p.productCode,
       category: p.category, costPrice: String(p.costPrice || ''), salePriceJpy: String(p.salePriceJpy || ''),
-      optionSize: p.optionSize, optionColor: p.optionColor, unit: p.unit || '1',
+      optionSize: p.optionSize, optionColor: p.optionColor, unit: p.unit || '1', barcode: p.barcode || '',
     })
     setFormError(null)
     setFormOpen(true)
@@ -102,7 +104,7 @@ export default function ProductsPage() {
       const payload = {
         supplierCode: form.supplierCode, brand: form.brand, name: form.name, productCode: form.productCode,
         category: form.category, costPrice: Number(form.costPrice) || 0, salePriceJpy: Number(form.salePriceJpy) || 0,
-        optionSize: form.optionSize, optionColor: form.optionColor, unit: form.unit || '1',
+        optionSize: form.optionSize, optionColor: form.optionColor, unit: form.unit || '1', barcode: form.barcode,
       }
       const res = editId
         ? await fetch(`/api/products/${editId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -297,13 +299,13 @@ export default function ProductsPage() {
   const dirtyCount = dirty.size
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 md:p-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t.products.title}</h1>
           <p className="text-gray-600 text-sm mt-1 font-medium">{t.common.total} {formatNumber(total)}{t.products.totalCount}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={openNew}
             className="flex items-center gap-1.5 px-4 py-2 bg-slate-700 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"
@@ -778,6 +780,18 @@ export default function ProductsPage() {
                     className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 block">{t.products.fieldBarcode}</label>
+                <div className="flex gap-2">
+                  <input type="text" inputMode="numeric" value={form.barcode} onChange={e => setForm(f => ({ ...f, barcode: e.target.value }))}
+                    placeholder={t.products.fieldBarcodePh}
+                    className="flex-1 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <button type="button" onClick={() => setScanOpen(true)}
+                    className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700">
+                    <ScanLine className="w-4 h-4" /> {t.products.scanBarcode}
+                  </button>
+                </div>
+              </div>
               {form.supplierCode === 'ETC' && (
                 <p className="text-xs text-gray-500 dark:text-gray-400">{t.products.etcHint}</p>
               )}
@@ -800,6 +814,14 @@ export default function ProductsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 바코드 스캐너 */}
+      {scanOpen && (
+        <BarcodeScanner
+          onResult={(code) => { setForm(f => ({ ...f, barcode: code })); setScanOpen(false) }}
+          onClose={() => setScanOpen(false)}
+        />
       )}
 
       {/* 브랜드 관리 모달 */}
