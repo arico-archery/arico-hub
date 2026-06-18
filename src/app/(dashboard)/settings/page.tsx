@@ -234,7 +234,7 @@ export default function SettingsPage() {
       </div>
 
       {/* 발행처 정보 (청구서/견적서/발주서) */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-6 mb-6">
         <div className="flex items-center justify-between mb-1">
           <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
             <Building2 className="w-4 h-4 text-blue-500" />
@@ -274,7 +274,7 @@ export default function SettingsPage() {
       </div>
 
       {/* 계좌 정보 */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
             <Building2 className="w-4 h-4 text-green-500" />
@@ -314,7 +314,7 @@ export default function SettingsPage() {
 
       <div className="grid grid-cols-2 gap-6">
         {/* CSV / Excel Import */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-6">
           <h2 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
             <Upload className="w-4 h-4 text-blue-500" />
             {t.settings.importTitle}
@@ -445,7 +445,7 @@ export default function SettingsPage() {
         </div>
 
         {/* 공급사 현황 & 할인율 설정 */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
               <Database className="w-4 h-4 text-purple-500" />

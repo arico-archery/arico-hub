@@ -135,7 +135,7 @@ export default function CustomersPage() {
       )}
 
       {showForm && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 mb-4 border-l-4 border-blue-500">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5 mb-4 border-l-4 border-blue-500">
           <h3 className="font-semibold text-gray-900 dark:text-white mb-4">{t.customers.newTitle}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
             <InputField label={t.customers.labelName} placeholder={t.customers.placeholderName} value={form.name} onChange={v => setForm(p => ({ ...p, name: v }))} />
@@ -155,7 +155,7 @@ export default function CustomersPage() {
       {loading ? (
         <div className="text-center py-16 text-gray-400">{t.common.loading}</div>
       ) : (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-x-auto">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 overflow-x-auto">
           <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700">

@@ -102,7 +102,7 @@ export default function NewPurchaseOrderPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="col-span-2 space-y-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5">
             <h2 className="font-semibold text-gray-900 dark:text-white mb-3">{t.purchaseOrders.newSelectProduct}</h2>
             <div className="flex items-center gap-1.5 mb-3 flex-wrap">
               <Filter className="w-3.5 h-3.5 text-gray-400 shrink-0" />
@@ -162,7 +162,7 @@ export default function NewPurchaseOrderPage() {
           </div>
 
           {lines.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 overflow-hidden">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700">
@@ -230,7 +230,7 @@ export default function NewPurchaseOrderPage() {
         </div>
 
         <div className="space-y-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 sticky top-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5 sticky top-6">
             <h2 className="font-semibold text-gray-900 dark:text-white mb-4">{t.purchaseOrders.newSummary}</h2>
 
             {suppliers.length > 0 ? (

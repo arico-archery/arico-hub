@@ -386,7 +386,7 @@ export default function NewOrderPage() {
         <div className="col-span-2 space-y-4">
 
           {/* 거래처 선택 */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5">
             <h2 className="font-semibold text-gray-900 dark:text-white mb-3">{t.orders.newCustomerSection}</h2>
             {customers.length > 5 && (
               <div className="relative mb-3">
@@ -425,7 +425,7 @@ export default function NewOrderPage() {
           </div>
 
           {/* 상품 추가 */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5">
             <h2 className="font-semibold text-gray-900 dark:text-white mb-3">{t.orders.newAddProduct}</h2>
 
             {/* 검색 모드 토글 */}
@@ -587,7 +587,7 @@ export default function NewOrderPage() {
 
           {/* 주문 라인 테이블 */}
           {lines.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-x-auto">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 overflow-x-auto">
               <table className="w-full text-sm min-w-[640px]">
                 <thead>
                   <tr className="bg-gray-50 dark:bg-gray-700/50 border-b dark:border-gray-700">
@@ -728,7 +728,7 @@ export default function NewOrderPage() {
           )}
 
           {lines.length === 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-10 text-center text-gray-400">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-10 text-center text-gray-400">
               <ShoppingCart className="w-10 h-10 mx-auto mb-2" />
               <p className="text-sm">{t.orders.newEmptyCart}</p>
             </div>
@@ -737,7 +737,7 @@ export default function NewOrderPage() {
 
         {/* 주문 요약 */}
         <div className="space-y-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 sticky top-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5 sticky top-6">
             <h2 className="font-semibold text-gray-900 dark:text-white mb-4">{t.orders.newSummary}</h2>
 
             {selectedCustomer ? (

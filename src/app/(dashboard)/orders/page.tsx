@@ -262,7 +262,7 @@ export default function OrdersPage() {
       </div>
 
       {/* 검색 & 필터 */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 mb-4 flex gap-3 items-center flex-wrap">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-4 mb-4 flex gap-3 items-center flex-wrap">
         <div className="relative min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
@@ -299,7 +299,7 @@ export default function OrdersPage() {
       </div>
 
       {/* 테이블 */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-x-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 overflow-x-auto">
         <table className="w-full text-sm min-w-[760px]">
           <thead>
             <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-600">

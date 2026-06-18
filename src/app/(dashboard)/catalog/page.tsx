@@ -388,7 +388,7 @@ export default function CatalogPage() {
       )}
 
       {/* 검색 + 필터 */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-3 mb-3 flex gap-2 items-center">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-3 mb-3 flex gap-2 items-center">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
@@ -487,7 +487,7 @@ export default function CatalogPage() {
           <p className="text-xs text-gray-600 dark:text-gray-300 font-medium">
             {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} / {formatNumber(total)}개
           </p>
-          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-xl shadow-sm px-3 py-2">
+          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 px-3 py-2">
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
               className="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30">
               <ChevronLeft className="w-4 h-4" />

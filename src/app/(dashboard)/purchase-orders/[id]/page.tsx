@@ -293,7 +293,7 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
 
       {/* 매입 진행 단계 스텝퍼 */}
       {!isCancelled && (
-        <div className="mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
+        <div className="mb-6 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-4">
           <div className="flex items-center">
             {steps.map((st, i) => (
               <div key={i} className="flex items-center flex-1 last:flex-none">
@@ -321,7 +321,7 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="col-span-2 space-y-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
               <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                 <Package className="w-4 h-4 text-gray-400" />
@@ -443,7 +443,7 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
         <div className="space-y-4">
           {/* 재고확인 (제조사 청구서 수령) */}
           {!isCancelled && (canConfirm || stepConfirmed) && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 space-y-3">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5 space-y-3">
               <h3 className="font-semibold text-gray-900 dark:text-white text-sm flex items-center gap-2">
                 <ClipboardCheck className="w-4 h-4 text-indigo-500" />{t.purchaseOrders.confirmTitle}
               </h3>
@@ -495,7 +495,7 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
 
           {/* 매입 지급 (제조사 입금) */}
           {!isCancelled && stepConfirmed && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 space-y-3">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5 space-y-3">
               <h3 className="font-semibold text-gray-900 dark:text-white text-sm flex items-center gap-2">
                 <Banknote className="w-4 h-4 text-purple-500" />{t.purchaseOrders.payTitle}
               </h3>
@@ -536,7 +536,7 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
           )}
 
           {/* 일정 */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 space-y-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5 space-y-4">
             <h3 className="font-semibold text-gray-900 dark:text-white text-sm">{t.purchaseOrders.detailSchedule}</h3>
             <div className="space-y-3">
               <div>
@@ -573,7 +573,7 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
           </div>
 
           {/* 메모 */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-semibold text-gray-900 dark:text-white text-sm">{t.purchaseOrders.detailMemo}</h3>
               {editingMemo ? (
@@ -607,7 +607,7 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
 
           {/* 연결된 주문 */}
           {po.orderItems.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5">
               <h3 className="font-semibold text-gray-900 dark:text-white text-sm mb-3 flex items-center gap-1.5">
                 <span>{t.purchaseOrders.detailLinkedOrders}</span>
                 <span className="text-xs text-gray-400 font-normal">({po.orderItems.length}{t.common.cases})</span>
@@ -640,7 +640,7 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
           )}
 
           {/* 바로가기 */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5">
             <h3 className="font-semibold text-gray-900 dark:text-white text-sm mb-3">{t.purchaseOrders.detailQuickLinks}</h3>
             <div className="space-y-2">
               <a href={`/purchase-orders?supplier=${po.supplierCode}`} className="flex items-center gap-2 text-sm text-blue-600 hover:underline">

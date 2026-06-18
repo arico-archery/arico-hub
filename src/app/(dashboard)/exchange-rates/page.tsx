@@ -110,7 +110,7 @@ export default function ExchangeRatesPage() {
           const info = CURRENCY_INFO[rate.currency]
           const suppliers = SUPPLIERS_BY_CURRENCY[rate.currency] ?? []
           return (
-            <div key={rate.currency} className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border-l-4 ${info?.color}`}>
+            <div key={rate.currency} className={`bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-6 border-l-4 ${info?.color}`}>
               <div className="flex items-center gap-3 mb-4">
                 <span className="text-3xl">{info?.flag}</span>
                 <div>
@@ -158,7 +158,7 @@ export default function ExchangeRatesPage() {
         })}
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-6">
         <h2 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-blue-500" />
           {t.exchangeRates.howApply}

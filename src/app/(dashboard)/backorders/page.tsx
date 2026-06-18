@@ -185,7 +185,7 @@ export default function BackordersPage() {
         {/* 왼쪽: 리스트 */}
         <div className="flex-1 min-w-0">
           {/* 필터 */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 mb-4 flex gap-4 flex-wrap items-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-4 mb-4 flex gap-4 flex-wrap items-center">
             <div className="flex items-center gap-1.5">
               <Filter className="w-3.5 h-3.5 text-gray-400" />
               <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">{t.backorders.supplierLabel}</span>
@@ -237,9 +237,9 @@ export default function BackordersPage() {
 
           {/* 리스트 (공급사별 그룹) */}
           {loading ? (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-16 text-center text-gray-400">{t.common.loading}</div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-16 text-center text-gray-400">{t.common.loading}</div>
           ) : items.length === 0 ? (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-16 text-center text-gray-400">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-16 text-center text-gray-400">
               <ClipboardList className="w-10 h-10 mx-auto mb-3 opacity-30" />
               <p className="text-sm">{t.backorders.noItems}</p>
             </div>
@@ -265,7 +265,7 @@ export default function BackordersPage() {
                 const isCollapsed    = collapsed.has(sc)
 
                 return (
-                  <div key={sc} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-x-auto">
+                  <div key={sc} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 overflow-x-auto">
                     {/* 그룹 헤더 */}
                     <div
                       className="flex items-center gap-3 px-5 py-3 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -421,7 +421,7 @@ export default function BackordersPage() {
 
         {/* 오른쪽: 발주 생성 패널 */}
         <div className="w-64 shrink-0">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 sticky top-6 space-y-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5 sticky top-6 space-y-4">
             <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
               <Truck className="w-4 h-4 text-gray-400" />
               {t.backorders.createPO}

@@ -625,7 +625,7 @@ export default function ManualPage() {
       </div>
 
       {/* 전체 업무 흐름 */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 mb-6">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5 mb-6">
         <h2 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
           <ArrowRight className="w-4 h-4 text-blue-500" />{isKo ? '전체 업무 흐름' : '全体業務フロー'}
         </h2>
@@ -645,7 +645,7 @@ export default function ManualPage() {
       </div>
 
       {/* 목차 */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 mb-6">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5 mb-6">
         <h2 className="font-semibold text-gray-900 dark:text-white mb-3 text-sm">{isKo ? '목차' : '目次'}</h2>
         <div className="flex flex-wrap gap-2">
           {SECTIONS.map((s, i) => (
@@ -661,7 +661,7 @@ export default function ManualPage() {
         {SECTIONS.map((s, i) => {
           const Icon = s.icon
           return (
-            <section key={s.id} id={s.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-5 scroll-mt-6">
+            <section key={s.id} id={s.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5 scroll-mt-6">
               <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2 mb-2">
                 <span className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center shrink-0">
                   <Icon className="w-4 h-4 text-blue-500" />

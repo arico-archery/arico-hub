@@ -122,7 +122,7 @@ export default function PurchaseOrdersPage() {
       </div>
 
       {/* 필터 */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 mb-4 flex gap-4 flex-wrap items-center">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-4 mb-4 flex gap-4 flex-wrap items-center">
         <div>
           <span className="text-xs text-gray-600 dark:text-gray-400 font-medium mr-2">{t.common.supplier}</span>
           <button
@@ -152,7 +152,7 @@ export default function PurchaseOrdersPage() {
       </div>
 
       {/* 테이블 */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-x-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 overflow-x-auto">
         <table className="w-full text-sm min-w-[760px]">
           <thead>
             <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700">

@@ -126,7 +126,7 @@ export default function TranslatePage() {
       {/* 언어 선택 */}
       <div className="flex items-center gap-4 mb-4">
         {/* From */}
-        <div className="flex gap-1 bg-white dark:bg-gray-800 rounded-xl shadow-sm p-1 border border-gray-100 dark:border-gray-700">
+        <div className="flex gap-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-1 border border-gray-100 dark:border-gray-700">
           {LANGS.filter(l => l.code !== to).map(l => (
             <button
               key={l.code}
@@ -150,7 +150,7 @@ export default function TranslatePage() {
         </button>
 
         {/* To */}
-        <div className="flex gap-1 bg-white dark:bg-gray-800 rounded-xl shadow-sm p-1 border border-gray-100 dark:border-gray-700">
+        <div className="flex gap-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-1 border border-gray-100 dark:border-gray-700">
           {LANGS.filter(l => l.code !== from).map(l => (
             <button
               key={l.code}
@@ -168,7 +168,7 @@ export default function TranslatePage() {
       {/* 번역 영역 */}
       <div className="grid grid-cols-2 gap-4 mb-4">
         {/* 입력 */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
           <div className="flex items-center justify-between px-4 pt-3 pb-1">
             <span className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">
               {fromLang.flag} {fromLang.label}
@@ -216,7 +216,7 @@ export default function TranslatePage() {
         </div>
 
         {/* 결과 */}
-        <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border overflow-hidden flex flex-col transition-colors ${
+        <div className={`bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 border overflow-hidden flex flex-col transition-colors ${
           error
             ? 'border-red-200 dark:border-red-800/50'
             : result
@@ -297,7 +297,7 @@ export default function TranslatePage() {
 
       {/* 번역 히스토리 */}
       {showHistory && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 border border-gray-100 dark:border-gray-700 p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
               <History className="w-4 h-4 text-gray-400 dark:text-gray-500" />

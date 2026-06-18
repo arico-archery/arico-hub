@@ -34,7 +34,7 @@ export default function MyPage() {
         {isKo ? '마이페이지' : 'マイページ'}
       </h1>
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 overflow-hidden">
         {/* 헤더 */}
         <div className="bg-slate-900 px-6 py-5 flex items-center gap-4">
           <div className="w-14 h-14 rounded-full bg-blue-500 flex items-center justify-center text-white text-xl font-bold shrink-0">

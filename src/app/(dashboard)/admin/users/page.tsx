@@ -60,7 +60,7 @@ export default function UsersAdminPage() {
         {isKo ? `@arico.group 관리자 ${users.length}명 · 역할·접속 권한 관리` : `@arico.group 管理者 ${users.length}名`}
       </p>
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-x-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 overflow-x-auto">
         <table className="w-full text-sm min-w-[680px]">
           <thead>
             <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700">
