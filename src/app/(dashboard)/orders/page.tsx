@@ -108,7 +108,7 @@ export default function OrdersPage() {
   const [orders, setOrders]   = useState<Order[]>([])
   const [total, setTotal]     = useState(0)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab]         = useState<'active' | 'done'>('active')   // 진행중 / 완료
+  const [tab, setTab]         = useState<'active' | 'ready' | 'done'>('active')   // 진행중 / 배송대기 / 완료
   const [statusFilter, setStatusFilter]   = useState('')
   const [payFilter, setPayFilter]         = useState('')
   const [searchQ, setSearchQ]             = useState('')
@@ -134,6 +134,7 @@ export default function OrdersPage() {
     if (payFilter)    params.set('paymentStatus', payFilter)
     if (searchQ)      params.set('q', searchQ)
     params.set('completed', tab === 'done' ? '1' : '0')
+    if (tab === 'ready') params.set('readyToShip', '1')
     params.set('limit', String(PAGE_SIZE))
     params.set('page',  String(currentPage))
     const res  = await fetch(`/api/orders?${params}`)
@@ -204,13 +205,16 @@ export default function OrdersPage() {
 
   // 탭별 카운트용
   const [activeCount, setActiveCount] = useState(0)
+  const [readyCount,  setReadyCount]  = useState(0)
   const [doneCount,   setDoneCount]   = useState(0)
   useEffect(() => {
     Promise.all([
       fetch('/api/orders?completed=0&limit=1').then(r => r.json()),
+      fetch('/api/orders?completed=0&readyToShip=1&limit=1').then(r => r.json()),
       fetch('/api/orders?completed=1&limit=1').then(r => r.json()),
-    ]).then(([a, d]) => {
+    ]).then(([a, r, d]) => {
       setActiveCount(a.total ?? 0)
+      setReadyCount(r.total ?? 0)
       setDoneCount(d.total ?? 0)
     })
   }, [orders]) // orders 변경 시 탭 카운트 갱신
@@ -247,6 +251,16 @@ export default function OrdersPage() {
           {t.orders.tabActive}
           <span className={`ml-2 px-1.5 py-0.5 rounded-full text-xs font-bold ${tab === 'active' ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
             {activeCount}
+          </span>
+        </button>
+        <button
+          onClick={() => { setTab('ready'); setPage(1) }}
+          className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors ${tab === 'ready' ? 'bg-amber-500 text-white shadow-sm' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600'}`}
+        >
+          <Truck className="w-3.5 h-3.5 inline mr-1.5" />
+          {t.orders.tabReady}
+          <span className={`ml-2 px-1.5 py-0.5 rounded-full text-xs font-bold ${tab === 'ready' ? 'bg-amber-400 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
+            {readyCount}
           </span>
         </button>
         <button

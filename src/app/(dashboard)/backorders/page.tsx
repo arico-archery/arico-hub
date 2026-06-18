@@ -192,15 +192,15 @@ export default function BackordersPage() {
   }
 
   // 발주 생성
-  const createPO = async () => {
-    if (selected.size === 0) return
+  const submitPO = async (orderItemIds: number[]) => {
+    if (orderItemIds.length === 0) return
     setCreating(true)
     setLastResult(null)
     const res = await fetch('/api/backorders/create-po', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({
-        orderItemIds: Array.from(selected),
+        orderItemIds,
         expectedDate: expectedDate || undefined,
         memo:         memo || undefined,
       }),
@@ -215,6 +215,14 @@ export default function BackordersPage() {
     } else {
       alert(data.error ?? '발주 생성 실패')
     }
+  }
+
+  const createPO = () => submitPO(Array.from(selected))
+
+  // 이 공급사 미발주 전체를 한 번에 발주
+  const createPOForGroup = (groupItems: BackorderItem[]) => {
+    const ids = groupItems.filter(i => i.procureStatus === 'needed').map(i => i.id)
+    submitPO(ids)
   }
 
   const grouped = groupBySupplier(items)
@@ -347,6 +355,15 @@ export default function BackordersPage() {
                           {needInGroup.length > 0 && ` · ${t.backorders.unordered} ${needInGroup.length}${t.common.cases}`}
                         </span>
                       </span>
+                      {needInGroup.length > 0 && (
+                        <button
+                          onClick={e => { e.stopPropagation(); createPOForGroup(groupItems) }}
+                          disabled={creating}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          <Truck className="w-3 h-3" /> {t.backorders.orderAllInGroup} ({needInGroup.length})
+                        </button>
+                      )}
                       {isCollapsed ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronUp className="w-4 h-4 text-gray-400" />}
                     </div>
 
