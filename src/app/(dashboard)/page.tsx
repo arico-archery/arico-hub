@@ -42,6 +42,7 @@ type DashboardData = {
   supplierStats: { supplierCode: string; _count: number }[]
   totalProducts: number
   pricedProducts: number
+  unpricedBySupplier: { supplierCode: string; _count: number }[]
 }
 
 type MonthPoint = { label: string; month: number; year: number; sales: number; cost: number; count: number }
@@ -73,7 +74,6 @@ export default function DashboardPage() {
   const t = useT()
   const [data, setData] = useState<DashboardData | null>(null)
   const [trend, setTrend] = useState<MonthPoint[]>([])
-  const [unpriced, setUnpriced] = useState<Record<string, number>>({})
   const [now, setNow] = useState(new Date())
   const [range, setRange] = useState<'month' | '6m' | 'all'>('month')
 
@@ -86,20 +86,6 @@ export default function DashboardPage() {
     setNow(new Date())
   }, [])
 
-  useEffect(() => {
-    Promise.all(
-      SUPPLIER_LIST.map(code =>
-        fetch(`/api/products?supplier=${code}&noPrice=1&limit=1`)
-          .then(r => r.json())
-          .then((d: { total: number }) => ({ code, total: d.total ?? 0 }))
-      )
-    ).then(results => {
-      const m: Record<string, number> = {}
-      for (const { code, total } of results) m[code] = total
-      setUnpriced(m)
-    })
-  }, [])
-
   if (!data) {
     return (
       <div className="p-6 flex items-center justify-center h-64">
@@ -110,9 +96,11 @@ export default function DashboardPage() {
 
   const { monthlySales, monthlyProfit, monthlyMargin, monthlyOrderCount, salesMoM, profitMoM,
     marginMoMPts, procure, supplierPayable, overduePO, totalUnpaid, pendingShipment, overdueCount,
-    unpaidOrders, recentOrders, supplierStats, totalProducts, pricedProducts } = data
+    unpaidOrders, recentOrders, supplierStats, totalProducts, pricedProducts, unpricedBySupplier } = data
   const statsMap: Record<string, number> = {}
   for (const s of supplierStats) statsMap[s.supplierCode] = s._count
+  const unpriced: Record<string, number> = {}
+  for (const u of (unpricedBySupplier ?? [])) unpriced[u.supplierCode] = u._count
   const unpricedTotal = Math.max(0, totalProducts - pricedProducts)
 
   const momText = (v: number | null, unit = '%') =>

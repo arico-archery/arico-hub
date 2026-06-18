@@ -57,6 +57,9 @@ model Product {
   @@index([brand])
   @@index([supplierCode])
   @@index([barcode])
+  @@index([salePriceJpy])           // 가격 설정/미설정 필터·집계 가속 (7만 행 풀스캔 방지)
+  @@index([category])               // 카테고리 필터 가속
+  @@index([supplierCode, salePriceJpy]) // 공급사별 미설정 카운트 가속
 }
 
 model ExchangeRate {

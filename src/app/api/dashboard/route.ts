@@ -38,6 +38,7 @@ export async function GET(req: Request) {
     supplierStats,
     totalProducts,
     pricedProducts,
+    unpricedGroups,
   ] = await Promise.all([
     prisma.order.aggregate({
       where: periodWhere,
@@ -89,6 +90,12 @@ export async function GET(req: Request) {
     }),
     prisma.product.count(),
     prisma.product.count({ where: { salePriceJpy: { gt: 0 } } }),
+    // 공급사별 "판매가 미설정" 카운트 — 기존 클라이언트 8요청을 1쿼리로 통합
+    prisma.product.groupBy({
+      by: ['supplierCode'],
+      where: { salePriceJpy: 0 },
+      _count: true,
+    }),
   ])
 
   const monthlySales = monthOrders._sum.totalAmountJpy ?? 0
@@ -141,5 +148,6 @@ export async function GET(req: Request) {
     supplierStats,
     totalProducts,
     pricedProducts,
+    unpricedBySupplier: unpricedGroups.map(g => ({ supplierCode: g.supplierCode, _count: g._count })),
   })
 }
