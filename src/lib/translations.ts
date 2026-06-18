@@ -325,6 +325,11 @@ const T = {
     customers: {
       title: '거래처 관리',
       newCustomer: '거래처 추가',
+      cardScan: '명함 스캔',
+      scanProcessing: '인식 중…',
+      scanNoKey: '명함 OCR은 Anthropic API 키 설정이 필요합니다 (.env: ANTHROPIC_API_KEY)',
+      scanFailed: '명함 인식 실패. 다시 시도해 주세요.',
+      scanReview: '명함에서 인식했습니다. 내용을 확인 후 저장하세요.',
       excelImport: '엑셀 임포트',
       importTitle: '거래처 엑셀/CSV 임포트',
       importTemplate: '템플릿',
@@ -961,6 +966,11 @@ const T = {
     customers: {
       title: '取引先管理',
       newCustomer: '取引先追加',
+      cardScan: '名刺スキャン',
+      scanProcessing: '認識中…',
+      scanNoKey: '名刺OCRはAnthropic APIキー設定が必要です (.env: ANTHROPIC_API_KEY)',
+      scanFailed: '名刺の認識に失敗しました。再試行してください。',
+      scanReview: '名刺から認識しました。内容を確認して保存してください。',
       excelImport: 'Excelインポート',
       importTitle: '取引先 Excel/CSV インポート',
       importTemplate: 'テンプレート',

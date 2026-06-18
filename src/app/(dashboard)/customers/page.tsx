@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { Users, Plus, Phone, Mail, MapPin, Pencil, Check, X, Trash2, Search, ShoppingCart, Upload, FileDown, FileSpreadsheet } from 'lucide-react'
+import { Users, Plus, Phone, Mail, MapPin, Pencil, Check, X, Trash2, Search, ShoppingCart, Upload, FileDown, FileSpreadsheet, Camera } from 'lucide-react'
 import { formatJpy } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
 
@@ -117,6 +117,34 @@ export default function CustomersPage() {
     const a = document.createElement('a'); a.href = url; a.download = 'customers_template.csv'; a.click(); URL.revokeObjectURL(url)
   }
 
+  // 명함 스캔(OCR) → 인식 결과로 등록 폼 프리필 (사람 확인 후 저장)
+  const cardInputRef = useRef<HTMLInputElement>(null)
+  const [scanning, setScanning] = useState(false)
+
+  const handleCardScan = async (file: File) => {
+    setScanning(true); setErrorMsg('')
+    try {
+      const fd = new FormData(); fd.append('file', file)
+      const res = await fetch('/api/customers/ocr', { method: 'POST', body: fd })
+      const d = await res.json()
+      if (res.status === 503 || d.error === 'no_api_key') { setErrorMsg(t.customers.scanNoKey); return }
+      if (!res.ok || !d.fields) { setErrorMsg(t.customers.scanFailed); return }
+      const f = d.fields
+      setForm({
+        name: f.name || '', company: f.company || '', phone: f.phone || '', email: f.email || '',
+        address: f.address || '', memo: f.title || '', customerType: f.customerType || 'individual',
+        taxRegNo: f.taxRegNo || '', legalName: '', postalCode: f.postalCode || '',
+        billingAddress: '', contactPerson: f.contactPerson || '',
+      })
+      setShowForm(true); setEditingId(null); setImportOpen(false)
+      setErrorMsg('')
+    } catch (e) {
+      setErrorMsg(String(e))
+    } finally {
+      setScanning(false)
+    }
+  }
+
   const handleImport = async () => {
     if (!importFile) return
     setImporting(true); setImportResult(null)
@@ -210,6 +238,16 @@ export default function CustomersPage() {
               onChange={e => setSearchQ(e.target.value)}
             />
           </div>
+          <input ref={cardInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleCardScan(f); e.target.value = '' }} />
+          <button
+            onClick={() => cardInputRef.current?.click()}
+            disabled={scanning}
+            className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors"
+          >
+            <Camera className="w-4 h-4" />
+            {scanning ? t.customers.scanProcessing : t.customers.cardScan}
+          </button>
           <button
             onClick={() => { setImportOpen(o => !o); setImportResult(null) }}
             className="flex items-center gap-1.5 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
