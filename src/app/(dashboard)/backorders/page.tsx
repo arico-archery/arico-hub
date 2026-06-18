@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import {
   ClipboardList, Truck, CheckCircle2, Clock, AlertCircle,
-  ChevronDown, ChevronUp, Filter, RefreshCw
+  ChevronDown, ChevronUp, Filter, RefreshCw, SlidersHorizontal
 } from 'lucide-react'
 import { formatJpy, SUPPLIER_COLORS, SUPPLIER_LIST } from '@/lib/utils'
 import SupplierBadge from '@/components/SupplierBadge'
@@ -44,6 +44,9 @@ type BackorderItem = {
   } | null
 }
 
+type VariantAxis = { label: string; values: string[] }
+type VItem = { id: number; name: string; productCode: string; supplierCode: string; optionSize: string; optionColor: string; options: Record<string, string>; optionLabel: string }
+
 // ── 상수 ──────────────────────────────────────────────
 const PROCURE_STYLE = {
   needed:   { color: 'bg-red-100 text-red-700',      icon: <Clock className="w-3 h-3" /> },
@@ -75,6 +78,8 @@ export default function BackordersPage() {
   const [memo, setMemo]             = useState('')
   const [creating, setCreating]     = useState(false)
   const [lastResult, setLastResult] = useState<{ poNo: string; supplierCode: string; itemCount: number }[] | null>(null)
+  // 백오더 단계 변형(옵션) 선택: orderItemId → {axes, list, sel}
+  const [vData, setVData] = useState<Record<number, { axes: VariantAxis[]; list: VItem[]; sel: Record<string, string> } | 'none'>>({})
 
   const fetchItems = useCallback(async () => {
     setLoading(true)
@@ -130,6 +135,60 @@ export default function BackordersPage() {
       }
       return n
     })
+  }
+
+  // 옵션(변형) 불러오기 — 같은 그룹 변형/축
+  const loadVariants = async (item: BackorderItem) => {
+    if (vData[item.id]) return
+    try {
+      const d = await fetch(`/api/products/variants?productId=${item.product.id}`).then(r => r.json())
+      if (Array.isArray(d.variants) && d.variants.length >= 2 && Array.isArray(d.axes) && d.axes.length > 0) {
+        const cur = (d.variants as VItem[]).find(v => v.id === item.product.id)
+        setVData(prev => ({ ...prev, [item.id]: { axes: d.axes, list: d.variants, sel: cur ? { ...cur.options } : {} } }))
+      } else {
+        setVData(prev => ({ ...prev, [item.id]: 'none' }))
+      }
+    } catch { setVData(prev => ({ ...prev, [item.id]: 'none' })) }
+  }
+
+  const availableAxisValues = (list: VItem[], axisLabel: string, sel: Record<string, string>): string[] => {
+    const others = Object.keys(sel).filter(k => k !== axisLabel && sel[k])
+    const out: string[] = []
+    for (const v of list) {
+      if (!others.every(k => v.options[k] === sel[k])) continue
+      const val = v.options[axisLabel]
+      if (val && !out.includes(val)) out.push(val)
+    }
+    return out
+  }
+
+  // 옵션 축 선택 → 변형 해결 → 주문항목 상품 교체(PATCH)
+  const changeAxis = async (item: BackorderItem, axisLabel: string, value: string) => {
+    const vd = vData[item.id]
+    if (!vd || vd === 'none') return
+    const sel = { ...vd.sel }
+    if (value) sel[axisLabel] = value; else delete sel[axisLabel]
+    for (const ax of vd.axes) {
+      if (ax.label === axisLabel) continue
+      if (sel[ax.label] && !availableAxisValues(vd.list, ax.label, sel).includes(sel[ax.label])) delete sel[ax.label]
+    }
+    setVData(prev => ({ ...prev, [item.id]: { ...vd, sel } }))
+
+    const keys = Object.keys(sel).filter(k => sel[k])
+    const matches = vd.list.filter(v => keys.every(k => v.options[k] === sel[k]))
+    if (matches.length >= 1 && keys.length >= vd.axes.length) {
+      const v = matches[0]
+      if (v.id === item.product.id) return
+      const res = await fetch(`/api/order-items/${item.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: v.id, optionMemo: v.optionLabel }),
+      })
+      if (res.ok) {
+        setItems(prev => prev.map(it => it.id === item.id
+          ? { ...it, optionMemo: v.optionLabel, product: { ...it.product, id: v.id, name: v.name, productCode: v.productCode, optionSize: v.optionSize, optionColor: v.optionColor } }
+          : it))
+      }
+    }
   }
 
   // 발주 생성
@@ -370,6 +429,36 @@ export default function BackordersPage() {
                                     {item.product.name}
                                   </p>
                                   <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">{item.product.productCode}</p>
+                                  {isNeed && (() => {
+                                    const vd = vData[item.id]
+                                    if (vd === 'none') return null
+                                    if (!vd) return (
+                                      <button
+                                        onClick={e => { e.stopPropagation(); loadVariants(item) }}
+                                        className="mt-1 inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                                      >
+                                        <SlidersHorizontal className="w-3 h-3" /> {t.backorders.changeOption}
+                                      </button>
+                                    )
+                                    return (
+                                      <div className="flex flex-wrap gap-1 mt-1.5" onClick={e => e.stopPropagation()}>
+                                        {vd.axes.map(ax => {
+                                          const vals = availableAxisValues(vd.list, ax.label, vd.sel)
+                                          return (
+                                            <select
+                                              key={ax.label}
+                                              value={vd.sel[ax.label] ?? ''}
+                                              onChange={e => changeAxis(item, ax.label, e.target.value)}
+                                              className="border border-gray-200 dark:border-gray-600 rounded px-1.5 py-0.5 text-xs text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 max-w-[8rem]"
+                                            >
+                                              <option value="">{ax.label}</option>
+                                              {vals.map(v => <option key={v} value={v}>{v}</option>)}
+                                            </select>
+                                          )
+                                        })}
+                                      </div>
+                                    )
+                                  })()}
                                 </td>
                                 {/* 비고 */}
                                 <td className="px-3 py-3">
