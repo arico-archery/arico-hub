@@ -46,6 +46,7 @@ export default async function DocumentPage({
   let docNoVal = ''
   let recipientName = ''
   let recipientLines: string[] = []
+  let recipientHonorific = T.honorific
   let dateRows: DateRow[] = []
   let rows: Row[] = []
   let totals: TotalRow[] = []
@@ -88,8 +89,19 @@ export default async function DocumentPage({
     if (!order) notFound()
     backHref = '/orders'
     docNoVal = order.orderNo
-    recipientName = order.customer.name
-    recipientLines = [order.customer.company, order.customer.address, order.customer.email, order.customer.phone].filter(Boolean)
+    {
+      const c = order.customer
+      const isOrg = c.customerType === 'institution' || c.customerType === 'corporation'
+      recipientName = isOrg ? (c.legalName || c.company || c.name) : c.name
+      recipientHonorific = c.honorific || (isOrg ? T.honorific : T.honorificPerson)
+      recipientLines = [
+        c.postalCode ? `〒${c.postalCode}` : '',
+        c.billingAddress || c.address,
+        isOrg && c.contactPerson ? `${T.contactLabel}: ${c.contactPerson} ${T.honorificPerson}` : '',
+        c.taxRegNo ? `${T.regNo}: ${c.taxRegNo}` : '',
+        c.email, c.phone,
+      ].filter(Boolean)
+    }
     rows = order.items.map(it => ({
       name: it.product.name,
       sub: [it.product.brand, it.product.productCode, it.optionMemo].filter(Boolean).join(' · '),
@@ -158,7 +170,7 @@ export default async function DocumentPage({
         <div className="px-8 py-5 grid grid-cols-2 gap-6 border-b border-gray-100">
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">{T.to}</p>
-            <p className="text-lg font-bold text-gray-900">{recipientName} {T.honorific}</p>
+            <p className="text-lg font-bold text-gray-900">{recipientName} {recipientHonorific}</p>
             {recipientLines.map((l, i) => (
               <p key={i} className="text-gray-500 text-xs mt-0.5">{l}</p>
             ))}

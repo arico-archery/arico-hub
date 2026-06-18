@@ -21,7 +21,9 @@ export type DocText = {
   intro: Record<DocType, string>
   to: string                 // 수신 블록 라벨
   from: string               // 발행처 블록 라벨
-  honorific: string          // 御中 / 귀중 / '' (수신자명 뒤에 붙임)
+  honorific: string          // 御中 / 귀중 / '' (기관·기업 수신자명 뒤)
+  honorificPerson: string    // 様 / 님 / '' (개인 수신자명 뒤)
+  contactLabel: string       // 担当 / 담당 / Attn (수신 담당자)
   issueDate: string
   dueDate: string
   validUntil: string
@@ -61,7 +63,7 @@ export const DOC_TEXT: Record<DocLang, DocText> = {
       quote:   '下記の通りお見積り申し上げます。',
       po:      '下記の通り発注いたします。',
     },
-    to: '宛先', from: '発行元', honorific: '御中',
+    to: '宛先', from: '発行元', honorific: '御中', honorificPerson: '様', contactLabel: '担当',
     issueDate: '発行日', dueDate: 'お支払期限', validUntil: '有効期限', expectedDate: '納品予定日',
     no: 'No.', itemName: '品名', remarks: '備考', qty: '数量', unitPrice: '単価', amount: '金額',
     subtotal: '小計', total: '合計', paidAmount: '入金額', balanceDue: 'ご請求額', totalQty: '合計数量',
@@ -78,7 +80,7 @@ export const DOC_TEXT: Record<DocLang, DocText> = {
       quote:   '아래와 같이 견적합니다.',
       po:      '아래와 같이 발주합니다.',
     },
-    to: '수신', from: '발행처', honorific: '귀중',
+    to: '수신', from: '발행처', honorific: '귀중', honorificPerson: '님', contactLabel: '담당',
     issueDate: '발행일', dueDate: '결제 기한', validUntil: '유효 기한', expectedDate: '입고 예정일',
     no: 'No.', itemName: '품명', remarks: '비고', qty: '수량', unitPrice: '단가', amount: '금액',
     subtotal: '소계', total: '합계', paidAmount: '입금액', balanceDue: '청구 금액', totalQty: '총 수량',
@@ -95,7 +97,7 @@ export const DOC_TEXT: Record<DocLang, DocText> = {
       quote:   'We are pleased to provide the following quotation.',
       po:      'We hereby place the following order.',
     },
-    to: 'To', from: 'From', honorific: '',
+    to: 'To', from: 'From', honorific: '', honorificPerson: '', contactLabel: 'Attn',
     issueDate: 'Issue Date', dueDate: 'Due Date', validUntil: 'Valid Until', expectedDate: 'Expected Delivery',
     no: 'No.', itemName: 'Description', remarks: 'Remarks', qty: 'Qty', unitPrice: 'Unit Price', amount: 'Amount',
     subtotal: 'Subtotal', total: 'Total', paidAmount: 'Paid', balanceDue: 'Balance Due', totalQty: 'Total Qty',
