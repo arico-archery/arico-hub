@@ -9,12 +9,27 @@ import { useT } from '@/lib/i18n'
 type Customer = {
   id: number; code: string; name: string; company: string
   email: string; phone: string; address: string; memo: string
+  customerType: string; taxRegNo: string; legalName: string
+  postalCode: string; billingAddress: string; contactPerson: string
   _count: { orders: number }
   orders: { totalAmountJpy: number; paidAmountJpy: number }[]
 }
 
-type FormState = { name: string; company: string; phone: string; email: string; address: string; memo: string }
-const EMPTY_FORM: FormState = { name: '', company: '', phone: '', email: '', address: '', memo: '' }
+type FormState = {
+  name: string; company: string; phone: string; email: string; address: string; memo: string
+  customerType: string; taxRegNo: string; legalName: string
+  postalCode: string; billingAddress: string; contactPerson: string
+}
+const EMPTY_FORM: FormState = {
+  name: '', company: '', phone: '', email: '', address: '', memo: '',
+  customerType: 'individual', taxRegNo: '', legalName: '', postalCode: '', billingAddress: '', contactPerson: '',
+}
+
+const CUSTOMER_TYPES: { v: string; key: 'typeIndividual' | 'typeInstitution' | 'typeCorporation' }[] = [
+  { v: 'individual', key: 'typeIndividual' },
+  { v: 'institution', key: 'typeInstitution' },
+  { v: 'corporation', key: 'typeCorporation' },
+]
 
 // 모듈 레벨 컴포넌트로 정의 (컴포넌트 내부에 두면 매 렌더마다 재생성되어
 // input이 unmount/remount → 한 글자 입력 후 포커스(커서)를 잃는 버그 발생)
@@ -30,6 +45,49 @@ function InputField({ label, value, onChange, placeholder, className = '' }: {
         value={value}
         onChange={e => onChange(e.target.value)}
       />
+    </div>
+  )
+}
+
+// 거래처 입력 필드 (등록·편집 공용). 구분 선택 + 기관/기업이면 인보이스 필드 노출.
+function CustomerFormFields({ form, patch }: { form: FormState; patch: (p: Partial<FormState>) => void }) {
+  const t = useT()
+  const isOrg = form.customerType !== 'individual'
+  return (
+    <div className="space-y-3">
+      {/* 구분 */}
+      <div>
+        <label className="text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1 block">{t.customers.labelType}</label>
+        <div className="flex gap-2">
+          {CUSTOMER_TYPES.map(({ v, key }) => (
+            <button key={v} type="button" onClick={() => patch({ customerType: v })}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${form.customerType === v ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
+              {t.customers[key]}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <InputField label={t.customers.labelName} placeholder={t.customers.placeholderName} value={form.name} onChange={v => patch({ name: v })} />
+        <InputField label={t.customers.labelCompany} placeholder={t.customers.placeholderCompany} value={form.company} onChange={v => patch({ company: v })} />
+        <InputField label={t.customers.labelPhone} placeholder="090-0000-0000" value={form.phone} onChange={v => patch({ phone: v })} />
+        <InputField label={t.customers.labelEmail} placeholder="email@example.com" value={form.email} onChange={v => patch({ email: v })} />
+        <InputField label={t.customers.labelPostalCode} placeholder="〒000-0000" value={form.postalCode} onChange={v => patch({ postalCode: v })} />
+        <InputField label={t.customers.labelAddress} value={form.address} onChange={v => patch({ address: v })} />
+      </div>
+      {/* 기관/기업: 청구서(적격청구서) 정보 */}
+      {isOrg && (
+        <div className="rounded-lg border border-gray-100 dark:border-gray-700 p-3">
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">{t.customers.invoiceInfo}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <InputField label={t.customers.labelTaxRegNo} placeholder="T0000000000000" value={form.taxRegNo} onChange={v => patch({ taxRegNo: v })} />
+            <InputField label={t.customers.labelLegalName} value={form.legalName} onChange={v => patch({ legalName: v })} />
+            <InputField label={t.customers.labelContactPerson} value={form.contactPerson} onChange={v => patch({ contactPerson: v })} />
+            <InputField label={t.customers.labelBillingAddress} value={form.billingAddress} onChange={v => patch({ billingAddress: v })} className="sm:col-span-2 lg:col-span-3" />
+          </div>
+        </div>
+      )}
+      <InputField label={t.customers.labelMemo} placeholder={t.common.memoPlaceholder} value={form.memo} onChange={v => patch({ memo: v })} />
     </div>
   )
 }
@@ -71,7 +129,11 @@ export default function CustomersPage() {
 
   const startEdit = (c: Customer) => {
     setEditingId(c.id)
-    setEditForm({ name: c.name, company: c.company, phone: c.phone, email: c.email, address: c.address, memo: c.memo })
+    setEditForm({
+      name: c.name, company: c.company, phone: c.phone, email: c.email, address: c.address, memo: c.memo,
+      customerType: c.customerType || 'individual', taxRegNo: c.taxRegNo || '', legalName: c.legalName || '',
+      postalCode: c.postalCode || '', billingAddress: c.billingAddress || '', contactPerson: c.contactPerson || '',
+    })
     setErrorMsg('')
   }
 
@@ -137,13 +199,8 @@ export default function CustomersPage() {
       {showForm && (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5 mb-4 border-l-4 border-blue-500">
           <h3 className="font-semibold text-gray-900 dark:text-white mb-4">{t.customers.newTitle}</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-            <InputField label={t.customers.labelName} placeholder={t.customers.placeholderName} value={form.name} onChange={v => setForm(p => ({ ...p, name: v }))} />
-            <InputField label={t.customers.labelCompany} placeholder={t.customers.placeholderCompany} value={form.company} onChange={v => setForm(p => ({ ...p, company: v }))} />
-            <InputField label={t.customers.labelPhone} placeholder="010-0000-0000" value={form.phone} onChange={v => setForm(p => ({ ...p, phone: v }))} />
-            <InputField label={t.customers.labelEmail} placeholder="email@example.com" value={form.email} onChange={v => setForm(p => ({ ...p, email: v }))} />
-            <InputField label={t.customers.labelAddress} placeholder="" value={form.address} onChange={v => setForm(p => ({ ...p, address: v }))} className="col-span-2" />
-            <InputField label={t.customers.labelMemo} placeholder={t.common.memoPlaceholder} value={form.memo} onChange={v => setForm(p => ({ ...p, memo: v }))} className="col-span-3" />
+          <div className="mb-4">
+            <CustomerFormFields form={form} patch={p => setForm(f => ({ ...f, ...p }))} />
           </div>
           <div className="flex gap-2">
             <button onClick={handleCreate} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">{t.customers.save}</button>
@@ -192,12 +249,8 @@ export default function CustomersPage() {
                   if (isEditing) return (
                     <tr key={c.id} className="bg-blue-50/40 dark:bg-blue-900/10">
                       <td colSpan={8} className="px-4 py-3">
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-2">
-                          <InputField label={t.customers.labelName} value={editForm.name} onChange={v => setEditForm(p => ({ ...p, name: v }))} />
-                          <InputField label={t.customers.labelCompany} value={editForm.company} onChange={v => setEditForm(p => ({ ...p, company: v }))} />
-                          <InputField label={t.customers.labelPhone} value={editForm.phone} onChange={v => setEditForm(p => ({ ...p, phone: v }))} />
-                          <InputField label={t.customers.labelEmail} value={editForm.email} onChange={v => setEditForm(p => ({ ...p, email: v }))} />
-                          <InputField label={t.customers.labelAddress} value={editForm.address} onChange={v => setEditForm(p => ({ ...p, address: v }))} className="col-span-2" />
+                        <div className="mb-2">
+                          <CustomerFormFields form={editForm} patch={p => setEditForm(f => ({ ...f, ...p }))} />
                         </div>
                         <div className="flex gap-2">
                           <button onClick={() => handleSave(c.id)} className="flex items-center gap-1 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-blue-700">

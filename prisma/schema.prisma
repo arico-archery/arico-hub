@@ -78,6 +78,14 @@ model Customer {
   phone       String    @default("")
   address     String    @default("")
   memo        String    @default("")
+  // 거래처 구분 + 청구서(적격청구서) 정보
+  customerType   String @default("individual") // individual | institution | corporation
+  taxRegNo       String @default("")           // 適格請求書 登録番号(T+13) / 法人番号
+  legalName      String @default("")           // 정식 상호(표시명과 다를 때)
+  postalCode     String @default("")           // 우편번호 〒
+  billingAddress String @default("")           // 청구지(배송지와 다를 수 있음)
+  contactPerson  String @default("")           // 수신 담당자 担当者
+  honorific      String @default("")           // 様 / 御中 (비우면 구분따라 자동)
   orders      Order[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
