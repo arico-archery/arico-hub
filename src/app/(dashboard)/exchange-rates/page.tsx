@@ -22,7 +22,7 @@ export default function ExchangeRatesPage() {
   const t = useT()
 
   const CURRENCY_INFO: Record<string, { name: string; flag: string; color: string }> = {
-    USD: { name: t.exchangeRates.currencyUSD, flag: '🇺🇸', color: 'border-blue-500' },
+    USD: { name: t.exchangeRates.currencyUSD, flag: '🇺🇸', color: 'border-sky-500' },
     KRW: { name: t.exchangeRates.currencyKRW, flag: '🇰🇷', color: 'border-purple-500' },
     EUR: { name: t.exchangeRates.currencyEUR, flag: '🇪🇺', color: 'border-yellow-500' },
   }
