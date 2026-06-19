@@ -212,6 +212,27 @@ model StockLevel {
   updatedAt     DateTime @updatedAt
 }
 
+// ARICO 온라인샵 재고 SKU — 옵션(색/방향/사이즈/무게)별 변형 1행. JAN당 1개.
+// 수동 관리(재고 관리 탭) + 추후 MakeShop/Smaregi 동기화(source/syncedAt)가 같은 테이블로 들어옴.
+model OnlineSku {
+  id                Int       @id @default(autoincrement())
+  barcode           String    @default("") @map("barcode")        // JAN — Smaregi 연결키
+  name              String                                        // 표시 상품명(베이스)
+  optionLabel       String    @default("") @map("option_label")   // 예: LH / バーガンディーレッド / 25"
+  stockQty          Int       @default(0) @map("stock_qty")
+  reorderPoint      Int       @default(0) @map("reorder_point")
+  catalogId         Int?      @map("catalog_id")                  // 부모 카탈로그(선택)
+  supplierProductId Int?      @map("supplier_product_id")         // 공급사 변형 링크(선택, 원가/발주)
+  source            String    @default("manual")                 // manual | smaregi | makeshop
+  syncedAt          DateTime? @map("synced_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@index([barcode])
+  @@index([catalogId])
+  @@map("online_sku")
+}
+
 model AricoCatalog {
   id              Int      @id @default(autoincrement())
   productCode     String   @unique @map("product_code")
