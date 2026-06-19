@@ -231,6 +231,9 @@ model AricoCatalog {
   // ARICO 자사몰 옵션 (JSON: [{label, values:[...]}]) — 주문 시 옵션 선택용
   options         String   @default("") @map("options")
   barcode         String   @default("") @map("barcode") // JAN 바코드 — Smaregi 재고 연결 키
+  // ARICO 온라인샵 재고 — MakeShop/Smaregi에서 동기화(바코드 기준). API 연동 전엔 0.
+  onlineStockQty  Int       @default(0) @map("online_stock_qty")
+  stockSyncedAt   DateTime? @map("stock_synced_at")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
 
