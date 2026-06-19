@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, RefreshCw, ChevronLeft, ChevronRight, Link2, Link2Off, X, Check, Wand2, ImageOff, Barcode, Languages, ScanLine, Layers } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
+import { Search, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Link2, Link2Off, X, Check, Wand2, ImageOff, Barcode, Languages, ScanLine, Layers, Plus, Trash2, CheckCircle } from 'lucide-react'
 import BarcodeScanner from '@/components/BarcodeScanner'
 import { formatNumber, SUPPLIER_COLORS } from '@/lib/utils'
 import Image from 'next/image'
@@ -9,8 +9,13 @@ import { useT } from '@/lib/i18n'
 
 type MatchedProduct = {
   id: number; name: string; brand: string; productCode: string
-  supplierCode: string; costPrice: number; salePriceJpy: number
+  supplierCode: string; costPrice: number; salePriceJpy: number; category?: string
   supplier: { currency: string }
+}
+
+type SkuRow = {
+  id: number; barcode: string; name: string; optionLabel: string
+  stockQty: number; source: string
 }
 
 type CatalogItem = {
@@ -20,6 +25,8 @@ type CatalogItem = {
   supplierProductId: number | null
   barcode: string
   matchedProduct: MatchedProduct | null
+  variants: SkuRow[]
+  stockTotal: number
 }
 
 type SupplierProduct = {
@@ -276,6 +283,12 @@ export default function CatalogPage() {
   const [autoMatching, setAutoMatching] = useState(false)
   const [autoMatchResult, setAutoMatchResult] = useState<AutoMatchResult>(null)
   const [stats, setStats] = useState<CatalogStats | null>(null)
+  // 변형(재고) 펼치기·편집
+  const [expanded, setExpanded] = useState<Set<number>>(new Set())
+  const [skuStock, setSkuStock] = useState<Record<number, string>>({})
+  const [skuSaved, setSkuSaved] = useState<Set<number>>(new Set())
+  const [addForm, setAddForm] = useState<{ catalogId: number; optionLabel: string; barcode: string; stockQty: string } | null>(null)
+  const [skuScanOpen, setSkuScanOpen] = useState(false)
 
   const fetchStats = useCallback(async () => {
     try {
@@ -299,8 +312,58 @@ export default function CatalogPage() {
     const data = await res.json()
     setItems(data.rows)
     setTotal(data.total)
+    const init: Record<number, string> = {}
+    for (const it of (data.rows as CatalogItem[])) for (const v of it.variants) init[v.id] = String(v.stockQty)
+    setSkuStock(prev => ({ ...prev, ...init }))
     setLoading(false)
   }, [q, filter])
+
+  const toggleExpand = (id: number) => setExpanded(prev => {
+    const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n
+  })
+
+  // 변형 재고 인라인 저장
+  const saveSkuStock = async (catalogId: number, skuId: number) => {
+    const val = Number(skuStock[skuId] ?? 0)
+    const item = items.find(i => i.id === catalogId)
+    const cur = item?.variants.find(v => v.id === skuId)?.stockQty ?? 0
+    if (isNaN(val) || val === cur) return
+    const res = await fetch(`/api/online-sku/${skuId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stockQty: val }),
+    })
+    if (!res.ok) return
+    setItems(prev => prev.map(i => i.id !== catalogId ? i : {
+      ...i,
+      variants: i.variants.map(v => v.id === skuId ? { ...v, stockQty: val } : v),
+      stockTotal: i.stockTotal - cur + val,
+    }))
+    setSkuSaved(prev => new Set(prev).add(skuId))
+    setTimeout(() => setSkuSaved(prev => { const s = new Set(prev); s.delete(skuId); return s }), 1800)
+  }
+
+  // 변형 추가 (해당 카탈로그 상품 아래)
+  const submitAddVariant = async () => {
+    if (!addForm) return
+    const item = items.find(i => i.id === addForm.catalogId)
+    await fetch('/api/online-sku', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        catalogId: addForm.catalogId,
+        supplierProductId: item?.supplierProductId ?? null,
+        name: item?.name ?? '',
+        optionLabel: addForm.optionLabel,
+        barcode: addForm.barcode,
+        stockQty: Number(addForm.stockQty) || 0,
+      }),
+    })
+    setAddForm(null)
+    fetchItems(page)
+  }
+
+  const deleteVariant = async (skuId: number) => {
+    await fetch(`/api/online-sku/${skuId}`, { method: 'DELETE' })
+    fetchItems(page)
+  }
 
   useEffect(() => {
     setPage(1)
@@ -488,76 +551,113 @@ export default function CatalogPage() {
         </button>
       </div>
 
-      {/* 상품 그리드 — 화면 크기별 자동 컬럼 조정 */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2">
-        {items.map(item => {
-          const priceKrw = Math.round(item.priceJpyNotax * krwPerJpy)
-          const img = item.imageUrl2 || item.imageUrl1
-          const matched = item.matchedProduct
-          return (
-            <div key={item.id} className="relative bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow flex flex-col group">
-              {item.barcode && (
-                <span className="absolute top-1 right-1 z-10 flex items-center justify-center w-5 h-5 rounded text-white" style={{ backgroundColor: '#2f7d55' }} title={`JAN ${item.barcode}`}>
-                  <Barcode className="w-3 h-3" />
-                </span>
-              )}
-              {/* 이미지 — 없거나 로딩 실패 시 "이미지 없음" placeholder */}
-              <CatalogImage src={img} alt={item.name} label={t.catalog.noImage} />
-
-              {/* 정보 (컴팩트) */}
-              <div className="p-1.5 flex flex-col flex-1">
-                {item.brand && (
-                  <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 leading-none mb-0.5 truncate">{item.brand}</p>
-                )}
-                <p className="text-[11px] font-medium text-gray-800 dark:text-gray-100 leading-tight line-clamp-2 mb-1 flex-1">{item.name}</p>
-
-                {/* 가격 + 링크 */}
-                <div className="flex items-baseline justify-between mb-1">
-                  <div>
-                    <span className="text-xs font-bold text-gray-900 dark:text-gray-100">¥{formatNumber(item.priceJpy)}</span>
-                    <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-1">₩{formatNumber(priceKrw)}</span>
-                  </div>
-                  {item.url && (
-                    <a href={item.url} target="_blank" rel="noopener noreferrer"
-                       className="text-[10px] text-blue-500 hover:underline flex-shrink-0"
-                       onClick={e => e.stopPropagation()}>{t.common.view}</a>
-                  )}
-                </div>
-
-                {/* 매칭 버튼 (컴팩트) */}
-                <button
-                  onClick={() => setModalItem(item)}
-                  className={`w-full flex items-center gap-1 px-1.5 py-1 rounded text-[10px] font-medium transition-colors ${
-                    matched
-                      ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 border border-green-200 dark:border-green-800/50'
-                      : 'bg-gray-50 dark:bg-gray-700/50 text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600'
-                  }`}
-                >
-                  {matched ? (
+      {/* 상품 + 변형(재고) 리스트 */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 overflow-x-auto">
+        <table className="w-full text-sm min-w-[820px]">
+          <thead>
+            <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 text-left">
+              <th className="w-8 px-2 py-2.5" />
+              <th className="px-3 py-2.5 font-semibold text-gray-700 dark:text-gray-200">{t.catalog.colItem}</th>
+              <th className="px-3 py-2.5 font-semibold text-gray-700 dark:text-gray-200">{t.catalog.colCategory}</th>
+              <th className="px-3 py-2.5 font-semibold text-gray-700 dark:text-gray-200 text-center w-28">{t.catalog.colStockStatus}</th>
+              <th className="px-3 py-2.5 font-semibold text-gray-700 dark:text-gray-200 text-right w-28">{t.catalog.colPrice}</th>
+              <th className="px-3 py-2.5 font-semibold text-gray-700 dark:text-gray-200 w-56">{t.catalog.colMatch}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
+            {items.map(item => {
+              const img = item.imageUrl2 || item.imageUrl1
+              const matched = item.matchedProduct
+              const isOpen = expanded.has(item.id)
+              const hasVar = item.variants.length > 0
+              return (
+                <Fragment key={item.id}>
+                  <tr className={`transition-colors cursor-pointer ${isOpen ? 'bg-blue-50/40 dark:bg-blue-900/10' : 'hover:bg-gray-50 dark:hover:bg-gray-700/40'}`} onClick={() => toggleExpand(item.id)}>
+                    <td className="px-2 py-2 text-gray-400 text-center">{isOpen ? <ChevronDown className="w-4 h-4 inline" /> : <ChevronRight className="w-4 h-4 inline" />}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 shrink-0"><CatalogImage src={img} alt={item.name} label="" /></div>
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 dark:text-gray-100 leading-tight truncate">{item.name}</p>
+                          <p className="text-xs text-gray-400 flex items-center gap-1.5">
+                            {item.brand && <span>{item.brand}</span>}
+                            {item.barcode && <span className="inline-flex items-center gap-0.5"><Barcode className="w-3 h-3" />{item.barcode}</span>}
+                            {hasVar && <span className="inline-flex items-center gap-0.5 text-blue-600 dark:text-blue-400"><Layers className="w-3 h-3" />{item.variants.length}</span>}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-gray-600 dark:text-gray-300 text-xs">{matched?.category || '—'}</td>
+                    <td className="px-3 py-2 text-center">
+                      {!hasVar
+                        ? <span className="text-xs text-gray-400">{t.catalog.stockUnset}</span>
+                        : item.stockTotal > 0
+                          ? <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300">{t.catalog.inStockShort} {item.stockTotal}</span>
+                          : <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300">{t.catalog.soldOut}</span>}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-gray-900 dark:text-gray-100">{item.priceJpy > 0 ? `¥${formatNumber(item.priceJpy)}` : '—'}</td>
+                    <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
+                      <button onClick={() => setModalItem(item)}
+                        className={`w-full flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                          matched ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 hover:bg-green-100 border border-green-200 dark:border-green-800/50'
+                                  : 'bg-gray-50 dark:bg-gray-700/50 text-gray-400 hover:bg-gray-100 border border-gray-200 dark:border-gray-600'}`}>
+                        {matched ? (
+                          <><Link2 className="w-3 h-3 shrink-0" /><span className="truncate"><span className="inline-block px-0.5 rounded text-white text-[9px] font-bold mr-0.5" style={{ backgroundColor: SUPPLIER_COLORS[matched.supplierCode] ?? '#6b7280' }}>{matched.supplierCode}</span>{matched.name}</span></>
+                        ) : (<><Link2Off className="w-3 h-3 shrink-0" /><span>{t.catalog.matchButton}</span></>)}
+                      </button>
+                    </td>
+                  </tr>
+                  {isOpen && (
                     <>
-                      <Link2 className="w-2.5 h-2.5 flex-shrink-0" />
-                      <span className="truncate">
-                        <span
-                          className="inline-block px-0.5 rounded text-white text-[9px] font-bold mr-0.5"
-                          style={{ backgroundColor: SUPPLIER_COLORS[matched.supplierCode] ?? '#6b7280' }}
-                        >{matched.supplierCode}</span>
-                        {matched.name}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <Link2Off className="w-2.5 h-2.5 flex-shrink-0" />
-                      <span>{t.catalog.matchButton}</span>
+                      {item.variants.map(v => (
+                        <tr key={v.id} className="bg-gray-50/40 dark:bg-gray-900/20">
+                          <td />
+                          <td className="px-3 py-1.5 pl-12">
+                            <span className="text-sm text-gray-700 dark:text-gray-200">{v.optionLabel || t.catalog.variantBase}</span>
+                            {v.barcode && <span className="text-[10px] text-gray-400 font-mono ml-2">{v.barcode}</span>}
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded ${v.source === 'manual' ? 'bg-gray-100 dark:bg-gray-700 text-gray-500' : 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'}`}>{v.source === 'manual' ? t.inventory.sourceManual : v.source}</span>
+                          </td>
+                          <td className="px-3 py-1.5 text-center">
+                            <span className="relative inline-flex items-center">
+                              <input type="number"
+                                className={`w-16 text-center border rounded px-2 py-1 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-blue-500 ${skuSaved.has(v.id) ? 'border-green-400 bg-green-50 dark:bg-green-900/20 text-gray-900 dark:text-gray-100' : (Number(skuStock[v.id] ?? 0) > 0 ? 'border-green-300 dark:border-green-700 bg-white dark:bg-gray-700 text-green-700 dark:text-green-300 font-medium' : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-400')}`}
+                                value={skuStock[v.id] ?? ''}
+                                onChange={e => setSkuStock(prev => ({ ...prev, [v.id]: e.target.value }))}
+                                onBlur={() => saveSkuStock(item.id, v.id)}
+                                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }} />
+                              {skuSaved.has(v.id) && <CheckCircle className="absolute -right-5 w-3.5 h-3.5 text-green-500" />}
+                            </span>
+                          </td>
+                          <td />
+                          <td className="px-3 py-1.5">
+                            <button onClick={() => deleteVariant(v.id)} title={t.common.delete} className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="bg-gray-50/40 dark:bg-gray-900/20">
+                        <td />
+                        <td colSpan={5} className="px-3 py-1.5 pl-12">
+                          <button onClick={() => setAddForm({ catalogId: item.id, optionLabel: '', barcode: '', stockQty: '0' })}
+                            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline font-medium">
+                            <Plus className="w-3.5 h-3.5" />{t.catalog.addVariant}
+                          </button>
+                        </td>
+                      </tr>
                     </>
                   )}
-                </button>
-              </div>
-            </div>
-          )
-        })}
-        {!loading && items.length === 0 && (
-          <div className="col-span-full text-center py-16 text-gray-400">{t.catalog.noProducts}</div>
-        )}
+                </Fragment>
+              )
+            })}
+            {loading && items.length === 0 && (
+              <tr><td colSpan={6} className="text-center py-16 text-gray-400">{t.common.loading}</td></tr>
+            )}
+            {!loading && items.length === 0 && (
+              <tr><td colSpan={6} className="text-center py-16 text-gray-400">{t.catalog.noProducts}</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       {/* 페이지네이션 */}
@@ -598,6 +698,47 @@ export default function CatalogPage() {
           onClose={() => setModalItem(null)}
           onMatch={handleMatch}
         />
+      )}
+
+      {/* 변형 추가 모달 */}
+      {addForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setAddForm(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+              <h2 className="font-semibold text-gray-900 dark:text-white">{t.catalog.addVariantTitle}</h2>
+              <button onClick={() => setAddForm(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 block">{t.inventory.fieldOption}</label>
+                <input type="text" value={addForm.optionLabel} onChange={e => setAddForm(f => f && { ...f, optionLabel: e.target.value })} placeholder={t.inventory.fieldOptionPh}
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 block">{t.inventory.fieldBarcode}</label>
+                  <div className="flex gap-1.5">
+                    <input type="text" inputMode="numeric" value={addForm.barcode} onChange={e => setAddForm(f => f && { ...f, barcode: e.target.value })}
+                      className="flex-1 min-w-0 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <button type="button" onClick={() => setSkuScanOpen(true)} className="shrink-0 px-2.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700"><ScanLine className="w-4 h-4" /></button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 block">{t.inventory.fieldStock}</label>
+                  <input type="number" value={addForm.stockQty} onChange={e => setAddForm(f => f && { ...f, stockQty: e.target.value })}
+                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 px-5 py-4 border-t border-gray-100 dark:border-gray-700">
+              <button onClick={submitAddVariant} className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700">{t.common.save}</button>
+              <button onClick={() => setAddForm(null)} className="px-4 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 py-2 rounded-lg text-sm font-medium hover:bg-gray-200">{t.common.cancel}</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {skuScanOpen && (
+        <BarcodeScanner onResult={code => { setAddForm(f => f && { ...f, barcode: code }); setSkuScanOpen(false) }} onClose={() => setSkuScanOpen(false)} />
       )}
     </div>
   )

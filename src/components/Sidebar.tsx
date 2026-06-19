@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Package, ShoppingCart, CreditCard,
   Users, BarChart3, Settings, RefreshCw, Globe, Truck, ClipboardList, BookOpen, LogOut,
-  Sun, Moon, Boxes
+  Sun, Moon
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -55,7 +55,6 @@ export default function Sidebar() {
       items: [
         { href: '/customers',        label: t.nav.customers,       icon: Users },
         { href: '/catalog',          label: t.nav.catalog,         icon: Globe },
-        { href: '/inventory',        label: t.nav.inventory,       icon: Boxes },
         { href: '/products',         label: t.nav.products,        icon: Package },
         { href: '/analytics',        label: t.nav.analytics,       icon: BarChart3 },
       ],

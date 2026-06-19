@@ -60,7 +60,7 @@ export async function GET(req: Request) {
       ? await prisma.product.findMany({
           where: { id: { in: productIds } },
           select: {
-            id: true, name: true, brand: true, productCode: true, supplierCode: true,
+            id: true, name: true, brand: true, productCode: true, supplierCode: true, category: true,
             costPrice: true, salePriceJpy: true, unit: true, optionSize: true, optionColor: true,
             supplier: { select: { currency: true, taxRate: true, discount: true } },
           },
@@ -68,10 +68,23 @@ export async function GET(req: Request) {
       : []
     const productMap = Object.fromEntries(products.map(p => [p.id, p]))
 
-    const rowsWithMatch = rows.map(r => ({
-      ...r,
-      matchedProduct: r.supplierProductId ? (productMap[r.supplierProductId] ?? null) : null,
-    }))
+    // 각 카탈로그의 온라인샵 변형(OnlineSku) 재고
+    const catalogIds = rows.map(r => r.id)
+    const skus = catalogIds.length > 0
+      ? await prisma.onlineSku.findMany({ where: { catalogId: { in: catalogIds } }, orderBy: { optionLabel: 'asc' } })
+      : []
+    const skuMap: Record<number, typeof skus> = {}
+    for (const s of skus) { if (s.catalogId != null) (skuMap[s.catalogId] ??= []).push(s) }
+
+    const rowsWithMatch = rows.map(r => {
+      const variants = skuMap[r.id] ?? []
+      return {
+        ...r,
+        matchedProduct: r.supplierProductId ? (productMap[r.supplierProductId] ?? null) : null,
+        variants,
+        stockTotal: variants.reduce((sum, v) => sum + v.stockQty, 0),
+      }
+    })
 
     return NextResponse.json({ rows: rowsWithMatch, total })
   } catch (err) {
