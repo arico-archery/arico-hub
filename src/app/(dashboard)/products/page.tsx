@@ -14,7 +14,6 @@ type Product = {
   costPrice: number; msrp: number; salePriceJpy: number; unit: string; availability: string
   imageUrl1: string; url: string; supplierCode: string; supplier: Supplier
   optionSize: string; optionColor: string; shopProductId: string; barcode: string
-  stockLevel?: { quantity: number } | null
 }
 type ExchangeRate = { currency: string; rateToJpy: number }
 // 통합 보기: 코드 접두부로 묶은 상품 그룹
@@ -63,8 +62,6 @@ export default function ProductsPage() {
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(false)
   const [salePrices, setSalePrices] = useState<Record<number, string>>({})
-  const [stockInputs, setStockInputs] = useState<Record<number, string>>({})
-  const [stockSavedIds, setStockSavedIds] = useState<Set<number>>(new Set())
   const [dirty, setDirty] = useState<Set<number>>(new Set())
   const [saving, setSaving] = useState(false)
   const [savedOk, setSavedOk] = useState(false)
@@ -180,13 +177,10 @@ export default function ProductsPage() {
     setTotal(data.total)
     // 저장된 판매가 초기값 로드
     const init: Record<number, string> = {}
-    const stockInit: Record<number, string> = {}
     for (const p of data.products) {
       if (p.salePriceJpy > 0) init[p.id] = String(p.salePriceJpy)
-      stockInit[p.id] = String(p.stockLevel?.quantity ?? 0)
     }
     setSalePrices(prev => ({ ...prev, ...init }))
-    setStockInputs(prev => ({ ...prev, ...stockInit }))
     setDirty(new Set())
     setLoading(false)
   }, [q, supplierFilter, categoryFilter, brandFilter, noPriceOnly])
@@ -285,25 +279,6 @@ export default function ProductsPage() {
     } finally {
       setSavingIds(prev => { const s = new Set(prev); s.delete(id); return s })
     }
-  }
-
-  // 재고 저장 (blur 시) — /api/stock PATCH
-  const saveStock = async (id: number) => {
-    const val = Number(stockInputs[id] ?? 0)
-    if (isNaN(val)) return
-    const cur = products.find(p => p.id === id)?.stockLevel?.quantity ?? 0
-    if (val === cur) return
-    try {
-      const res = await fetch('/api/stock', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([{ productId: id, quantity: val }]),
-      })
-      if (!res.ok) return
-      setProducts(prev => prev.map(p => p.id === id ? { ...p, stockLevel: { quantity: val } } : p))
-      setStockSavedIds(prev => new Set(prev).add(id))
-      setTimeout(() => setStockSavedIds(prev => { const s = new Set(prev); s.delete(id); return s }), 2000)
-    } catch { /* noop */ }
   }
 
   // 전체 일괄 저장 (버튼)
@@ -609,7 +584,6 @@ export default function ProductsPage() {
               <th className="text-left px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.products.colName}</th>
               <th className="text-right px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.products.colCost}</th>
               <th className="text-right px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.products.colSale}</th>
-              <th className="text-center px-4 py-3 font-semibold text-gray-700 dark:text-gray-200 w-24">{t.products.colStock}</th>
               <th className="px-4 py-3 font-semibold text-gray-700 dark:text-gray-200 w-44">{t.products.colMargin}</th>
               <th className="text-right px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.products.colCostRate}</th>
               <th className="text-right px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.products.colProfit}</th>
@@ -617,9 +591,9 @@ export default function ProductsPage() {
           </thead>
           <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
             {loading && products.length === 0 ? (
-              <tr><td colSpan={9} className="text-center py-16 text-gray-400">{t.common.loading}</td></tr>
+              <tr><td colSpan={8} className="text-center py-16 text-gray-400">{t.common.loading}</td></tr>
             ) : products.length === 0 ? (
-              <tr><td colSpan={9} className="text-center py-16 text-gray-400">
+              <tr><td colSpan={8} className="text-center py-16 text-gray-400">
                 <Package className="w-8 h-8 mx-auto mb-2 opacity-30" />
                 <p>{t.products.noProducts}</p>
               </td></tr>
@@ -727,20 +701,6 @@ export default function ProductsPage() {
                         <CheckCircle className="absolute -right-4 w-3.5 h-3.5 text-green-500 shrink-0" />
                       )}
                     </div>
-                  </td>
-                  <td className="px-4 py-2 w-24">
-                    <input
-                      type="number"
-                      className={`w-16 text-center border rounded px-2 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-1 ${
-                        stockSavedIds.has(p.id) ? 'border-green-400 bg-green-50 dark:bg-green-900/20 focus:ring-green-500 text-gray-900 dark:text-gray-100' :
-                        (Number(stockInputs[p.id] ?? 0) > 0 ? 'border-green-300 dark:border-green-700 bg-white dark:bg-gray-700 text-green-700 dark:text-green-300 font-medium' : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-400')
-                      } focus:ring-blue-500`}
-                      placeholder="0"
-                      value={stockInputs[p.id] ?? ''}
-                      onChange={e => setStockInputs(prev => ({ ...prev, [p.id]: e.target.value }))}
-                      onBlur={() => saveStock(p.id)}
-                      onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur() } }}
-                    />
                   </td>
                   <td className="px-4 py-3">
                     {hasPrice ? <ProfitBar margin={margin} /> : <span className="text-gray-500 text-xs">{t.products.needInput}</span>}

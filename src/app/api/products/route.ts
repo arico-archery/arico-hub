@@ -73,7 +73,7 @@ export async function GET(req: Request) {
   const [products, total] = await Promise.all([
     prisma.product.findMany({
       where,
-      include: { supplier: true, stockLevel: true },
+      include: { supplier: true },
       skip: exportCsv ? 0 : skip,
       take: exportCsv ? 9999 : limit,
       orderBy: [{ supplierCode: 'asc' }, { brand: 'asc' }, { name: 'asc' }],

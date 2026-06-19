@@ -56,11 +56,10 @@ function Thumb({ src, size = 32 }: { src?: string; size?: number }) {
 }
 
 function getStepDone(order: Order): boolean[] {
-  // from_stock(재고출고)은 발주 없이 바로 손에 있는 상태 → received와 동일하게 "입고됨" 취급
   const allReceived = order.items.length > 0
-    ? order.items.every(i => i.procureStatus === 'received' || i.procureStatus === 'from_stock')
+    ? order.items.every(i => i.procureStatus === 'received')
     : false
-  const anyOrdered = order.items.some(i => ['ordered', 'received', 'from_stock'].includes(i.procureStatus))
+  const anyOrdered = order.items.some(i => i.procureStatus === 'ordered' || i.procureStatus === 'received')
 
   return [
     true,                                                        // 주문접수: 항상 완료

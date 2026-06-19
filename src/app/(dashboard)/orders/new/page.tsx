@@ -14,7 +14,6 @@ type Product = {
   id: number; name: string; brand: string; productCode: string; supplierCode: string
   costPrice: number; salePriceJpy: number; unit: string
   supplier: Supplier; optionSize: string; optionColor: string
-  stockLevel?: { quantity: number } | null
 }
 type CatalogMatchedProduct = {
   id: number; name: string; brand: string; productCode: string; supplierCode: string
@@ -630,9 +629,6 @@ export default function NewOrderPage() {
                             <p className="text-xs text-gray-400">{p.brand} · {p.productCode}</p>
                             {p.optionSize && <span className="text-xs px-1 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 font-medium">{p.optionSize}</span>}
                             {p.optionColor && <span className="text-xs px-1 py-0.5 rounded bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 font-medium">{p.optionColor}</span>}
-                            {(p.stockLevel?.quantity ?? 0) > 0
-                              ? <span className="text-xs px-1 py-0.5 rounded bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 font-medium">{t.orders.inStock} {p.stockLevel!.quantity}</span>
-                              : <span className="text-xs px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-400 font-medium">{t.orders.needOrder}</span>}
                           </div>
                         </div>
                         <span className="text-sm font-medium text-gray-600 dark:text-gray-300 whitespace-nowrap">{formatJpy(costJpy)} {t.orders.newCostLabel}</span>
