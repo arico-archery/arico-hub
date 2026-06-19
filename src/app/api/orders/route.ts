@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createWithSeqRetry } from '@/lib/seq'
+import { planAllocation, type StockItemInput } from '@/lib/stock'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -27,10 +28,10 @@ export async function GET(req: Request) {
     // 완료 필터: '1'=completedAt 있음, '0'=completedAt 없음
     ...(completed === '1' ? { completedAt: { not: null } } : {}),
     ...(completed === '0' ? { completedAt: null } : {}),
-    // 배송대기: 모든 주문품목이 입고완료(received)인데 아직 미발송
+    // 배송대기: 모든 주문품목이 손에 있고(received=입고완료 또는 from_stock=재고출고) 아직 미발송
     ...(readyToShip === '1' ? {
       shippingDate: null,
-      items: { some: {}, every: { procureStatus: 'received' } },
+      items: { some: {}, every: { procureStatus: { in: ['received', 'from_stock'] } } },
     } : {}),
     ...(q ? {
       OR: [
@@ -124,9 +125,15 @@ export async function POST(req: Request) {
     productId: number; quantity: number; salePriceJpy: number
     costPriceJpy: number; optionMemo?: string; catalogId?: number | null
   }
+  // 2-lane 분기: 현재 재고를 보고 재고있음(from_stock)/없음(needed)으로 나눈다 (부분재고는 분리)
+  const productIds = [...new Set((items as OrderItemInput[]).map(i => i.productId))]
+  const stocks = await prisma.stockLevel.findMany({ where: { productId: { in: productIds } } })
+  const stockMap = Object.fromEntries(stocks.map(s => [s.productId, s.quantity]))
+  const plan = planAllocation(items as StockItemInput[], stockMap)
+
   let totalAmountJpy = 0
   let totalCostJpy = 0
-  const itemsData = (items as OrderItemInput[]).map((item) => {
+  const itemsData = plan.items.map((item) => {
     totalAmountJpy += item.salePriceJpy * item.quantity
     totalCostJpy += item.costPriceJpy * item.quantity
     return {
@@ -135,6 +142,7 @@ export async function POST(req: Request) {
       salePriceJpy: item.salePriceJpy,
       costPriceJpy: item.costPriceJpy,
       optionMemo: item.optionMemo ?? '',
+      procureStatus: item.procureStatus,
     }
   })
 
@@ -160,6 +168,14 @@ export async function POST(req: Request) {
       },
     }),
   )
+
+  // 재고 차감 (from_stock으로 배정된 수량만큼)
+  const decrEntries = Object.entries(plan.decrements).filter(([, q]) => q > 0)
+  if (decrEntries.length > 0) {
+    await prisma.$transaction(decrEntries.map(([pid, q]) =>
+      prisma.stockLevel.update({ where: { productId: Number(pid) }, data: { quantity: { decrement: q } } })
+    )).catch(() => { /* 재고 행 없으면 무시 (from_stock 배정 시엔 존재) */ })
+  }
 
   // 주문에서 사람이 확정한 정보를 공급사 상품 / ARICO 카탈로그에 역반영한다.
   // 주문이 쌓일수록 판매가·매칭이 실제 거래 기준으로 점점 정확해진다.
