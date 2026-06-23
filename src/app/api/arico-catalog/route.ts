@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { calcCostJpy } from '@/lib/utils'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -68,10 +69,18 @@ export async function GET(req: Request) {
       : []
     const productMap = Object.fromEntries(products.map(p => [p.id, p]))
 
-    const rowsWithMatch = rows.map(r => ({
-      ...r,
-      matchedProduct: r.supplierProductId ? (productMap[r.supplierProductId] ?? null) : null,
-    }))
+    // 공급가(엔화 환산) 계산용 환율
+    const rates = await prisma.exchangeRate.findMany({ select: { currency: true, rateToJpy: true } })
+
+    const rowsWithMatch = rows.map(r => {
+      const mp = r.supplierProductId ? (productMap[r.supplierProductId] ?? null) : null
+      return {
+        ...r,
+        matchedProduct: mp,
+        // 매칭된 공급사 상품의 원가를 엔화로 환산한 공급가 (미매칭은 null)
+        supplyCostJpy: mp ? Math.round(calcCostJpy(mp, rates)) : null,
+      }
+    })
 
     return NextResponse.json({ rows: rowsWithMatch, total })
   } catch (err) {

@@ -231,6 +231,7 @@ model AricoCatalog {
   // ARICO 자사몰 옵션 (JSON: [{label, values:[...]}]) — 주문 시 옵션 선택용
   options         String   @default("") @map("options")
   barcode         String   @default("") @map("barcode") // JAN 바코드 — Smaregi 재고 연결 키
+  point           Int      @default(0) @map("point")     // ARICO 온라인숍 적립 포인트(1pt=1엔). 자사몰에서 수집.
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
 

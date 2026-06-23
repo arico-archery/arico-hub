@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, RefreshCw, ChevronLeft, ChevronRight, Link2, Link2Off, X, Check, Wand2, ImageOff, Barcode, Languages, ScanLine, Layers } from 'lucide-react'
+import { Search, RefreshCw, ChevronLeft, ChevronRight, Link2, Link2Off, X, Check, Wand2, ImageOff, Barcode, Languages, ScanLine, Layers, List, LayoutGrid } from 'lucide-react'
 import BarcodeScanner from '@/components/BarcodeScanner'
 import { formatNumber, SUPPLIER_COLORS } from '@/lib/utils'
 import Image from 'next/image'
@@ -19,6 +19,8 @@ type CatalogItem = {
   imageUrl1: string; imageUrl2: string; url: string
   supplierProductId: number | null
   barcode: string
+  point: number
+  supplyCostJpy: number | null   // 공급가(엔화) — 미매칭은 null
   matchedProduct: MatchedProduct | null
 }
 
@@ -276,6 +278,7 @@ export default function CatalogPage() {
   const [autoMatching, setAutoMatching] = useState(false)
   const [autoMatchResult, setAutoMatchResult] = useState<AutoMatchResult>(null)
   const [stats, setStats] = useState<CatalogStats | null>(null)
+  const [viewMode, setViewMode] = useState<'list' | 'card'>('list')
 
   const fetchStats = useCallback(async () => {
     try {
@@ -483,12 +486,83 @@ export default function CatalogPage() {
             </button>
           ))}
         </div>
+        <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+          <button onClick={() => setViewMode('list')} title="리스트"
+            className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>
+            <List className="w-4 h-4" />
+          </button>
+          <button onClick={() => setViewMode('card')} title="카드"
+            className={`p-1.5 rounded-md transition-colors ${viewMode === 'card' ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+        </div>
         <button onClick={() => fetchItems(page)} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
 
+      {/* 리스트 뷰 — 판매가·공급가·마진·포인트 비교 */}
+      {viewMode === 'list' && (
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 overflow-x-auto">
+        <table className="w-full text-sm min-w-[760px]">
+          <thead>
+            <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700 text-left">
+              <th className="px-3 py-2.5 font-semibold text-gray-700 dark:text-gray-200">{t.catalog.colItem}</th>
+              <th className="px-3 py-2.5 font-semibold text-gray-700 dark:text-gray-200 text-right w-28">{t.catalog.colSalePrice}</th>
+              <th className="px-3 py-2.5 font-semibold text-gray-700 dark:text-gray-200 text-right w-28">{t.catalog.colSupplyPrice}</th>
+              <th className="px-3 py-2.5 font-semibold text-gray-700 dark:text-gray-200 text-right w-32">{t.catalog.colMargin}</th>
+              <th className="px-3 py-2.5 font-semibold text-gray-700 dark:text-gray-200 text-right w-20">{t.catalog.colPoint}</th>
+              <th className="px-3 py-2.5 font-semibold text-gray-700 dark:text-gray-200 w-48">{t.catalog.colMatch}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
+            {items.map(item => {
+              const matched = item.matchedProduct
+              const img = item.imageUrl2 || item.imageUrl1
+              const cost = item.supplyCostJpy
+              const marginJpy = (cost != null && item.priceJpy > 0) ? item.priceJpy - cost : null
+              const marginPct = (marginJpy != null && item.priceJpy > 0) ? (marginJpy / item.priceJpy) * 100 : null
+              const mColor = marginPct == null ? '' : marginPct < 0 ? 'text-red-600 dark:text-red-400' : marginPct < 20 ? 'text-amber-600 dark:text-amber-400' : 'text-green-700 dark:text-green-400'
+              return (
+                <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 shrink-0"><CatalogImage src={img} alt={item.name} label="" /></div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900 dark:text-gray-100 leading-tight truncate">{item.name}</p>
+                        <p className="text-xs text-gray-400">{item.brand}{item.barcode ? ` · ${item.barcode}` : ''}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums text-gray-900 dark:text-gray-100">{item.priceJpy > 0 ? `¥${formatNumber(item.priceJpy)}` : '—'}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-gray-500 dark:text-gray-400">{cost != null ? `¥${formatNumber(cost)}` : '—'}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {marginJpy != null
+                      ? <span className={mColor}>¥{formatNumber(marginJpy)} <span className="text-[11px]">{marginPct!.toFixed(0)}%</span></span>
+                      : <span className="text-gray-300 dark:text-gray-600">—</span>}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums text-gray-500 dark:text-gray-400">{item.point > 0 ? formatNumber(item.point) : '—'}</td>
+                  <td className="px-3 py-2">
+                    <button onClick={() => setModalItem(item)}
+                      className={`w-full flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${matched ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 hover:bg-green-100 border border-green-200 dark:border-green-800/50' : 'bg-gray-50 dark:bg-gray-700/50 text-gray-400 hover:bg-gray-100 border border-gray-200 dark:border-gray-600'}`}>
+                      {matched
+                        ? <><Link2 className="w-3 h-3 shrink-0" /><span className="truncate"><span className="inline-block px-0.5 rounded text-white text-[9px] font-bold mr-0.5" style={{ backgroundColor: SUPPLIER_COLORS[matched.supplierCode] ?? '#6b7280' }}>{matched.supplierCode}</span>{matched.name}</span></>
+                        : <><Link2Off className="w-3 h-3 shrink-0" /><span>{t.catalog.matchButton}</span></>}
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
+            {!loading && items.length === 0 && (
+              <tr><td colSpan={6} className="text-center py-16 text-gray-400">{t.catalog.noProducts}</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      )}
+
       {/* 상품 그리드 — 화면 크기별 자동 컬럼 조정 */}
+      {viewMode === 'card' && (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2">
         {items.map(item => {
           const priceKrw = Math.round(item.priceJpyNotax * krwPerJpy)
@@ -559,6 +633,7 @@ export default function CatalogPage() {
           <div className="col-span-full text-center py-16 text-gray-400">{t.catalog.noProducts}</div>
         )}
       </div>
+      )}
 
       {/* 페이지네이션 */}
       {totalPages > 1 && (
