@@ -487,13 +487,13 @@ export default function CatalogPage() {
           ))}
         </div>
         <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-          <button onClick={() => setViewMode('list')} title="리스트"
-            className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>
-            <List className="w-4 h-4" />
+          <button onClick={() => setViewMode('list')} title={t.catalog.viewList}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+            <List className="w-3.5 h-3.5" />{t.catalog.viewList}
           </button>
-          <button onClick={() => setViewMode('card')} title="카드"
-            className={`p-1.5 rounded-md transition-colors ${viewMode === 'card' ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>
-            <LayoutGrid className="w-4 h-4" />
+          <button onClick={() => setViewMode('card')} title={t.catalog.viewCard}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === 'card' ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>
+            <LayoutGrid className="w-3.5 h-3.5" />{t.catalog.viewCard}
           </button>
         </div>
         <button onClick={() => fetchItems(page)} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
