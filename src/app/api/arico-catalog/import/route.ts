@@ -4,51 +4,49 @@ import { fetchShop, codesFromList, listPageUrl, itemUrl, parseItem } from '@/lib
 
 export const maxDuration = 60
 
-// POST /api/arico-catalog/import — 자사숍에서 "새 상품"만 가져와 카탈로그에 추가.
-// body: { pages?: number, maxNew?: number } — 최근 목록 N페이지를 훑어 카탈로그에 없는 코드만 추가.
-// ⚠️ 시간 소요 작업. 한 번에 과하게 돌지 않도록 페이지·추가 수를 제한한다.
+// POST /api/arico-catalog/import — 자사숍 목록 "한 페이지"만 처리(배치). 클라이언트가 page를 1씩 올려 반복.
+// body: { mode: 'new' | 'all', page: number }
+//   - new: 카탈로그에 없는 상품만 추가 (기존은 스킵 → 빠름)
+//   - all: 모든 상품을 가져와 추가/갱신(upsert) → 느림(전체)
+// ⚠️ 한 번에 전체를 돌리지 않도록 페이지 단위로 끊는다.
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => ({})) as { pages?: number; maxNew?: number }
-  const pages = Math.min(Math.max(1, body.pages ?? 6), 12)   // 최대 12페이지
-  const maxNew = Math.min(Math.max(1, body.maxNew ?? 30), 50) // 한 번에 최대 50개 추가
+  const body = await req.json().catch(() => ({})) as { mode?: 'new' | 'all'; page?: number }
+  const mode = body.mode === 'all' ? 'all' : 'new'
+  const page = Math.max(1, body.page ?? 1)
 
-  // 1) 목록 페이지에서 코드 열거
-  const shopCodes: string[] = []
-  for (let pg = 1; pg <= pages; pg++) {
-    try {
-      const html = await fetchShop(listPageUrl(pg))
-      for (const c of codesFromList(html)) if (!shopCodes.includes(c)) shopCodes.push(c)
-    } catch { /* 페이지 실패 무시 */ }
+  let codes: string[] = []
+  try {
+    const html = await fetchShop(listPageUrl(page))
+    codes = codesFromList(html)
+  } catch {
+    return NextResponse.json({ ok: false, page, error: 'list_fetch_failed', hasMore: false })
+  }
+  if (codes.length === 0) {
+    return NextResponse.json({ ok: true, page, seen: 0, added: 0, updated: 0, hasMore: false })
   }
 
-  // 2) 카탈로그에 없는 신규 코드만
-  const existing = await prisma.aricoCatalog.findMany({ select: { productCode: true } })
+  const existing = await prisma.aricoCatalog.findMany({ where: { productCode: { in: codes } }, select: { productCode: true } })
   const have = new Set(existing.map(e => e.productCode))
-  const newCodes = shopCodes.filter(c => !have.has(c)).slice(0, maxNew)
 
-  // 3) 신규 상품 상세 파싱 후 추가
-  let added = 0
-  const samples: string[] = []
-  for (const code of newCodes) {
+  let added = 0, updated = 0
+  for (const code of codes) {
+    const exists = have.has(code)
+    if (mode === 'new' && exists) continue
     try {
       const html = await fetchShop(itemUrl(code))
       const item = parseItem(html, code)
       if (!item) continue
-      await prisma.aricoCatalog.create({
-        data: {
-          productCode: code, name: item.name, priceJpy: item.priceJpy,
-          priceJpyNotax: item.priceJpy ? Math.round(item.priceJpy / 1.1) : 0,
-          msrpJpy: item.msrpJpy, point: item.point, imageUrl1: item.imageUrl1, url: item.url,
-        },
-      })
-      added++
-      if (samples.length < 5) samples.push(item.name)
+      const data = {
+        name: item.name, priceJpy: item.priceJpy,
+        priceJpyNotax: item.priceJpy ? Math.round(item.priceJpy / 1.1) : 0,
+        msrpJpy: item.msrpJpy, point: item.point, url: item.url,
+        ...(item.imageUrl1 ? { imageUrl1: item.imageUrl1 } : {}),
+      }
+      if (exists) { await prisma.aricoCatalog.update({ where: { productCode: code }, data }); updated++ }
+      else { await prisma.aricoCatalog.create({ data: { productCode: code, ...data } }); added++ }
     } catch { /* 개별 실패 무시 */ }
   }
 
-  return NextResponse.json({
-    ok: true, scannedPages: pages, shopCodesSeen: shopCodes.length,
-    newFound: shopCodes.filter(c => !have.has(c)).length, added, samples,
-    truncated: shopCodes.filter(c => !have.has(c)).length > maxNew,
-  })
+  // 12개 미만이면 마지막 페이지로 간주
+  return NextResponse.json({ ok: true, page, seen: codes.length, added, updated, hasMore: codes.length >= 12 })
 }

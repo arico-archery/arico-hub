@@ -287,6 +287,12 @@ export default function CatalogPage() {
   const [confirm, setConfirm] = useState<{ title: string; message: string; confirmLabel: string; onConfirm: () => void } | null>(null)
   const [busyMsg, setBusyMsg] = useState<string | null>(null)
   const [refreshingId, setRefreshingId] = useState<number | null>(null)
+  // 상품 가져오기 모달 (전체/새상품 선택 → 확인 → 페이지별 배치 진행)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importMode, setImportMode] = useState<'new' | 'all'>('new')
+  const [importRunning, setImportRunning] = useState(false)
+  const [importProg, setImportProg] = useState<{ page: number; added: number; updated: number; done: boolean } | null>(null)
+  const importCancel = useRef(false)
 
   const fetchStats = useCallback(async () => {
     try {
@@ -362,16 +368,27 @@ export default function CatalogPage() {
     fetchItems(page); fetchStats()
   }
 
-  // A: 자사숍에서 새 상품 가져오기 (확인 후 실행)
-  const runImport = async () => {
-    setBusyMsg(t.catalog.importing)
-    try {
-      const d = await fetch('/api/arico-catalog/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }).then(r => r.json())
-      if (d.ok) {
-        setBusyMsg(`✅ ${t.catalog.importDone.replace('{added}', d.added).replace('{found}', d.newFound)}${d.truncated ? ' · ' + t.catalog.importMore : ''}`)
-        fetchItems(page); fetchStats()
-      } else setBusyMsg('⚠️ ' + (d.message ?? 'error'))
-    } catch { setBusyMsg('⚠️ error') }
+  // A: 자사숍에서 가져오기 — 전체(all)/새상품(new). 페이지 단위로 끊어 반복(타임아웃 방지).
+  const runImport = async (mode: 'new' | 'all') => {
+    importCancel.current = false
+    setImportRunning(true)
+    setImportProg({ page: 0, added: 0, updated: 0, done: false })
+    let pg = 1, added = 0, updated = 0
+    for (;;) {
+      if (importCancel.current) break
+      let d
+      try {
+        d = await fetch('/api/arico-catalog/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode, page: pg }) }).then(r => r.json())
+      } catch { break }
+      if (!d?.ok) break
+      added += d.added; updated += d.updated
+      setImportProg({ page: pg, added, updated, done: false })
+      if (!d.hasMore) break
+      pg++
+    }
+    setImportProg({ page: pg, added, updated, done: true })
+    setImportRunning(false)
+    fetchItems(page); fetchStats()
   }
 
   // C: 개별 상품 자사숍에서 새로고침 (확인 후 실행)
@@ -425,7 +442,7 @@ export default function CatalogPage() {
             <Plus className="w-3.5 h-3.5" />{t.catalog.addItem}
           </button>
           <button
-            onClick={() => setConfirm({ title: t.catalog.importConfirmTitle, message: t.catalog.importConfirmMsg, confirmLabel: t.catalog.importBtn, onConfirm: runImport })}
+            onClick={() => { setImportMode('new'); setImportProg(null); setImportOpen(true) }}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 transition-colors"
             title={t.catalog.importTooltip}
           >
@@ -818,6 +835,52 @@ export default function CatalogPage() {
               <button onClick={submitForm} disabled={savingForm || !editForm.name.trim()}
                 className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">{savingForm ? t.common.saving : t.common.save}</button>
               <button onClick={() => setEditForm(null)} className="px-4 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 py-2 rounded-lg text-sm font-medium hover:bg-gray-200">{t.common.cancel}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 상품 가져오기 모달 — 전체/새상품 선택 → 진행 */}
+      {importOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => { if (!importRunning) setImportOpen(false) }}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+              <h2 className="font-semibold text-gray-900 dark:text-white">{t.catalog.importTitle}</h2>
+              {!importRunning && <button onClick={() => setImportOpen(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded"><X className="w-5 h-5" /></button>}
+            </div>
+            <div className="p-5 space-y-3">
+              {/* 선택지 */}
+              {(['new', 'all'] as const).map(m => (
+                <button key={m} onClick={() => !importRunning && setImportMode(m)} disabled={importRunning}
+                  className={`w-full text-left p-3 rounded-lg border transition-colors ${importMode === m ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300'} ${importRunning ? 'opacity-60' : ''}`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${importMode === m ? 'border-blue-600' : 'border-gray-300'}`}>
+                      {importMode === m && <span className="w-2 h-2 rounded-full bg-blue-600" />}
+                    </span>
+                    <span className="font-medium text-sm text-gray-900 dark:text-gray-100">{m === 'new' ? t.catalog.importNew : t.catalog.importAll}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">{m === 'new' ? t.catalog.importNewDesc : t.catalog.importAllDesc}</p>
+                </button>
+              ))}
+
+              {/* 진행 상태 */}
+              {importProg && (
+                <div className={`text-xs px-3 py-2 rounded-lg ${importProg.done ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300'}`}>
+                  {importProg.done
+                    ? `✅ ${t.catalog.importResult.replace('{added}', String(importProg.added)).replace('{updated}', String(importProg.updated))}`
+                    : `${t.catalog.importProgress.replace('{page}', String(importProg.page))} · +${importProg.added} · ⟳${importProg.updated}`}
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2 px-5 py-4 border-t border-gray-100 dark:border-gray-700">
+              {importRunning ? (
+                <button onClick={() => { importCancel.current = true }} className="flex-1 bg-red-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-red-700">{t.catalog.importStop}</button>
+              ) : (
+                <>
+                  <button onClick={() => runImport(importMode)} className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700">{importProg?.done ? t.catalog.importAgain : t.catalog.importStart}</button>
+                  <button onClick={() => setImportOpen(false)} className="px-4 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 py-2 rounded-lg text-sm font-medium hover:bg-gray-200">{t.common.close}</button>
+                </>
+              )}
             </div>
           </div>
         </div>
