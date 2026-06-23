@@ -89,14 +89,44 @@ export async function GET(req: Request) {
   }
 }
 
-// PATCH /api/arico-catalog — { id, supplierProductId?: number | null, barcode?: string }
+// POST /api/arico-catalog — 수동(이벤트/일시) 상품 추가. productCode 자동생성 EVENT-xxxx.
+export async function POST(req: Request) {
+  const body = await req.json() as { name?: string; brand?: string; priceJpy?: number; point?: number; imageUrl1?: string }
+  if (!body.name || !body.name.trim()) {
+    return NextResponse.json({ error: 'name required' }, { status: 400 })
+  }
+  const price = Math.round(body.priceJpy ?? 0) || 0
+  const created = await prisma.aricoCatalog.create({
+    data: {
+      productCode: `EVENT-${Date.now().toString(36).toUpperCase()}`,
+      name: body.name.trim(),
+      brand: (body.brand ?? '').trim(),
+      priceJpy: price,
+      priceJpyNotax: price ? Math.round(price / 1.1) : 0,
+      point: Math.round(body.point ?? 0) || 0,
+      imageUrl1: (body.imageUrl1 ?? '').trim(),
+    },
+  })
+  return NextResponse.json(created, { status: 201 })
+}
+
+// PATCH /api/arico-catalog — { id, supplierProductId?, barcode?, name?, brand?, priceJpy?, point?, imageUrl1? }
 export async function PATCH(req: Request) {
-  const body = await req.json() as { id: number; supplierProductId?: number | null; barcode?: string }
+  const body = await req.json() as {
+    id: number; supplierProductId?: number | null; barcode?: string
+    name?: string; brand?: string; priceJpy?: number; point?: number; imageUrl1?: string
+  }
   const { id } = body
 
-  const data: { supplierProductId?: number | null; barcode?: string } = {}
+  const data: { supplierProductId?: number | null; barcode?: string; name?: string; brand?: string; priceJpy?: number; priceJpyNotax?: number; point?: number; imageUrl1?: string } = {}
   if ('supplierProductId' in body) data.supplierProductId = body.supplierProductId
   if (body.barcode !== undefined) data.barcode = body.barcode.trim()
+  // 수동(이벤트) 상품 필드 편집
+  if (body.name !== undefined) data.name = body.name.trim()
+  if (body.brand !== undefined) data.brand = body.brand.trim()
+  if (body.priceJpy !== undefined) { data.priceJpy = Math.round(body.priceJpy) || 0; data.priceJpyNotax = Math.round((Math.round(body.priceJpy) || 0) / 1.1) }
+  if (body.point !== undefined) data.point = Math.round(body.point) || 0
+  if (body.imageUrl1 !== undefined) data.imageUrl1 = body.imageUrl1.trim()
 
   const catalog = await prisma.aricoCatalog.update({ where: { id }, data })
 

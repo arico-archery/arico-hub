@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, RefreshCw, ChevronLeft, ChevronRight, Link2, Link2Off, X, Check, Wand2, ImageOff, Barcode, Languages, ScanLine, Layers, List, LayoutGrid } from 'lucide-react'
+import { Search, RefreshCw, ChevronLeft, ChevronRight, Link2, Link2Off, X, Check, Wand2, ImageOff, Barcode, Languages, ScanLine, Layers, List, LayoutGrid, Plus, Pencil, Trash2 } from 'lucide-react'
 import BarcodeScanner from '@/components/BarcodeScanner'
 import { formatNumber, SUPPLIER_COLORS } from '@/lib/utils'
 import Image from 'next/image'
@@ -279,6 +279,10 @@ export default function CatalogPage() {
   const [autoMatchResult, setAutoMatchResult] = useState<AutoMatchResult>(null)
   const [stats, setStats] = useState<CatalogStats | null>(null)
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list')
+  // 수동(이벤트) 상품 추가/편집
+  const [editForm, setEditForm] = useState<{ id?: number; name: string; brand: string; priceJpy: string; point: string; imageUrl1: string } | null>(null)
+  const [savingForm, setSavingForm] = useState(false)
+  const [deleteId, setDeleteId] = useState<number | null>(null)
 
   const fetchStats = useCallback(async () => {
     try {
@@ -324,6 +328,36 @@ export default function CatalogPage() {
     fetchStats()
   }
 
+  const openCreate = () => setEditForm({ name: '', brand: '', priceJpy: '', point: '', imageUrl1: '' })
+  const openEdit = (item: CatalogItem) => setEditForm({
+    id: item.id, name: item.name, brand: item.brand,
+    priceJpy: item.priceJpy ? String(item.priceJpy) : '', point: item.point ? String(item.point) : '', imageUrl1: item.imageUrl1 || '',
+  })
+
+  const submitForm = async () => {
+    if (!editForm || !editForm.name.trim()) return
+    setSavingForm(true)
+    const payload = {
+      name: editForm.name, brand: editForm.brand,
+      priceJpy: Number(editForm.priceJpy) || 0, point: Number(editForm.point) || 0, imageUrl1: editForm.imageUrl1,
+    }
+    try {
+      if (editForm.id) {
+        await fetch('/api/arico-catalog', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editForm.id, ...payload }) })
+      } else {
+        await fetch('/api/arico-catalog', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      }
+      setEditForm(null)
+      fetchItems(page); fetchStats()
+    } finally { setSavingForm(false) }
+  }
+
+  const deleteItem = async (id: number) => {
+    await fetch(`/api/arico-catalog/${id}`, { method: 'DELETE' })
+    setDeleteId(null)
+    fetchItems(page); fetchStats()
+  }
+
   const handleAutoMatch = async (dryRun = false) => {
     setAutoMatching(true)
     setAutoMatchResult(null)
@@ -355,9 +389,15 @@ export default function CatalogPage() {
           <p className="text-gray-600 dark:text-gray-400 font-medium text-sm mt-1">arico-archery.com · {t.common.total} {formatNumber(total)}{t.common.items}</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="text-sm text-gray-600 dark:text-gray-400 font-medium">
+          <div className="text-sm text-gray-600 dark:text-gray-400 font-medium hidden sm:block">
             {t.catalog.jpyRate} <span className="font-semibold text-gray-900 dark:text-gray-100">¥1 ≈ ₩{krwPerJpy}</span>
           </div>
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 text-white rounded-lg text-xs font-medium hover:bg-slate-800 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />{t.catalog.addItem}
+          </button>
           <button
             onClick={() => handleAutoMatch(true)}
             disabled={autoMatching}
@@ -529,8 +569,22 @@ export default function CatalogPage() {
                     <div className="flex items-center gap-2.5">
                       <div className="w-9 h-9 shrink-0"><CatalogImage src={img} alt={item.name} label="" /></div>
                       <div className="min-w-0">
-                        <p className="font-medium text-gray-900 dark:text-gray-100 leading-tight truncate">{item.name}</p>
-                        <p className="text-xs text-gray-400">{item.brand}{item.barcode ? ` · ${item.barcode}` : ''}</p>
+                        <p className="font-medium text-gray-900 dark:text-gray-100 leading-tight truncate flex items-center gap-1.5">
+                          {item.name}
+                          {item.productCode.startsWith('EVENT-') && <span className="text-[10px] px-1 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-medium shrink-0">{t.catalog.manualBadge}</span>}
+                        </p>
+                        <p className="text-xs text-gray-400 flex items-center gap-1.5">
+                          <span className="truncate">{item.brand}{item.barcode ? ` · ${item.barcode}` : ''}</span>
+                          <button onClick={() => openEdit(item)} title={t.common.edit} className="shrink-0 p-0.5 text-gray-400 hover:text-blue-600"><Pencil className="w-3 h-3" /></button>
+                          {deleteId === item.id ? (
+                            <span className="inline-flex items-center gap-1 shrink-0">
+                              <button onClick={() => deleteItem(item.id)} className="px-1 py-0.5 bg-red-600 text-white rounded text-[10px] font-semibold">{t.common.delete}</button>
+                              <button onClick={() => setDeleteId(null)} className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-500 rounded text-[10px]">{t.common.cancel}</button>
+                            </span>
+                          ) : (
+                            <button onClick={() => setDeleteId(item.id)} title={t.common.delete} className="shrink-0 p-0.5 text-gray-400 hover:text-red-600"><Trash2 className="w-3 h-3" /></button>
+                          )}
+                        </p>
                       </div>
                     </div>
                   </td>
@@ -673,6 +727,53 @@ export default function CatalogPage() {
           onClose={() => setModalItem(null)}
           onMatch={handleMatch}
         />
+      )}
+
+      {/* 수동(이벤트) 상품 추가/편집 모달 */}
+      {editForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setEditForm(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+              <h2 className="font-semibold text-gray-900 dark:text-white">{editForm.id ? t.catalog.editItem : t.catalog.addItem}</h2>
+              <button onClick={() => setEditForm(null)} className="p-1 text-gray-400 hover:text-gray-600 rounded"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 block">{t.catalog.colItem} *</label>
+                <input type="text" value={editForm.name} onChange={e => setEditForm(f => f && { ...f, name: e.target.value })}
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 block">{t.products.fieldBrand}</label>
+                <input type="text" value={editForm.brand} onChange={e => setEditForm(f => f && { ...f, brand: e.target.value })}
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 block">{t.catalog.colSalePrice} (¥)</label>
+                  <input type="number" value={editForm.priceJpy} onChange={e => setEditForm(f => f && { ...f, priceJpy: e.target.value })} placeholder="0"
+                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 block">{t.catalog.colPoint}</label>
+                  <input type="number" value={editForm.point} onChange={e => setEditForm(f => f && { ...f, point: e.target.value })} placeholder="0"
+                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 block">{t.catalog.imageUrl}</label>
+                <input type="text" value={editForm.imageUrl1} onChange={e => setEditForm(f => f && { ...f, imageUrl1: e.target.value })} placeholder="https://..."
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t.catalog.manualHint}</p>
+            </div>
+            <div className="flex gap-2 px-5 py-4 border-t border-gray-100 dark:border-gray-700">
+              <button onClick={submitForm} disabled={savingForm || !editForm.name.trim()}
+                className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">{savingForm ? t.common.saving : t.common.save}</button>
+              <button onClick={() => setEditForm(null)} className="px-4 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 py-2 rounded-lg text-sm font-medium hover:bg-gray-200">{t.common.cancel}</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
