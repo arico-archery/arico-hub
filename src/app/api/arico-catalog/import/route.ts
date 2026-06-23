@@ -35,7 +35,8 @@ export async function POST(req: Request) {
     try {
       const html = await fetchShop(itemUrl(code))
       const item = parseItem(html, code)
-      if (!item) continue
+      // 상품명이 없는 건 가져오지 않음 (추가·갱신 모두 스킵)
+      if (!item || !item.name.trim()) continue
       const data = {
         name: item.name, priceJpy: item.priceJpy,
         priceJpyNotax: item.priceJpy ? Math.round(item.priceJpy / 1.1) : 0,
