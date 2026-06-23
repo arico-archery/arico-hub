@@ -575,15 +575,17 @@ export default function CatalogPage() {
                         </p>
                         <p className="text-xs text-gray-400 flex items-center gap-1.5">
                           <span className="truncate">{item.brand}{item.barcode ? ` · ${item.barcode}` : ''}</span>
-                          <button onClick={() => openEdit(item)} title={t.common.edit} className="shrink-0 p-0.5 text-gray-400 hover:text-blue-600"><Pencil className="w-3 h-3" /></button>
-                          {deleteId === item.id ? (
-                            <span className="inline-flex items-center gap-1 shrink-0">
-                              <button onClick={() => deleteItem(item.id)} className="px-1 py-0.5 bg-red-600 text-white rounded text-[10px] font-semibold">{t.common.delete}</button>
-                              <button onClick={() => setDeleteId(null)} className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-500 rounded text-[10px]">{t.common.cancel}</button>
-                            </span>
-                          ) : (
-                            <button onClick={() => setDeleteId(item.id)} title={t.common.delete} className="shrink-0 p-0.5 text-gray-400 hover:text-red-600"><Trash2 className="w-3 h-3" /></button>
-                          )}
+                          {item.productCode.startsWith('EVENT-') && (<>
+                            <button onClick={() => openEdit(item)} title={t.common.edit} className="shrink-0 p-0.5 text-gray-400 hover:text-blue-600"><Pencil className="w-3 h-3" /></button>
+                            {deleteId === item.id ? (
+                              <span className="inline-flex items-center gap-1 shrink-0">
+                                <button onClick={() => deleteItem(item.id)} className="px-1 py-0.5 bg-red-600 text-white rounded text-[10px] font-semibold">{t.common.delete}</button>
+                                <button onClick={() => setDeleteId(null)} className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-500 rounded text-[10px]">{t.common.cancel}</button>
+                              </span>
+                            ) : (
+                              <button onClick={() => setDeleteId(item.id)} title={t.common.delete} className="shrink-0 p-0.5 text-gray-400 hover:text-red-600"><Trash2 className="w-3 h-3" /></button>
+                            )}
+                          </>)}
                         </p>
                       </div>
                     </div>
