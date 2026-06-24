@@ -20,7 +20,9 @@ async function buildGroups(supplier: string, category: string, brand: string, q:
       ...(supplier ? { supplierCode: supplier } : {}),
       ...(category ? { category } : {}),
       ...(brand ? { brand } : {}),
-      ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
+      // 공백으로 토큰 분리 → 모든 토큰을 AND로 포함 검색.
+      // 예: "Diamond bow" → name에 Diamond AND bow 둘 다 포함(비연속 가능)되면 매칭.
+      ...(q ? { AND: q.split(/\s+/).filter(Boolean).map((term) => ({ name: { contains: term, mode: 'insensitive' as const } })) } : {}),
     },
     select: {
       id: true, productCode: true, name: true, brand: true, category: true,
