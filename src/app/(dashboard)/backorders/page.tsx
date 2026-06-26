@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useCallback } from 'react'
+import { useApiCache } from '@/lib/useApiCache'
 import Link from 'next/link'
 import {
   ClipboardList, Truck, CheckCircle2, Clock, AlertCircle,
@@ -68,10 +69,12 @@ function groupBySupplier(items: BackorderItem[]) {
 // ── 컴포넌트 ──────────────────────────────────────────
 export default function BackordersPage() {
   const t = useT()
-  const [items, setItems]           = useState<BackorderItem[]>([])
-  const [loading, setLoading]       = useState(true)
   const [supplierFilter, setSupplierFilter] = useState('')
   const [statusFilter, setStatusFilter]     = useState('needed,ordered')
+  const backordersUrl = `/api/backorders?status=${encodeURIComponent(statusFilter)}${supplierFilter ? `&supplier=${encodeURIComponent(supplierFilter)}` : ''}`
+  // 클라 캐시: 재방문/뒤로가기 시 즉시 표시 + 백그라운드 재검증
+  const { data: itemsData, isLoading: loading, refresh, mutate } = useApiCache<BackorderItem[]>(backordersUrl)
+  const items = itemsData ?? []
   const [selected, setSelected]     = useState<Set<number>>(new Set())
   const [collapsed, setCollapsed]   = useState<Set<string>>(new Set())
   const [expectedDate, setExpectedDate] = useState('')
@@ -81,18 +84,11 @@ export default function BackordersPage() {
   // 백오더 단계 변형(옵션) 선택: orderItemId → {axes, list, sel}
   const [vData, setVData] = useState<Record<number, { axes: VariantAxis[]; list: VItem[]; sel: Record<string, string> } | 'none'>>({})
 
-  const fetchItems = useCallback(async () => {
-    setLoading(true)
-    const params = new URLSearchParams({ status: statusFilter })
-    if (supplierFilter) params.set('supplier', supplierFilter)
-    const res  = await fetch(`/api/backorders?${params}`)
-    const data = await res.json()
-    setItems(data)
+  // 필터 변경/PO 생성 후 새로고침 — 선택 초기화 + 캐시 재검증 (초기 로드는 훅이 처리)
+  const fetchItems = useCallback(() => {
     setSelected(new Set())
-    setLoading(false)
-  }, [supplierFilter, statusFilter])
-
-  useEffect(() => { fetchItems() }, [fetchItems])
+    refresh()
+  }, [refresh])
 
   // 전체 선택 / 해제
   const needItems   = items.filter(i => i.procureStatus === 'needed')
@@ -184,7 +180,7 @@ export default function BackordersPage() {
         body: JSON.stringify({ productId: v.id, optionMemo: v.optionLabel }),
       })
       if (res.ok) {
-        setItems(prev => prev.map(it => it.id === item.id
+        mutate(items.map(it => it.id === item.id
           ? { ...it, optionMemo: v.optionLabel, product: { ...it.product, id: v.id, name: v.name, productCode: v.productCode, optionSize: v.optionSize, optionColor: v.optionColor } }
           : it))
       }
