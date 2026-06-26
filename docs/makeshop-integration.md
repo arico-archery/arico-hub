@@ -49,8 +49,29 @@
 | **상품명** | `HOYT スーパーレスト` | `HOYT スーパーレスト` | ✅ |
 
 → 카탈로그 `productCode`는 MakeShop **商品番号**라 주문의 `独自商品コード`/`variationCustomCode`와 안 맞는다.
-→ **1차 매칭 키 = 상품명 정확일치.** 매칭되면 `AricoCatalog.supplierProductId` → `Product` → `calcCostJpy`로 원가·마진 자동.
-→ (옵션) 최초 매칭 시 `独自商品コード`를 카탈로그에 캐시해두면 다음부터 코드로 O(1). — 1단계에서는 생략 가능.
+
+### 매칭 설계 — JAN(바코드) 정본 + 이름 fallback + self-heal (2026-06-26 확정)
+
+**왜 JAN인가:** `searchOrder` 품목 응답 필드는 `productCode / variationCustomCode / quantity / price / **janCode**` — **상품명(name)이 목록에 없다.** 이름 정확일치를 1차로 두면 "API가 이름을 안 주면 매칭 붕괴" 리스크. 반면 `janCode`는 응답에 있고, **Smaregi=재고 SSOT, 연결키=JAN** 전략과도 일치 → JAN을 정본 키로.
+
+**인프라 이미 있음:** `AricoCatalog.barcode`(233행)·`Product.barcode`(47행) 둘 다 JAN용 필드+인덱스 존재, 비어만 있음. **스키마 변경 불필요.**
+
+**매칭 순서 (sync 품목마다):**
+```
+1) order.janCode → AricoCatalog.barcode 정확일치 (인덱스)  → supplierProductId → calcCostJpy
+2) 실패 → 상품명 정확일치 (현행, 기존 수동매칭 유지)
+3) 매칭 성공 & catalog.barcode 비어있고 order.janCode 있으면
+       → catalog.barcode = janCode   (self-heal: JAN 지도 자동 축적)
+4) 다 실패 → 미매칭 큐(수동 연결 UI로)
+```
+
+**JAN 수급(채우기):**
+- ❌ 자사몰 크롤 — **상품페이지에 JAN 미노출 확인(2026-06-26 probe: jan키워드·EAN-13·13자리 0건).** 크롤 backfill 불가.
+- ✅ **MakeShop 商品 데이터 CSV/API** (商品番号·独自코드 ↔ JAN). 카탈로그 productCode=商品番号(12자리)와 키 매칭 → 일괄 backfill. **본진.**
+- ✅ self-heal (위 3) — 주문된 상품만 점진 커버, 보조.
+- (향후) Smaregi API.
+
+**⚠️ 단위(granularity) 절충:** `AricoCatalog.barcode`는 상품 1행=1필드인데 JAN은 옵션별 SKU 단위라 옵션多 상품은 JAN이 여러 개 → 한 필드에 다 못 담음. **1단계는 옵션없는 단품=대표 JAN 1개로 완벽 매칭, 옵션 상품은 대표 JAN + 옵션은 주문 메모로 운용. 옵션별 정밀(per-SKU) 매칭은 Smaregi/OnlineSku 재논의 때 승급**(per-SKU 작업 보류 결정과 일관).
 
 ---
 
@@ -102,7 +123,7 @@
 3. 각 주문:
    - `externalMemberId`로 Customer upsert (customerType='online')
    - `externalOrderNo`로 Order upsert (있으면 상태/배송만 갱신 → 중복 X)
-   - 품목마다 **상품명 정확일치**로 AricoCatalog 매칭 → `supplierProductId` → `calcCostJpy` 원가·마진
+   - 품목마다 **§2 매칭 순서(JAN→이름→self-heal→미매칭큐)**로 AricoCatalog 매칭 → `supplierProductId` → `calcCostJpy` 원가·마진
    - `【取寄せ商品】` 품목 → `procureStatus='needed'`(backorder 유입)
 4. `lastSyncAt` 갱신
 5. **Vercel Cron 15분** + 주문관리 화면 **[지금 동기화]** 버튼
@@ -163,7 +184,8 @@
 ## 8. 착수 체크리스트 (API Key 도착 시)
 
 1. `.env` + Vercel에 `MAKESHOP_GQL_ENDPOINT` / `MAKESHOP_API_TOKEN` / `MAKESHOP_API_KEY` 등록
-2. `searchOrder` 실제 응답 1건으로 필드명·매칭(상품명) 1건 검증 (특히 응답에 상품명 필드 유무 — 없으면 `productCode` 브리지 필요)
-3. §3 모델 마이그레이션 (db push → trgm 복구)
-4. `src/lib/makeshop.ts` Mock→실호출 전환, `/api/makeshop/sync` + Cron
-5. §7 화면 연결, Mock fixture로 회귀 확인
+2. `searchOrder` 실제 응답 1건으로 필드 검증 — **`janCode` 채워져 오는지**, 상품명 필드 유무 확인
+3. **MakeShop 商品 CSV/API에 JAN 컬럼 확인 → `AricoCatalog.barcode` 일괄 backfill**(§2 본진)
+4. §3 모델 마이그레이션 (db push → trgm 복구)
+5. `src/lib/makeshop.ts` Mock→실호출 전환, `/api/makeshop/sync`(JAN 우선 매칭+self-heal) + Cron
+6. §7 화면 연결, Mock fixture로 회귀 확인
