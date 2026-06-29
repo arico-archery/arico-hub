@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useApiCache } from '@/lib/useApiCache'
 import {
   ShoppingCart, Plus, FileText, Truck, CreditCard, Search,
   Download, ChevronLeft, ChevronRight, CheckCircle2, Circle,
@@ -105,9 +106,6 @@ export default function OrdersPage() {
     paid:    { label: t.orders.payPaid,    color: 'bg-green-100 text-green-700' },
   }
 
-  const [orders, setOrders]   = useState<Order[]>([])
-  const [total, setTotal]     = useState(0)
-  const [loading, setLoading] = useState(true)
   const [tab, setTab]         = useState<'active' | 'ready' | 'done'>('active')   // 진행중 / 배송대기 / 완료
   const [statusFilter, setStatusFilter]   = useState('')
   const [payFilter, setPayFilter]         = useState('')
@@ -127,8 +125,8 @@ export default function OrdersPage() {
     }
   }, [])
 
-  const fetchOrders = useCallback(async (currentPage = 1) => {
-    setLoading(true)
+  // 클라 캐시: URL(필터+탭+페이지)별 캐시 → 재방문/페이지 왕복 즉시표시 + 백그라운드 재검증
+  const ordersUrl = useMemo(() => {
     const params = new URLSearchParams()
     if (statusFilter) params.set('status', statusFilter)
     if (payFilter)    params.set('paymentStatus', payFilter)
@@ -136,16 +134,17 @@ export default function OrdersPage() {
     params.set('completed', tab === 'done' ? '1' : '0')
     if (tab === 'ready') params.set('readyToShip', '1')
     params.set('limit', String(PAGE_SIZE))
-    params.set('page',  String(currentPage))
-    const res  = await fetch(`/api/orders?${params}`)
-    const data = await res.json()
-    setOrders(data.orders)
-    setTotal(data.total)
-    setLoading(false)
-  }, [statusFilter, payFilter, searchQ, tab])
+    params.set('page',  String(page))
+    return `/api/orders?${params}`
+  }, [statusFilter, payFilter, searchQ, tab, page])
+  const { data: ordersData, isLoading: loading, refresh } = useApiCache<{ orders: Order[]; total: number }>(ordersUrl)
+  const orders = ordersData?.orders ?? []
+  const total = ordersData?.total ?? 0
+  // 기존 호출부 유지: fetchOrders(page) / fetchOrders() → 현재 URL 재검증
+  const fetchOrders = useCallback((_p?: number) => refresh(), [refresh])
 
-  useEffect(() => { setPage(1); fetchOrders(1) }, [statusFilter, payFilter, searchQ, tab]) // eslint-disable-line
-  useEffect(() => { fetchOrders(page) }, [page]) // eslint-disable-line
+  // 필터/탭 변경 시 1페이지로 (목록 로드는 useApiCache가 ordersUrl 변경으로 처리)
+  useEffect(() => { setPage(1) }, [statusFilter, payFilter, searchQ, tab])
 
   const updateStatus = async (id: number, field: string, value: string) => {
     const body: Record<string, string | number> = { [field]: value }
