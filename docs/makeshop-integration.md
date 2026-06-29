@@ -73,6 +73,15 @@
 
 **⚠️ 단위(granularity) 절충:** `AricoCatalog.barcode`는 상품 1행=1필드인데 JAN은 옵션별 SKU 단위라 옵션多 상품은 JAN이 여러 개 → 한 필드에 다 못 담음. **1단계는 옵션없는 단품=대표 JAN 1개로 완벽 매칭, 옵션 상품은 대표 JAN + 옵션은 주문 메모로 운용. 옵션별 정밀(per-SKU) 매칭은 Smaregi/OnlineSku 재논의 때 승급**(per-SKU 작업 보류 결정과 일관).
 
+### 변형(옵션) 자동 resolve — `src/lib/optionDict.ts` (2026-06-26 PoC 완료)
+
+카탈로그→공급사 변형그룹을 확정한 뒤, **주문에 들어온 옵션(일본어, 예 `RH / グラファイトブラック`)을 공급사 변형 축값(영어, `Graphite Black`)으로 정규화해 정확한 SKU를 결정론적으로 찾는다.**
+- `optionDict.ts`: ja↔en 색상 사전(WIAWIS 팔레트) + 방향 정규화(右/左→RH/LH) + `matchAxisValue`(정규화일치→사전→방향정규화 순) + `mapIncomingToAxisSel`.
+- `variants.ts resolveVariant(group.variants, sel)`로 SKU 확정.
+- **PoC 검증(실 lib+DB)**: ATF-DX `RH/グラファイトブラック`→`119667-1060`, `右/サンオレンジ`→`119667-1130`, `LH/ホワイト`→`119667-1288`. 사전에 없는 색은 **"미해결" 플래그**(조용히 오매칭 안 함 → 사람 확인).
+- 사용처: MakeShop sync에서 주문 품목 매칭 직후 이 단계로 변형 SKU 확정 → backorder/PO가 정확한 SKU로 감.
+- 확장: 새 색상은 `COLOR_JA_EN`에 한 줄 추가. (관련: 주문 화면 orders/new도 신규 추가 시 색을 미리선택하지 않고 미선택 제출을 막도록 수정함 v1.18.3)
+
 ---
 
 ## 3. 데이터 모델 변경 (Prisma) — 착수 시

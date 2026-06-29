@@ -195,10 +195,15 @@ export default function NewOrderPage() {
         if (!Array.isArray(d.variants) || d.variants.length < 2) return
         // JVD: 옵션 축 드롭다운. 그 외(SIBUYA 등): 단일 변형 드롭다운.
         if (Array.isArray(d.axes) && d.axes.length > 0) {
-          const cur = (d.variants as JvdVariant[]).find(v => v.id === productId)
+          // 신규 추가 시 특정 색을 미리 선택하지 않는다(매칭 변형이 임의 색일 수 있음 — 예: ATF-DX가 LH/Burgandy Red로 매칭).
+          // 값이 하나뿐인 축만 자동 선택하고, 여러 값인 축(방향/색상)은 사용자가 직접 고르게 한다.
+          const preSel: Record<string, string> = {}
+          for (const ax of d.axes as { label: string; values: string[] }[]) {
+            if (ax.values.length === 1) preSel[ax.label] = ax.values[0]
+          }
           setLines(prev => prev.map(l =>
             l.product.id === productId && !l.variantAxes
-              ? { ...l, variantAxes: d.axes, variantList: d.variants, variantAxisSel: cur ? { ...cur.options } : {} }
+              ? { ...l, variantAxes: d.axes, variantList: d.variants, variantAxisSel: preSel }
               : l))
         } else {
           setLines(prev => prev.map(l =>
@@ -400,6 +405,14 @@ export default function NewOrderPage() {
     const hasUnpricedItems = lines.some(l => l.salePriceJpy <= 0)
     if (hasUnpricedItems) {
       alert(t.orders.alertPriceRequired)
+      return
+    }
+    // 변형(옵션) 미선택 가드 — 방향/색상 등 모든 축을 골라야 정확한 SKU로 발주된다
+    const hasUnselectedVariant = lines.some(l =>
+      l.variantAxes && l.variantAxes.length > 0 &&
+      l.variantAxes.some(ax => !(l.variantAxisSel || {})[ax.label]))
+    if (hasUnselectedVariant) {
+      alert(t.orders.alertOptionRequired)
       return
     }
     setSubmitting(true)
