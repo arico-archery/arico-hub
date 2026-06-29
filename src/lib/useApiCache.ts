@@ -107,3 +107,80 @@ export function useApiCache<T = unknown>(url: string | null, opts: Options = {})
 
   return { data, error, isLoading, mutate, refresh: () => load(true) }
 }
+
+// useState 드롭인 캐시 버전.
+// const [x, setX] = useState<T>(init)  →  const [x, setX, { isLoading, refresh }] = useCachedState<T>(url, init)
+// - 초기값: 캐시에 있으면 즉시(재방문 워터폴 제거), 없으면 init + 백그라운드 fetch
+// - setX(낙관적 업데이트 포함, 함수형 지원)는 캐시에 write-through → 다음 방문에도 반영
+// - 기존 setX(...) 호출부를 그대로 둘 수 있어 변환 위험이 낮다
+export function useCachedState<T>(
+  url: string | null,
+  initial: T,
+  opts: { revalidateOnFocus?: boolean } = {},
+): [T, (v: T | ((p: T) => T)) => void, { isLoading: boolean; refresh: () => void }] {
+  const { revalidateOnFocus = true } = opts
+  const [value, setValueRaw] = useState<T>(() => (url && cache.has(url) ? (cache.get(url) as T) : initial))
+  const [isLoading, setIsLoading] = useState<boolean>(() => !!url && !cache.has(url))
+  const mounted = useRef(true)
+
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
+
+  const setValue = useCallback(
+    (v: T | ((p: T) => T)) => {
+      setValueRaw((prev) => {
+        const next = typeof v === 'function' ? (v as (p: T) => T)(prev) : v
+        if (url) cache.set(url, next as unknown)
+        return next
+      })
+    },
+    [url],
+  )
+
+  const load = useCallback(
+    async (force = false) => {
+      if (!url) return
+      const cached = cache.get(url) as T | undefined
+      if (cached !== undefined) {
+        setValueRaw(cached)
+        setIsLoading(false)
+      }
+      const last = lastFetched.get(url) ?? 0
+      if (!force && cached !== undefined && Date.now() - last < 2000) return
+      try {
+        const fresh = (await fetchJson(url)) as T
+        cache.set(url, fresh as unknown)
+        lastFetched.set(url, Date.now())
+        if (mounted.current) setValueRaw(fresh)
+      } catch {
+        /* 네트워크 실패는 캐시/초기값 유지 */
+      } finally {
+        if (mounted.current) setIsLoading(false)
+      }
+    },
+    [url],
+  )
+
+  useEffect(() => {
+    if (url && cache.has(url)) {
+      setValueRaw(cache.get(url) as T)
+      setIsLoading(false)
+    } else {
+      setIsLoading(!!url)
+    }
+    load()
+  }, [url, load])
+
+  useEffect(() => {
+    if (!revalidateOnFocus || !url) return
+    const h = () => load(true)
+    window.addEventListener('focus', h)
+    return () => window.removeEventListener('focus', h)
+  }, [revalidateOnFocus, url, load])
+
+  return [value, setValue, { isLoading, refresh: () => load(true) }]
+}

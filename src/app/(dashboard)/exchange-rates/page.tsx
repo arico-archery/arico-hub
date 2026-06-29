@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useCachedState } from '@/lib/useApiCache'
 import { RefreshCw, Save, TrendingUp, Download } from 'lucide-react'
 import { useT } from '@/lib/i18n'
 
@@ -30,22 +31,22 @@ export default function ExchangeRatesPage() {
   // KRW는 "1엔 = ? 원"(won per yen) 의미로, rateToJpy 필드를 원/엔 값으로 사용(원가계산엔 미사용).
   const DISPLAY_CURRENCIES = ['USD', 'KRW', 'EUR'] as const
   const KRW_DEFAULT = 9.5
-  const [rates, setRates] = useState<Rate[]>([])
+  // 클라 캐시: 재방문 즉시표시 + 백그라운드 재검증
+  const [rates, setRates] = useCachedState<Rate[]>('/api/exchange-rates', [])
   const [editing, setEditing] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState<Record<string, boolean>>({})
   const [saved, setSaved] = useState<Record<string, boolean>>({})
   const [naverLoading, setNaverLoading] = useState(false)
   const [naverResult, setNaverResult] = useState<string | null>(null)
 
+  // rates 로드/변경 시 편집 입력값 동기화 (로드는 useCachedState가 처리)
   useEffect(() => {
-    fetch('/api/exchange-rates').then(r => r.json()).then(data => {
-      setRates(data)
-      const init: Record<string, string> = {}
-      data.forEach((r: Rate) => { init[r.currency] = String(r.rateToJpy) })
-      if (init.KRW === undefined) init.KRW = String(KRW_DEFAULT)
-      setEditing(init)
-    })
-  }, [])
+    if (!rates.length) return
+    const init: Record<string, string> = {}
+    rates.forEach((r) => { init[r.currency] = String(r.rateToJpy) })
+    if (init.KRW === undefined) init.KRW = String(KRW_DEFAULT)
+    setEditing(init)
+  }, [rates])
 
   const handleNaverUpdate = async () => {
     setNaverLoading(true)

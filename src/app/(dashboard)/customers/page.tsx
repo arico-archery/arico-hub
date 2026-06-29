@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
+import { useCachedState } from '@/lib/useApiCache'
 import Link from 'next/link'
 import { Users, Plus, Phone, Mail, MapPin, Pencil, Check, X, Trash2, Search, ShoppingCart, Upload, FileDown, FileSpreadsheet, Camera } from 'lucide-react'
 import { formatJpy } from '@/lib/utils'
@@ -94,8 +95,8 @@ function CustomerFormFields({ form, patch }: { form: FormState; patch: (p: Parti
 
 export default function CustomersPage() {
   const t = useT()
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [loading, setLoading] = useState(true)
+  // 클라 캐시: 재방문 즉시표시 + 백그라운드 재검증. setCustomers(낙관적 업데이트)는 캐시에 write-through.
+  const [customers, setCustomers, { isLoading: loading, refresh: loadCustomers }] = useCachedState<Customer[]>('/api/customers', [])
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [searchQ, setSearchQ] = useState('')
@@ -163,15 +164,7 @@ export default function CustomersPage() {
     }
   }
 
-  const loadCustomers = () => {
-    setLoading(true)
-    fetch('/api/customers').then(r => r.json()).then(data => {
-      setCustomers(data)
-      setLoading(false)
-    })
-  }
-
-  useEffect(() => { loadCustomers() }, [])
+  // 목록 로드/새로고침은 useCachedState가 처리 (loadCustomers = refresh)
 
   const handleCreate = async () => {
     if (!form.name) return

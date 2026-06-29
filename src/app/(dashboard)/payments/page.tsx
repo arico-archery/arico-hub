@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
+import { useApiCache } from '@/lib/useApiCache'
 import { CreditCard, CheckCircle, ChevronDown, ChevronUp, Package, Truck, Banknote } from 'lucide-react'
 import { formatJpy, calcProfitRate } from '@/lib/utils'
 import SupplierBadge from '@/components/SupplierBadge'
@@ -42,29 +43,29 @@ type PurchasePO = {
 export default function PaymentsPage() {
   const t = useT()
   const [tab, setTab] = useState<'sales' | 'purchase'>('sales')
-  const [orders, setOrders]     = useState<Order[]>([])
-  const [loading, setLoading]   = useState(true)
+  // 클라 캐시: 미입금 주문(원시 응답 캐시) → dueDate 정렬은 파생
+  const { data: ordersRaw, isLoading: loading, refresh: loadOrders } = useApiCache<{ orders: Order[] }>('/api/orders?paymentStatus=unpaid,partial&limit=200')
+  const orders = useMemo(() => {
+    const list = [...(ordersRaw?.orders ?? [])]
+    list.sort((a, b) => {
+      if (!a.dueDate && !b.dueDate) return 0
+      if (!a.dueDate) return 1
+      if (!b.dueDate) return -1
+      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
+    })
+    return list
+  }, [ordersRaw])
   const [paying, setPaying]     = useState<number | null>(null)
   const [payAmounts, setPayAmounts] = useState<Record<number, string>>({})
   const [expanded, setExpanded] = useState<number | null>(null)
   // 매입(제조사 지급)
-  const [pos, setPos] = useState<PurchasePO[]>([])
-  const [posLoading, setPosLoading] = useState(true)
   const [payingPo, setPayingPo] = useState<number | null>(null)
-
-  const loadPOs = () => {
-    setPosLoading(true)
-    fetch('/api/purchase-orders?limit=200')
-      .then(r => r.json())
-      .then(data => {
-        const list: PurchasePO[] = (data.orders ?? []).filter(
-          (p: PurchasePO) => ['confirmed', 'paid', 'partial', 'received'].includes(p.status)
-        )
-        setPos(list)
-        setPosLoading(false)
-      })
-      .catch(() => setPosLoading(false))
-  }
+  // 클라 캐시: 매입(발주) 원시 응답 → 지급대상 상태만 파생
+  const { data: posRaw, isLoading: posLoading, refresh: loadPOs } = useApiCache<{ orders: PurchasePO[] }>('/api/purchase-orders?limit=200')
+  const pos = useMemo(
+    () => (posRaw?.orders ?? []).filter((p) => ['confirmed', 'paid', 'partial', 'received'].includes(p.status)),
+    [posRaw],
+  )
 
   const payPO = async (po: PurchasePO) => {
     setPayingPo(po.id)
@@ -77,24 +78,7 @@ export default function PaymentsPage() {
     loadPOs()
   }
 
-  const loadOrders = () => {
-    setLoading(true)
-    fetch('/api/orders?paymentStatus=unpaid,partial&limit=200')
-      .then(r => r.json())
-      .then(data => {
-        const list = data.orders ?? []
-        list.sort((a: Order, b: Order) => {
-          if (!a.dueDate && !b.dueDate) return 0
-          if (!a.dueDate) return 1
-          if (!b.dueDate) return -1
-          return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
-        })
-        setOrders(list)
-        setLoading(false)
-      })
-  }
-
-  useEffect(() => { loadOrders(); loadPOs() }, [])
+  // 로드/새로고침은 useApiCache가 처리 (loadOrders/loadPOs = refresh)
 
   const handlePay = async (order: Order) => {
     const amount = Number(payAmounts[order.id] ?? order.totalAmountJpy - order.paidAmountJpy)
