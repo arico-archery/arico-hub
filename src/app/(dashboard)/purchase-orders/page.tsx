@@ -14,8 +14,8 @@ import { useT } from '@/lib/i18n'
 const PAGE_SIZE = 20
 
 type POItem = {
-  id: number; quantity: number; confirmedQty: number | null; receivedQty: number; unitCostJpy: number
-  product: { name: string; productCode: string; supplierCode: string }
+  id: number; quantity: number; confirmedQty: number | null; receivedQty: number; unitCostJpy: number; memo: string
+  product: { name: string; productCode: string; supplierCode: string; optionSize: string; optionColor: string }
 }
 type PurchaseOrder = {
   id: number; poNo: string; supplierCode: string; status: string
@@ -255,6 +255,12 @@ export default function PurchaseOrdersPage() {
                                   <SupplierBadge code={item.product.supplierCode} />
                                   <span className="text-gray-700 dark:text-gray-200 flex-1 truncate">{item.product.name}</span>
                                   <span className="text-gray-500 dark:text-gray-400 text-xs">{item.product.productCode}</span>
+                                  {/* 옵션: 변형SKU는 optionSize/Color, 단일SKU(MK/FIVICS 등)는 memo */}
+                                  {(item.product.optionSize || item.product.optionColor || item.memo) && (
+                                    <span className="text-xs px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-medium whitespace-nowrap">
+                                      {[item.product.optionSize, item.product.optionColor, item.memo].filter(Boolean).join(' / ')}
+                                    </span>
+                                  )}
                                   <span className="text-gray-500 dark:text-gray-400 tabular-nums">
                                     {item.receivedQty}/{item.quantity}
                                     {item.receivedQty >= item.quantity
