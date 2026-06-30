@@ -371,6 +371,8 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
                           <p className="text-xs text-gray-400">{item.product.productCode}</p>
                           {item.product.optionSize && <span className="text-xs px-1 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 font-medium">{item.product.optionSize}</span>}
                           {item.product.optionColor && <span className="text-xs px-1 py-0.5 rounded bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 font-medium">{item.product.optionColor}</span>}
+                          {/* 옵션(색/방향 등) — MK/FIVICS 등 단일 SKU 상품은 여기로 표시 */}
+                          {item.memo && <span className="text-xs px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-medium">{item.memo}</span>}
                           {soldOut && <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300 font-semibold">{t.purchaseOrders.soldOut}</span>}
                         </div>
                       </td>

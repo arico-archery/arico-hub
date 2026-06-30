@@ -57,8 +57,10 @@ export async function POST(req: Request) {
     const supplier = groupItems[0].product.supplier
     const rate     = getRate(supplier.currency)
 
-    // 같은 상품은 수량 합산
-    const productMap = new Map<number, { productId: number; quantity: number; unitCostJpy: number }>()
+    // 같은 상품+같은 옵션은 수량 합산. MK/FIVICS는 색/방향이 같은 productId(이름 안에 텍스트)라
+    // 옵션으로 구분해야 서로 다른 색이 한 줄로 합쳐지지 않고 발주서에 어떤 옵션인지 남는다.
+    // JVD는 색마다 productId가 달라 기존과 동일하게 동작.
+    const productMap = new Map<string, { productId: number; quantity: number; unitCostJpy: number; optionMemo: string }>()
     for (const item of groupItems) {
       const p       = item.product
       const costJpy = (() => {
@@ -67,11 +69,12 @@ export async function POST(req: Request) {
         if (supplier.discount > 0 && supplier.discount < 1) price *= supplier.discount
         return Math.round(price * rate)
       })()
-
-      if (productMap.has(p.id)) {
-        productMap.get(p.id)!.quantity += item.quantity
+      const opt = item.optionMemo || ''
+      const key = `${p.id}|${opt}`
+      if (productMap.has(key)) {
+        productMap.get(key)!.quantity += item.quantity
       } else {
-        productMap.set(p.id, { productId: p.id, quantity: item.quantity, unitCostJpy: costJpy })
+        productMap.set(key, { productId: p.id, quantity: item.quantity, unitCostJpy: costJpy, optionMemo: opt })
       }
     }
 
@@ -100,6 +103,7 @@ export async function POST(req: Request) {
               productId:   i.productId,
               quantity:    i.quantity,
               unitCostJpy: i.unitCostJpy,
+              memo:        i.optionMemo,   // 옵션(색/방향 등)을 발주 품목에 기록 → 발주서 표시
             })),
           },
         },
