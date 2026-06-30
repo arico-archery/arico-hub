@@ -29,6 +29,15 @@ type SupplierProduct = {
   id: number; name: string; brand: string; productCode: string
   supplierCode: string; costPrice: number; salePriceJpy: number
   supplier: { currency: string }
+  group?: { base: string; count: number } | null   // 변형 그룹(JVD 코드접두부/SIBUYA 베이스명) — 있으면 그룹으로 표시
+}
+
+// 매칭 표시: 변형 그룹이면 특정 변형명 대신 그룹 베이스명(+변형수)으로 보여준다
+function MatchedName({ m }: { m: SupplierProduct }) {
+  if (m.group) {
+    return <>{m.group.base}{m.group.count > 1 ? <span className="ml-1 opacity-70">({m.group.count}変)</span> : null}</>
+  }
+  return <>{m.name}</>
 }
 // 통합(그룹) 검색 결과 — JVD는 코드접두부로 묶임, 그 외는 1개씩
 type GroupResult = {
@@ -133,6 +142,7 @@ function MatchModal({
     const synth: SupplierProduct | null = group ? {
       id: group.repId, name: group.base, brand: group.brand, productCode: group.groupCode,
       supplierCode: group.supplierCode, costPrice: 0, salePriceJpy: group.minSale, supplier: { currency: 'JPY' },
+      group: { base: group.base, count: group.count },   // 낙관적 표시도 그룹으로
     } : null
     onMatch(item.id, synth, barcode)
     setSaving(false)
@@ -150,7 +160,7 @@ function MatchModal({
             {item.matchedProduct && (
               <div className="mt-1 flex items-center gap-2">
                 <span className="text-xs text-green-600 font-medium">{tr.catalog.currentMatch}</span>
-                <span className="text-xs text-gray-600 dark:text-gray-400">{item.matchedProduct.name}</span>
+                <span className="text-xs text-gray-600 dark:text-gray-400"><MatchedName m={item.matchedProduct} /></span>
                 <button
                   onClick={() => handleSelect(null)}
                   disabled={saving}
@@ -649,7 +659,7 @@ export default function CatalogPage() {
                     <button onClick={() => setModalItem(item)}
                       className={`w-full flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${matched ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 hover:bg-green-100 border border-green-200 dark:border-green-800/50' : 'bg-gray-50 dark:bg-gray-700/50 text-gray-400 hover:bg-gray-100 border border-gray-200 dark:border-gray-600'}`}>
                       {matched
-                        ? <><Link2 className="w-3 h-3 shrink-0" /><span className="truncate"><span className="inline-block px-0.5 rounded text-white text-[9px] font-bold mr-0.5" style={{ backgroundColor: SUPPLIER_COLORS[matched.supplierCode] ?? '#6b7280' }}>{matched.supplierCode}</span>{matched.name}</span></>
+                        ? <><Link2 className="w-3 h-3 shrink-0" /><span className="truncate"><span className="inline-block px-0.5 rounded text-white text-[9px] font-bold mr-0.5" style={{ backgroundColor: SUPPLIER_COLORS[matched.supplierCode] ?? '#6b7280' }}>{matched.supplierCode}</span><MatchedName m={matched} /></span></>
                         : <><Link2Off className="w-3 h-3 shrink-0" /><span>{t.catalog.matchButton}</span></>}
                     </button>
                   </td>
@@ -718,7 +728,7 @@ export default function CatalogPage() {
                           className="inline-block px-0.5 rounded text-white text-[9px] font-bold mr-0.5"
                           style={{ backgroundColor: SUPPLIER_COLORS[matched.supplierCode] ?? '#6b7280' }}
                         >{matched.supplierCode}</span>
-                        {matched.name}
+                        <MatchedName m={matched} />
                       </span>
                     </>
                   ) : (

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { calcCostJpy } from '@/lib/utils'
+import { groupCodeOf, commonBaseName, sibuyaBaseName } from '@/lib/variants'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -69,6 +70,39 @@ export async function GET(req: Request) {
       : []
     const productMap = Object.fromEntries(products.map(p => [p.id, p]))
 
+    // 매칭을 "변형 그룹"으로 표시하기 위한 그룹명/변형수 계산.
+    // JVD: 코드 접두부 그룹 → 멤버 조회로 베이스명+개수. SIBUYA: 옵션필드(사이즈/색상) 제거한 베이스명.
+    // (특정 변형 'LH Black/Gold' 대신 'ATF-DX 25"' 처럼 그룹으로 보여줘 옵션 혼동 방지)
+    const jvdGroupCodes = [...new Set(
+      products.filter(p => p.supplierCode === 'JVD')
+        .map(p => groupCodeOf('JVD', p.productCode))
+        .filter(gc => gc && gc !== '')
+    )]
+    const jvdMembers = jvdGroupCodes.length > 0
+      ? await prisma.product.findMany({
+          where: { supplierCode: 'JVD', OR: jvdGroupCodes.map(gc => ({ productCode: { startsWith: gc + '-' } })) },
+          select: { productCode: true, name: true },
+        })
+      : []
+    const groupNames = new Map<string, string[]>()
+    for (const m of jvdMembers) {
+      const gc = groupCodeOf('JVD', m.productCode)
+      if (!groupNames.has(gc)) groupNames.set(gc, [])
+      groupNames.get(gc)!.push(m.name)
+    }
+    const groupInfoOf = (p: { supplierCode: string; productCode: string; name: string; optionSize: string; optionColor: string }): { base: string; count: number } | null => {
+      if (p.supplierCode === 'JVD') {
+        const names = groupNames.get(groupCodeOf('JVD', p.productCode))
+        if (names && names.length > 1) return { base: commonBaseName(names) || p.name, count: names.length }
+        return null
+      }
+      if (p.supplierCode === 'SIBUYA') {
+        const base = sibuyaBaseName(p.name, p.optionSize, p.optionColor)
+        if (base && base !== p.name.trim()) return { base, count: 0 } // SIBUYA 변형수는 미상(0)
+      }
+      return null
+    }
+
     // 공급가(엔화 환산) 계산용 환율
     const rates = await prisma.exchangeRate.findMany({ select: { currency: true, rateToJpy: true } })
 
@@ -76,7 +110,7 @@ export async function GET(req: Request) {
       const mp = r.supplierProductId ? (productMap[r.supplierProductId] ?? null) : null
       return {
         ...r,
-        matchedProduct: mp,
+        matchedProduct: mp ? { ...mp, group: groupInfoOf(mp) } : null,
         // 매칭된 공급사 상품의 원가를 엔화로 환산한 공급가 (미매칭은 null)
         supplyCostJpy: mp ? Math.round(calcCostJpy(mp, rates)) : null,
       }
