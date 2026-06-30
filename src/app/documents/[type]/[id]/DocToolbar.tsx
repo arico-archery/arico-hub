@@ -1,6 +1,6 @@
 'use client'
 
-import { Printer } from 'lucide-react'
+import { Printer, FileSpreadsheet } from 'lucide-react'
 import { DocType, DocLang, DOC_LANGS, DOC_LANG_LABEL } from '@/lib/documents'
 
 const TYPE_LABEL: Record<DocType, Record<DocLang, string>> = {
@@ -58,13 +58,25 @@ export default function DocToolbar({
         ))}
       </div>
 
-      <button
-        onClick={() => window.print()}
-        className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors ml-auto"
-      >
-        <Printer className="w-4 h-4" />
-        PDF / Print
-      </button>
+      <div className="ml-auto flex items-center gap-2">
+        {/* 발주서는 공급사 전달용 Excel(.xlsx) 다운로드 제공 */}
+        {type === 'po' && (
+          <a
+            href={`/api/purchase-orders/${id}/excel?lang=${lang}`}
+            className="flex items-center gap-2 bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-800 transition-colors"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Excel
+          </a>
+        )}
+        <button
+          onClick={() => window.print()}
+          className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors"
+        >
+          <Printer className="w-4 h-4" />
+          PDF / Print
+        </button>
+      </div>
     </div>
   )
 }
