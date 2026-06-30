@@ -8,6 +8,7 @@ import SupplierBadge from '@/components/SupplierBadge'
 import ProfitBar from '@/components/ProfitBar'
 import DateInput from '@/components/DateInput'
 import { useT } from '@/lib/i18n'
+import { matchAxisValue } from '@/lib/optionDict'
 
 type Supplier = { code: string; currency: string; taxRate: number; discount: number }
 type Product = {
@@ -282,7 +283,34 @@ export default function NewOrderPage() {
       const sel = { ...(l.catalogOptionSel || {}) }
       if (value) sel[label] = value; else delete sel[label]
       const memo = Object.entries(sel).map(([k, v]) => k ? `${k}: ${v}` : v).join(' / ')
-      return { ...l, catalogOptionSel: sel, optionMemo: memo }
+      let next = { ...l, catalogOptionSel: sel, optionMemo: memo }
+      // 카탈로그 옵션(일본어 左右/カラー 등) 선택을 JVD 변형 축(방향/색상)에 매핑해 정확한 변형 SKU로 상품 교체.
+      // 예: カラー=ターキーグリーン → 색상=Turkey Green → 119667-1132로 productId 교체 (대표변형 고정 문제 해결).
+      if (l.variantList && l.variantAxes && l.variantAxes.length > 0) {
+        const clean = (s: string) => s.replace(/【[^】]*】|\[[^\]]*\]/g, '').replace(/即納商品|取り?寄せ/g, '').trim()
+        const tokens = Object.values(sel).flatMap(v => clean(String(v)).split(/[\s/]+/)).filter(Boolean)
+        const axisSel: Record<string, string> = {}
+        for (const ax of l.variantAxes) {
+          for (const tok of tokens) {
+            const hit = matchAxisValue(tok, ax.values)
+            if (hit) { axisSel[ax.label] = hit; break }
+          }
+        }
+        // 모든 축이 해결되면 그 변형으로 상품 교체 (해결 안 되면 메모만 — 기존 동작)
+        if (l.variantAxes.every(ax => axisSel[ax.label])) {
+          const v = l.variantList.find(vv => l.variantAxes!.every(ax => vv.options[ax.label] === axisSel[ax.label]))
+          if (v) {
+            const newProduct: Product = {
+              id: v.id, name: v.name, brand: v.brand, productCode: v.productCode,
+              supplierCode: v.supplierCode, costPrice: v.costPrice, salePriceJpy: v.salePriceJpy, unit: v.unit,
+              supplier: { code: v.supplierCode, currency: v.supplier.currency, taxRate: v.supplier.taxRate, discount: v.supplier.discount },
+              optionSize: v.optionSize, optionColor: v.optionColor,
+            }
+            next = { ...next, product: newProduct, costPriceJpy: calcCostJpy(newProduct, rates), variantAxisSel: axisSel }
+          }
+        }
+      }
+      return next
     }))
   }
 
