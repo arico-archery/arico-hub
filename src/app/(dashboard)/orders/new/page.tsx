@@ -407,8 +407,11 @@ export default function NewOrderPage() {
       alert(t.orders.alertPriceRequired)
       return
     }
-    // 변형(옵션) 미선택 가드 — 방향/색상 등 모든 축을 골라야 정확한 SKU로 발주된다
+    // 변형(옵션) 미선택 가드 — 방향/색상 등 모든 축을 골라야 정확한 SKU로 발주된다.
+    // 단, 카탈로그 옵션(자사몰 옵션)이 렌더되는 라인은 변형축 드롭다운이 숨겨지므로 제외한다
+    // (렌더 우선순위: 카탈로그옵션 > 변형축). 안 그러면 카탈로그 옵션을 다 골라도 계속 막힘.
     const hasUnselectedVariant = lines.some(l =>
+      !(l.catalogOptions && l.catalogOptions.length > 0) &&
       l.variantAxes && l.variantAxes.length > 0 &&
       l.variantAxes.some(ax => !(l.variantAxisSel || {})[ax.label]))
     if (hasUnselectedVariant) {
