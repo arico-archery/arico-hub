@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback, Fragment } from 'react'
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
+import { useApiCache } from '@/lib/useApiCache'
 import { Search, Package, RefreshCw, Save, CheckCircle, ChevronLeft, ChevronRight, ChevronDown, Tag, Tags, Download, Percent, Plus, Pencil, Trash2, X, AlertTriangle, ScanLine, Layers } from 'lucide-react'
 import SupplierBadge from '@/components/SupplierBadge'
 import BarcodeScanner from '@/components/BarcodeScanner'
@@ -56,11 +57,8 @@ export default function ProductsPage() {
   const [brandMsg, setBrandMsg] = useState<string | null>(null)
   const [brandDelConfirm, setBrandDelConfirm] = useState(false)
   const [noPriceOnly, setNoPriceOnly] = useState(false)
-  const [products, setProducts] = useState<Product[]>([])
   const [rates, setRates] = useState<ExchangeRate[]>([])
-  const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
-  const [loading, setLoading] = useState(false)
   const [salePrices, setSalePrices] = useState<Record<number, string>>({})
   const [dirty, setDirty] = useState<Set<number>>(new Set())
   const [saving, setSaving] = useState(false)
@@ -89,9 +87,6 @@ export default function ProductsPage() {
 
   // 통합 보기 (변형 그룹)
   const [viewMode, setViewMode] = useState<'flat' | 'grouped'>('flat')
-  const [groups, setGroups] = useState<GroupRow[]>([])
-  const [groupsTotal, setGroupsTotal] = useState(0)
-  const [groupsLoading, setGroupsLoading] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [expVariants, setExpVariants] = useState<Record<string, GroupVariant[]>>({})
 
@@ -168,43 +163,47 @@ export default function ProductsPage() {
     }
   }
 
-  const fetchProducts = useCallback(async (currentPage = 1) => {
-    setLoading(true)
-    const params = new URLSearchParams({ q, supplier: supplierFilter, category: categoryFilter, brand: brandFilter, limit: String(PAGE_SIZE), page: String(currentPage), ...(noPriceOnly ? { noPrice: '1' } : {}) })
-    const res = await fetch(`/api/products?${params}`)
-    const data = await res.json()
-    setProducts(data.products)
-    setTotal(data.total)
-    // 저장된 판매가 초기값 로드
+  // 검색어 디바운스 (입력마다 fetch 방지)
+  const [debouncedQ, setDebouncedQ] = useState('')
+  useEffect(() => { const t = setTimeout(() => setDebouncedQ(q), 300); return () => clearTimeout(t) }, [q])
+
+  // 클라 캐시: 플랫 목록 (현재 뷰가 flat일 때만 fetch)
+  const flatUrl = useMemo(() => {
+    if (viewMode !== 'flat') return null
+    const params = new URLSearchParams({ q: debouncedQ, supplier: supplierFilter, category: categoryFilter, brand: brandFilter, limit: String(PAGE_SIZE), page: String(page), ...(noPriceOnly ? { noPrice: '1' } : {}) })
+    return `/api/products?${params}`
+  }, [viewMode, debouncedQ, supplierFilter, categoryFilter, brandFilter, noPriceOnly, page])
+  const { data: prodData, isLoading: loading, refresh: refreshFlat } = useApiCache<{ products: Product[]; total: number }>(flatUrl)
+  const products = prodData?.products ?? []
+  const total = prodData?.total ?? 0
+  // 상품 로드 시 저장된 판매가 시드 + dirty 초기화
+  useEffect(() => {
+    if (!prodData) return
     const init: Record<number, string> = {}
-    for (const p of data.products) {
-      if (p.salePriceJpy > 0) init[p.id] = String(p.salePriceJpy)
-    }
+    for (const p of prodData.products) if (p.salePriceJpy > 0) init[p.id] = String(p.salePriceJpy)
     setSalePrices(prev => ({ ...prev, ...init }))
     setDirty(new Set())
-    setLoading(false)
-  }, [q, supplierFilter, categoryFilter, brandFilter, noPriceOnly])
+  }, [prodData])
+
+  // 클라 캐시: 통합(그룹) 목록 (현재 뷰가 grouped일 때만 fetch)
+  const groupsUrl = useMemo(() => {
+    if (viewMode !== 'grouped') return null
+    const params = new URLSearchParams({ supplier: supplierFilter, q: debouncedQ, category: categoryFilter, brand: brandFilter, page: String(page) })
+    if (noPriceOnly) params.set('noPrice', '1')
+    return `/api/products/groups?${params}`
+  }, [viewMode, supplierFilter, debouncedQ, categoryFilter, brandFilter, noPriceOnly, page])
+  const { data: groupsData, isLoading: groupsLoading, refresh: refreshGroups } = useApiCache<{ groups: GroupRow[]; total: number }>(groupsUrl)
+  const groups = groupsData?.groups ?? []
+  const groupsTotal = groupsData?.total ?? 0
+
+  // 기존 호출부 유지: fetchProducts(page)/fetchGroups(page) → 현재 URL 재검증
+  const fetchProducts = useCallback((_p?: number) => refreshFlat(), [refreshFlat])
+  const fetchGroups = useCallback((_p?: number) => refreshGroups(), [refreshGroups])
 
   const loadBrands = useCallback(() => {
     if (!supplierFilter) { setBrands([]); return }
     fetch(`/api/products?brandsOnly=1&supplier=${supplierFilter}`).then(r => r.json()).then(setBrands).catch(() => setBrands([]))
   }, [supplierFilter])
-
-  // 통합 보기: 코드 접두부 그룹 목록 로드
-  const fetchGroups = useCallback(async (pageArg: number) => {
-    setGroupsLoading(true)
-    const params = new URLSearchParams({
-      supplier: supplierFilter, q, category: categoryFilter, brand: brandFilter, page: String(pageArg),
-    })
-    if (noPriceOnly) params.set('noPrice', '1')
-    try {
-      const res = await fetch(`/api/products/groups?${params}`)
-      const data = await res.json()
-      setGroups(data.groups || [])
-      setGroupsTotal(data.total || 0)
-    } catch { setGroups([]); setGroupsTotal(0) }
-    setGroupsLoading(false)
-  }, [supplierFilter, q, categoryFilter, brandFilter, noPriceOnly])
 
   // 그룹 펼치기 → 변형 목록 lazy 로드
   const toggleExpand = async (g: GroupRow) => {
@@ -236,20 +235,11 @@ export default function ProductsPage() {
     loadBrands()
   }, [supplierFilter, loadBrands])
 
-  // 검색어/필터 변경 시 1페이지로
+  // 검색어/필터/뷰 변경 시 1페이지로 (목록 로드는 useApiCache가 URL 변경으로 처리)
   useEffect(() => {
     setPage(1)
     setExpanded(null)
-    const timer = setTimeout(() => {
-      if (viewMode === 'grouped') fetchGroups(1); else fetchProducts(1)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [fetchProducts, fetchGroups, viewMode])
-
-  // 페이지 변경 시
-  useEffect(() => {
-    if (viewMode === 'grouped') fetchGroups(page); else fetchProducts(page)
-  }, [page]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [debouncedQ, supplierFilter, categoryFilter, brandFilter, noPriceOnly, viewMode])
 
   const handlePriceChange = (id: number, val: string) => {
     setSalePrices(prev => ({ ...prev, [id]: val }))

@@ -45,7 +45,13 @@ export function parseOption(optStr: string): VariantOption {
   let m: RegExpMatchArray | null
   if ((m = s.match(/(?:^|\s)(LH|RH)(?:\s|$)/))) { o['방향'] = m[1]; s = s.replace(m[0], ' ') }
   if ((m = s.match(/(\d+)\s*#/))) { o['파운드'] = m[1] + '#'; s = s.replace(m[0], ' ') }
-  if ((m = s.match(/(\d+(?:\.\d+)?)\s*"/))) { o['길이'] = m[1] + '"'; s = s.replace(m[0], ' ') }
+  // 길이 범위: (15.0''-30.0'') / 28"-32" — ''·″·" 모두 인치로 본다. 컴파운드보우 드로우길이 범위가
+  // 색상 축에 새어들던 문제 해결: 범위를 먼저 떼어 길이 축으로 보내고 색상은 깨끗하게 남긴다.
+  if ((m = s.match(/\(?\s*(\d+(?:\.\d+)?)\s*(?:''|″|")\s*[-~]\s*(\d+(?:\.\d+)?)\s*(?:''|″|")\s*\)?/))) {
+    o['길이'] = `${m[1]}"-${m[2]}"`; s = s.replace(m[0], ' ')
+  }
+  // 단일 길이: 25" / 25'' / 25″
+  if (!o['길이'] && (m = s.match(/(\d+(?:\.\d+)?)\s*(?:''|″|")/))) { o['길이'] = m[1] + '"'; s = s.replace(m[0], ' ') }
   if ((m = s.match(/(\d+)\s*%\s*Let\s*Off/i))) { o['렛오프'] = m[1] + '%'; s = s.replace(m[0], ' ') }
   if ((m = s.match(/(?:^|\s)(X-Large|XXL|XL|X-Small|XS|Junior|Large|Medium|Small)(?:\s|$)/))) { o['사이즈'] = m[1]; s = s.replace(m[0], ' ') }
   // 나머지 = 색상/기타. 분리자였던 하이픈 등 구두점만 남은 잔여물은 버린다.

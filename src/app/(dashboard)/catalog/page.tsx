@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useApiCache } from '@/lib/useApiCache'
 import { Search, RefreshCw, ChevronLeft, ChevronRight, Link2, Link2Off, X, Check, Wand2, ImageOff, Barcode, Languages, ScanLine, Layers, List, LayoutGrid, Plus, Pencil, Trash2 } from 'lucide-react'
 import BarcodeScanner from '@/components/BarcodeScanner'
 import { formatNumber, SUPPLIER_COLORS } from '@/lib/utils'
@@ -269,15 +270,11 @@ export default function CatalogPage() {
   const t = useT()
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<'all' | 'matched' | 'unmatched'>('all')
-  const [items, setItems] = useState<CatalogItem[]>([])
-  const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
-  const [loading, setLoading] = useState(false)
   const [modalItem, setModalItem] = useState<CatalogItem | null>(null)
   const [krwPerJpy] = useState(9.5)
   const [autoMatching, setAutoMatching] = useState(false)
   const [autoMatchResult, setAutoMatchResult] = useState<AutoMatchResult>(null)
-  const [stats, setStats] = useState<CatalogStats | null>(null)
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list')
   // 수동(이벤트) 상품 추가/편집
   const [editForm, setEditForm] = useState<{ id?: number; name: string; brand: string; priceJpy: string; point: string; imageUrl1: string } | null>(null)
@@ -294,47 +291,37 @@ export default function CatalogPage() {
   const [importProg, setImportProg] = useState<{ page: number; added: number; updated: number; done: boolean } | null>(null)
   const importCancel = useRef(false)
 
-  const fetchStats = useCallback(async () => {
-    try {
-      const res = await fetch('/api/arico-catalog?stats=1')
-      const data = await res.json()
-      setStats(data)
-    } catch { /* 무시 */ }
-  }, [])
-
-  useEffect(() => { fetchStats() }, [fetchStats])
-
-  const fetchItems = useCallback(async (currentPage = 1) => {
-    setLoading(true)
+  // 검색어 디바운스 (입력마다 fetch 방지)
+  const [debouncedQ, setDebouncedQ] = useState('')
+  useEffect(() => { const t = setTimeout(() => setDebouncedQ(q), 300); return () => clearTimeout(t) }, [q])
+  // 필터/검색 변경 시 1페이지로
+  useEffect(() => { setPage(1) }, [debouncedQ, filter])
+  // 클라 캐시: URL(검색+필터+페이지)별 → 재방문/페이지 왕복 즉시표시 + 백그라운드 재검증
+  const itemsUrl = useMemo(() => {
     const params = new URLSearchParams({
-      q,
-      limit: String(PAGE_SIZE),
-      offset: String((currentPage - 1) * PAGE_SIZE),
+      q: debouncedQ, limit: String(PAGE_SIZE), offset: String((page - 1) * PAGE_SIZE),
       ...(filter === 'matched' ? { matchedOnly: '1' } : filter === 'unmatched' ? { unmatchedOnly: '1' } : {}),
     })
-    const res = await fetch(`/api/arico-catalog?${params}`)
-    const data = await res.json()
-    setItems(data.rows)
-    setTotal(data.total)
-    setLoading(false)
-  }, [q, filter])
-
-  useEffect(() => {
-    setPage(1)
-    const t = setTimeout(() => fetchItems(1), 300)
-    return () => clearTimeout(t)
-  }, [fetchItems])
-
-  useEffect(() => { fetchItems(page) }, [page]) // eslint-disable-line react-hooks/exhaustive-deps
+    return `/api/arico-catalog?${params}`
+  }, [debouncedQ, filter, page])
+  const { data: itemsData, isLoading: loading, refresh, mutate } = useApiCache<{ rows: CatalogItem[]; total: number }>(itemsUrl)
+  const items = itemsData?.rows ?? []
+  const total = itemsData?.total ?? 0
+  // 기존 호출부 유지: fetchItems(page)/fetchItems() → 현재 URL 재검증
+  const fetchItems = useCallback((_p?: number) => refresh(), [refresh])
+  // 통계 캐시 (fetchStats = refresh)
+  const { data: stats = null, refresh: fetchStats } = useApiCache<CatalogStats>('/api/arico-catalog?stats=1')
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   const handleMatch = (catalogId: number, product: SupplierProduct | null, barcode?: string) => {
-    setItems(prev => prev.map(item =>
-      item.id === catalogId
-        ? { ...item, supplierProductId: product?.id ?? null, matchedProduct: product ?? null, ...(barcode !== undefined ? { barcode } : {}) }
-        : item
-    ))
+    mutate({
+      rows: items.map(item =>
+        item.id === catalogId
+          ? { ...item, supplierProductId: product?.id ?? null, matchedProduct: product ?? null, ...(barcode !== undefined ? { barcode } : {}) }
+          : item),
+      total,
+    })
     fetchStats()
   }
 
