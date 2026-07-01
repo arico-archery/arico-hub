@@ -200,3 +200,59 @@
 4. §3 모델 마이그레이션 (db push → trgm 복구)
 5. `src/lib/makeshop.ts` Mock→실호출 전환, `/api/makeshop/sync`(JAN 우선 매칭+self-heal) + Cron
 6. §7 화면 연결, Mock fixture로 회귀 확인
+
+---
+
+## 9. 카탈로그 소스: 크롤 → API 대체 (2026-07-01 확정 방향)
+
+연동하면 **자사몰 크롤(`aricoShop.ts`)은 더 필요 없다.** MakeShop 商品 API/CSV로 직접 가져온다.
+
+| 항목 | 지금(크롤·스토어프론트 HTML) | MakeShop API/CSV |
+|---|---|---|
+| 데이터 | HTML 파싱(깨지기 쉬움) | **구조화 정식 데이터** |
+| 이름·가격·포인트·이미지 | ✅ 파싱 | ✅ 필드 |
+| 옵션(색/사이즈) | 부분·불안정 | ✅ 옵션 마스터 |
+| **JAN(바코드)** | ❌ **스토어프론트 미노출(확인함)** | ✅ **상품 마스터에 있음** |
+| 재고 연결 | ❌ | ✅ JAN으로 Smaregi 연결 |
+
+- **핵심 이점: JAN을 API로 확보** → §2 "이름 매칭 → JAN 정본" 과제 해결(정확 SKU + Smaregi 재고 연결).
+- **카탈로그 구조 자체는 유지**(자사몰↔공급사 매칭 다리). 채우는 소스만 크롤→API로 교체.
+- 착수 시 확인: 상품 API가 이름·가격·**포인트**·이미지·옵션·**JAN**을 다 주는지 1건 검증(포인트는 상품별 설정/계산방식 확인).
+- 기존 `aricoShop.ts` 크롤러는 fallback/폐기 예정으로 잔존.
+
+---
+
+## 10. 3-시스템 양방향 아키텍처 (MakeShop ↔ arico-hub ↔ Smaregi) — 2026-07-01 정리
+
+**구도**: MakeShop=온라인 주문·결제·회원(SSOT) / Smaregi=**재고 SSOT**·오프라인 POS / arico-hub=오케스트레이터(주문수렴·매칭·발주·입고·배송·정산). 기존 재고 피드 Smaregi→MakeShop 단방향.
+
+### 가능성 (API로 됨)
+| 흐름 | 방향 | API |
+|---|---|---|
+| 주문 유입 | MakeShop→hub | searchOrder(GraphQL) |
+| 재고 조회 | Smaregi→hub | 재고 API |
+| 발송·송장·상태 | hub→MakeShop | updateOrderAttribute·updateOrderDeliveryStatus |
+| 재고 변동(입고/출고) | hub→Smaregi | 재고조정 API (주의 최대) |
+| 상품/JAN 등록 | hub→Smaregi | 상품 API |
+
+→ "hub가 처리 → MakeShop(상태·송장)·Smaregi(재고) 되쓰기"는 **양쪽 API 모두 지원, 실현 가능.**
+
+### 주의점 (여기서 깨짐)
+1. **재고 SSOT=Smaregi.** hub가 자체 재고를 진실로 들면 어긋남 → **Smaregi에 쓰고 Smaregi에서 읽기만.**
+2. **재고 이중반영/루프** — 온라인판매(기존 피드로 Smaregi 감소)+hub 발송감소+POS 판매가 같은 재고를 각자 깎으면 오버셀. **누가·언제 깎는지 규칙 확정 필수.**
+3. **MakeShop 재고에 직접 쓰지 말 것** — Smaregi→MakeShop 피드가 이미 돌므로 hub는 Smaregi에만 쓴다(충돌 회피).
+4. **동기화 지연→오버셀** — 폴링 간격 사이 판매. **예약(reserve)+재고확인 게이트** 필요.
+5. **멱등성·부분실패** — 재시도/웹훅 중복이 재고 2번 깎거나 상태 2번 변경 금지 → idempotency 키. MakeShop 성공·Smaregi 실패 반쪽상태 → 재시도 큐+대사(fire-and-forget 금지).
+6. **옵션/변형=JAN(SKU) 단위 정합** — 재고는 JAN별. hub 매칭이 상품(그룹)단위면 재고동기화 틀림 → barcode(JAN) SKU 정체성 전제.
+7. **API 제약/인프라** — MakeShop 5MB·토큰1h, Smaregi 레이트리밋 → 배치+백오프. Vercel 타임아웃 → 백그라운드 잡/큐.
+8. **라이브 직접쓰기=사고** — dry-run/샌드박스 없이 쓰기 금지.
+
+### 안전한 단계 (읽기 먼저, 쓰기는 한 방향씩)
+- **P1 읽기전용**: MakeShop 주문유입 + Smaregi 재고조회. 위험 0.
+- **P2 MakeShop 되쓰기만**: 발송/송장/상태. 저위험.
+- **P3 Smaregi 재고쓰기**: "누가 언제 깎나"+예약모델 확정 후. 진짜 난관.
+
+### 지금 정할 3가지
+- 재고 깎는 주체·시점(온라인=피드 / 발송=hub / POS=Smaregi) 겹치지 않게.
+- 동기화 방식: 폴링(간단·지연) vs 웹훅(실시간·복잡).
+- JAN(SKU) 정합: 카탈로그/상품에 JAN 언제 채우나(§9 API/CSV).
