@@ -31,6 +31,12 @@ const CUSTOMER_TYPES: { v: string; key: 'typeIndividual' | 'typeInstitution' | '
   { v: 'institution', key: 'typeInstitution' },
   { v: 'corporation', key: 'typeCorporation' },
 ]
+// 구분 배지 색상 (개인=회색 / 기관=보라 / 기업=호박)
+const TYPE_BADGE: Record<string, string> = {
+  individual: 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400',
+  institution: 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300',
+  corporation: 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+}
 
 // 모듈 레벨 컴포넌트로 정의 (컴포넌트 내부에 두면 매 렌더마다 재생성되어
 // input이 unmount/remount → 한 글자 입력 후 포커스(커서)를 잃는 버그 발생)
@@ -100,6 +106,7 @@ export default function CustomersPage() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [searchQ, setSearchQ] = useState('')
+  const [typeFilter, setTypeFilter] = useState<string>('all')   // all | individual | institution | corporation
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editForm, setEditForm] = useState<FormState>(EMPTY_FORM)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
@@ -258,6 +265,22 @@ export default function CustomersPage() {
         </div>
       </div>
 
+      {/* 구분 필터 (전체/개인/기관/기업) */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 mr-1">{t.customers.labelType}</span>
+        {([{ v: 'all', label: t.common.all }, ...CUSTOMER_TYPES.map(({ v, key }) => ({ v, label: t.customers[key] }))]).map(({ v, label }) => {
+          const count = v === 'all' ? customers.length : customers.filter(c => (c.customerType || 'individual') === v).length
+          const active = typeFilter === v
+          return (
+            <button key={v} type="button" onClick={() => setTypeFilter(v)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${active ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
+              {label}
+              <span className={`text-xs tabular-nums ${active ? 'text-white/70' : 'text-gray-400 dark:text-gray-500'}`}>{count}</span>
+            </button>
+          )
+        })}
+      </div>
+
       {importOpen && (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5 mb-4 border-l-4 border-green-500">
           <div className="flex items-center justify-between mb-3">
@@ -317,6 +340,7 @@ export default function CustomersPage() {
             <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
               {(() => {
                 const filtered = customers.filter(c => {
+                  if (typeFilter !== 'all' && (c.customerType || 'individual') !== typeFilter) return false
                   if (!searchQ) return true
                   const q = searchQ.toLowerCase()
                   return c.name.toLowerCase().includes(q) || c.company.toLowerCase().includes(q) || c.phone.toLowerCase().includes(q) || c.code.toLowerCase().includes(q)
@@ -358,7 +382,12 @@ export default function CustomersPage() {
                         <div className="flex items-center gap-2">
                           <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium px-1.5 py-0.5 rounded shrink-0">{c.code}</span>
                           <div>
-                            <p className="font-semibold text-gray-900 dark:text-gray-100">{c.name}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-semibold text-gray-900 dark:text-gray-100">{c.name}</p>
+                              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 ${TYPE_BADGE[c.customerType || 'individual'] || TYPE_BADGE.individual}`}>
+                                {t.customers[(CUSTOMER_TYPES.find(x => x.v === (c.customerType || 'individual')) || CUSTOMER_TYPES[0]).key]}
+                              </span>
+                            </div>
                             {c.company && <p className="text-xs text-gray-500 dark:text-gray-400">{c.company}</p>}
                           </div>
                         </div>
