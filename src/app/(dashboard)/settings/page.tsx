@@ -317,10 +317,13 @@ export default function SettingsPage() {
         <div className="space-y-4">
           {companyProfiles.map((prof, i) => (
             <div key={i} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <input value={prof.label} onChange={e => updCompany(i, 'label', e.target.value)} placeholder={`프로필 ${i + 1}`}
-                  className="font-semibold text-sm border-b border-gray-200 dark:border-gray-600 bg-transparent px-1 py-0.5 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-blue-500" />
-                {companyProfiles.length > 1 && <button onClick={() => rmCompany(i)} className="ml-auto text-xs text-red-500 hover:text-red-700">{t.common.delete}</button>}
+              <div className="flex items-end gap-2 mb-3">
+                <div className="w-full max-w-xs">
+                  <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 block">{t.settings.profileName} <span className="font-normal text-gray-400">· 발행처 구분용</span></label>
+                  <input value={prof.label} onChange={e => updCompany(i, 'label', e.target.value)} placeholder="예: 기본 / 본사 / 한국지사"
+                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-semibold text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                </div>
+                {companyProfiles.length > 1 && <button onClick={() => rmCompany(i)} className="ml-auto text-xs text-red-500 hover:text-red-700 pb-2">{t.common.delete}</button>}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {([
@@ -367,10 +370,13 @@ export default function SettingsPage() {
         <div className="space-y-4">
           {bankProfiles.map((prof, i) => (
             <div key={i} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <input value={prof.label} onChange={e => updBank(i, 'label', e.target.value)} placeholder={`계좌 ${i + 1}`}
-                  className="font-semibold text-sm border-b border-gray-200 dark:border-gray-600 bg-transparent px-1 py-0.5 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-green-500" />
-                {bankProfiles.length > 1 && <button onClick={() => rmBank(i)} className="ml-auto text-xs text-red-500 hover:text-red-700">{t.common.delete}</button>}
+              <div className="flex items-end gap-2 mb-3">
+                <div className="w-full max-w-xs">
+                  <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 block">{t.settings.profileName} <span className="font-normal text-gray-400">· 계좌 구분용</span></label>
+                  <input value={prof.label} onChange={e => updBank(i, 'label', e.target.value)} placeholder="예: 기본 / 서브계좌"
+                    className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-semibold text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-300" />
+                </div>
+                {bankProfiles.length > 1 && <button onClick={() => rmBank(i)} className="ml-auto text-xs text-red-500 hover:text-red-700 pb-2">{t.common.delete}</button>}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {([
