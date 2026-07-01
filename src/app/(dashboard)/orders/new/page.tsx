@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, Trash2, ArrowLeft, ShoppingCart, Filter, Tag, Link2, RefreshCw, FileText, Image as ImageIcon } from 'lucide-react'
+import { Search, Plus, Trash2, ArrowLeft, ShoppingCart, Filter, Tag, Link2, RefreshCw, FileText, Image as ImageIcon, Clock } from 'lucide-react'
 import { formatJpy, formatNumber, calcProfitRate, calcCostJpy, SUPPLIER_COLORS, SUPPLIER_LIST } from '@/lib/utils'
 import SupplierBadge from '@/components/SupplierBadge'
 import ProfitBar from '@/components/ProfitBar'
@@ -33,7 +33,8 @@ type CatalogItem = {
   options?: string   // ARICO 자사몰 옵션 JSON: [{label, values:[...]}]
   imageUrl1?: string // ARICO 자사몰 대표 이미지
 }
-type Customer = { id: number; name: string; company: string; code: string }
+type Customer = { id: number; name: string; company: string; code: string; _count?: { orders: number } }
+const RECENT_CUSTOMERS_KEY = 'arico_recent_customers'
 type ExchangeRate = { currency: string; rateToJpy: number }
 type OrderLine = {
   product: Product; quantity: number; salePriceJpy: number; costPriceJpy: number
@@ -108,6 +109,7 @@ export default function NewOrderPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [customerSearch, setCustomerSearch] = useState('')
+  const [recentCustomerIds, setRecentCustomerIds] = useState<number[]>([])
   const [rates, setRates] = useState<ExchangeRate[]>([])
   const [lines, setLines] = useState<OrderLine[]>([])
 
@@ -130,6 +132,21 @@ export default function NewOrderPage() {
       fetch('/api/customers').then(r => r.json()),
       fetch('/api/exchange-rates').then(r => r.json()),
     ]).then(([c, r]) => { setCustomers(c); setRates(r) })
+    try {
+      const raw = JSON.parse(localStorage.getItem(RECENT_CUSTOMERS_KEY) || '[]')
+      if (Array.isArray(raw)) setRecentCustomerIds(raw.filter((n: unknown) => typeof n === 'number'))
+    } catch { /* ignore */ }
+  }, [])
+
+  // 거래처 선택 + 최근 이력 기록(localStorage). 반복 주문 시 퀵칩으로 빠르게 재선택.
+  const pickCustomer = useCallback((c: Customer) => {
+    setSelectedCustomer(c)
+    setCustomerSearch('')
+    setRecentCustomerIds(prev => {
+      const next = [c.id, ...prev.filter(id => id !== c.id)].slice(0, 8)
+      try { localStorage.setItem(RECENT_CUSTOMERS_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
   }, [])
 
   // 편집 모드: ?edit=<id> 면 기존 주문을 불러와 폼에 채운다
@@ -470,6 +487,19 @@ export default function NewOrderPage() {
     router.push('/orders')
   }
 
+  // 거래처 퀵칩: 최근 선택(localStorage) 우선, 부족분은 주문 많은 순(자주 쓰는 곳)으로 채움
+  const recentCustomers = recentCustomerIds
+    .map(id => customers.find(c => c.id === id))
+    .filter((c): c is Customer => !!c)
+  const frequentCustomers = [...customers]
+    .filter(c => !recentCustomerIds.includes(c.id))
+    .sort((a, b) => (b._count?.orders ?? 0) - (a._count?.orders ?? 0))
+  const quickPickCustomers = [...recentCustomers, ...frequentCustomers].slice(0, 6)
+  const cq = customerSearch.trim().toLowerCase()
+  const customerResults = cq
+    ? customers.filter(c => c.name.toLowerCase().includes(cq) || (c.company || '').toLowerCase().includes(cq)).slice(0, 8)
+    : []
+
   return (
     <div className="p-6">
       <div className="flex items-center gap-4 mb-6">
@@ -485,43 +515,93 @@ export default function NewOrderPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="col-span-2 space-y-4">
 
-          {/* 거래처 선택 */}
+          {/* 거래처 선택 — 검색 콤보박스 + 최근/자주 거래처 퀵칩 */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5">
             <h2 className="font-semibold text-gray-900 dark:text-white mb-3">{t.orders.newCustomerSection}</h2>
-            {customers.length > 5 && (
-              <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-                <input
-                  className="w-full pl-8 pr-4 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder={t.orders.newCustomerSearch}
-                  value={customerSearch}
-                  onChange={e => setCustomerSearch(e.target.value)}
-                />
+
+            {selectedCustomer ? (
+              /* 선택 완료 — 한 줄 카드로 축약 */
+              <div className="flex items-center gap-3 rounded-lg border border-blue-200 dark:border-blue-800/60 bg-blue-50 dark:bg-blue-900/20 px-3.5 py-2.5">
+                <div className="w-9 h-9 shrink-0 rounded-full bg-white dark:bg-gray-800 flex items-center justify-center text-sm font-semibold text-blue-700 dark:text-blue-300">
+                  {selectedCustomer.name.charAt(0)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-sm text-blue-900 dark:text-blue-200 truncate">{selectedCustomer.name}</p>
+                  {(selectedCustomer.company || selectedCustomer.code) && (
+                    <p className="text-xs text-blue-600 dark:text-blue-400 truncate">
+                      {[selectedCustomer.company, selectedCustomer.code].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setSelectedCustomer(null)}
+                  className="shrink-0 flex items-center gap-1 text-xs font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-800/40 px-2.5 py-1.5 rounded-lg transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  {t.orders.newCustomerChange}
+                </button>
+              </div>
+            ) : customers.length === 0 ? (
+              <p className="text-sm text-gray-400">
+                {t.orders.newNoCustomers} <a href="/customers" className="text-blue-500">{t.common.add}</a>
+              </p>
+            ) : (
+              <div className="relative">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                  <input
+                    autoComplete="off"
+                    className="w-full pl-8 pr-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder={t.orders.newCustomerSearch}
+                    value={customerSearch}
+                    onChange={e => setCustomerSearch(e.target.value)}
+                  />
+                </div>
+
+                {cq ? (
+                  /* 검색 결과 드롭다운 */
+                  <div className="mt-2 border border-gray-200 dark:border-gray-600 rounded-lg divide-y divide-gray-100 dark:divide-gray-700 overflow-hidden">
+                    {customerResults.length === 0 ? (
+                      <p className="px-3 py-3 text-sm text-gray-400">{t.orders.newCustomerNoResults}</p>
+                    ) : customerResults.map(c => (
+                      <button
+                        key={c.id}
+                        onClick={() => pickCustomer(c)}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                      >
+                        <div className="w-7 h-7 shrink-0 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-xs font-semibold text-gray-500 dark:text-gray-300">
+                          {c.name.charAt(0)}
+                        </div>
+                        <span className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{c.name}</span>
+                        {c.company && <span className="text-xs text-gray-500 dark:text-gray-400 truncate">{c.company}</span>}
+                        {c.code && <span className="ml-auto shrink-0 text-xs text-gray-400">{c.code}</span>}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  /* 최근/자주 거래처 퀵칩 */
+                  quickPickCustomers.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mb-2 flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {t.orders.newCustomerRecent}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {quickPickCustomers.map(c => (
+                          <button
+                            key={c.id}
+                            onClick={() => pickCustomer(c)}
+                            className="px-3 py-1.5 rounded-full text-sm border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/60 text-gray-700 dark:text-gray-200 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                          >
+                            {c.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                )}
               </div>
             )}
-            <div className="flex flex-wrap gap-2">
-              {customers
-                .filter(c => !customerSearch || c.name.toLowerCase().includes(customerSearch.toLowerCase()) || c.company.toLowerCase().includes(customerSearch.toLowerCase()))
-                .map(c => (
-                  <button
-                    key={c.id}
-                    onClick={() => setSelectedCustomer(c)}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      selectedCustomer?.id === c.id
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                    }`}
-                  >
-                    {c.name}
-                    {c.company && <span className="ml-1 font-normal opacity-70">({c.company})</span>}
-                  </button>
-                ))}
-              {customers.length === 0 && (
-                <p className="text-sm text-gray-400">
-                  {t.orders.newNoCustomers} <a href="/customers" className="text-blue-500">{t.common.add}</a>
-                </p>
-              )}
-            </div>
           </div>
 
           {/* 상품 추가 */}
