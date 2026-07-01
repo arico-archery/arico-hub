@@ -302,7 +302,7 @@ export default function SettingsPage() {
             {t.settings.companyInfoTitle}
           </h2>
           <div className="flex items-center gap-2">
-            <button onClick={addCompany} className="text-sm text-blue-600 hover:text-blue-700 font-medium">+ 프로필 추가</button>
+            <button onClick={addCompany} className="text-sm text-blue-600 hover:text-blue-700 font-medium">{t.settings.addProfile}</button>
             <button
               onClick={handleCompanySave}
               disabled={companySaving}
@@ -313,14 +313,14 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">{t.settings.companyInfoDesc} · 문서 발행 시 선택</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">{t.settings.companyInfoDesc} · {t.settings.selectOnIssue}</p>
         <div className="space-y-4">
           {companyProfiles.map((prof, i) => (
             <div key={i} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
               <div className="flex items-end gap-2 mb-3">
                 <div className="w-full max-w-xs">
-                  <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 block">{t.settings.profileName} <span className="font-normal text-gray-400">· 발행처 구분용</span></label>
-                  <input value={prof.label} onChange={e => updCompany(i, 'label', e.target.value)} placeholder="예: 기본 / 본사 / 한국지사"
+                  <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 block">{t.settings.profileName} <span className="font-normal text-gray-400">· {t.settings.profileHintCompany}</span></label>
+                  <input value={prof.label} onChange={e => updCompany(i, 'label', e.target.value)} placeholder={t.settings.profilePlaceholderCompany}
                     className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-semibold text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300" />
                 </div>
                 {companyProfiles.length > 1 && <button onClick={() => rmCompany(i)} className="ml-auto text-xs text-red-500 hover:text-red-700 pb-2">{t.common.delete}</button>}
@@ -355,7 +355,7 @@ export default function SettingsPage() {
             {t.settings.bankInfoTitle}
           </h2>
           <div className="flex items-center gap-2">
-            <button onClick={addBank} className="text-sm text-green-600 hover:text-green-700 font-medium">+ 계좌 추가</button>
+            <button onClick={addBank} className="text-sm text-green-600 hover:text-green-700 font-medium">{t.settings.addBank}</button>
             <button
               onClick={handleBankSave}
               disabled={bankSaving}
@@ -366,14 +366,14 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">청구서 발행 시 선택</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">{t.settings.bankSelectOnIssue}</p>
         <div className="space-y-4">
           {bankProfiles.map((prof, i) => (
             <div key={i} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
               <div className="flex items-end gap-2 mb-3">
                 <div className="w-full max-w-xs">
-                  <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 block">{t.settings.profileName} <span className="font-normal text-gray-400">· 계좌 구분용</span></label>
-                  <input value={prof.label} onChange={e => updBank(i, 'label', e.target.value)} placeholder="예: 기본 / 서브계좌"
+                  <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 block">{t.settings.profileName} <span className="font-normal text-gray-400">· {t.settings.profileHintBank}</span></label>
+                  <input value={prof.label} onChange={e => updBank(i, 'label', e.target.value)} placeholder={t.settings.profilePlaceholderBank}
                     className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm font-semibold text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-300" />
                 </div>
                 {bankProfiles.length > 1 && <button onClick={() => rmBank(i)} className="ml-auto text-xs text-red-500 hover:text-red-700 pb-2">{t.common.delete}</button>}
@@ -444,10 +444,10 @@ export default function SettingsPage() {
                 <button
                   onClick={() => downloadTemplate(selected)}
                   className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 px-2 py-1 rounded border border-gray-200 dark:border-gray-600 hover:border-blue-400 transition-colors shrink-0"
-                  title="CSV 템플릿 다운로드"
+                  title={t.settings.templateTitle}
                 >
                   <FileDown className="w-3 h-3" />
-                  템플릿
+                  {t.settings.templateBtn}
                 </button>
               </div>
             </div>
@@ -580,9 +580,9 @@ export default function SettingsPage() {
               <div className="flex items-center gap-2 mb-1">
                 <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
                 <p className="text-sm text-green-700 dark:text-green-400">
-                  {result.total}행 중 <strong>{result.imported}개 임포트 완료</strong>
-                  {(result.skipped ?? 0) > 0 && <span className="text-gray-500"> ({result.skipped}행 스킵)</span>}
-                  {result.errors > 0 && <span className="text-orange-500"> ({result.errors}개 오류)</span>}
+                  {result.total}{t.settings.importRowsOf} <strong>{result.imported}{t.settings.importDone}</strong>
+                  {(result.skipped ?? 0) > 0 && <span className="text-gray-500"> ({result.skipped}{t.settings.importSkipped})</span>}
+                  {result.errors > 0 && <span className="text-orange-500"> ({result.errors}{t.settings.importErrors})</span>}
                 </p>
               </div>
               {result.errorDetails && result.errorDetails.length > 0 && (
@@ -682,7 +682,7 @@ export default function SettingsPage() {
                   {stat !== undefined && (
                     <div className="text-right shrink-0 min-w-[56px]">
                       <span className={`text-xs font-bold tabular-nums block ${stat._count > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
-                        {formatNumber(stat._count)}개
+                        {formatNumber(stat._count)}{t.common.items}
                       </span>
                       {stat.latestScrapedAt && (
                         <span className="text-xs text-gray-400 dark:text-gray-500 block">
