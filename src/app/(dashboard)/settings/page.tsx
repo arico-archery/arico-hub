@@ -5,24 +5,19 @@ import { Upload, CheckCircle, AlertCircle, Database, RefreshCw, Building2, Save,
 import { SUPPLIER_COLORS, formatNumber } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
 
-type BankSettings = {
-  bank_name: string
-  bank_branch: string
-  bank_account_type: string
-  bank_account_no: string
-  bank_account_holder: string
-  bank_note: string
+// 발행처·계좌를 여러 프로필로 저장(JSON 배열). 문서 발행 시 선택.
+type CompanyProfile = {
+  label: string
+  company_name: string; company_regno: string; company_contact: string
+  company_address: string; company_tel: string; company_email: string; company_web: string
 }
-
-type CompanySettings = {
-  company_name: string
-  company_regno: string
-  company_contact: string
-  company_address: string
-  company_tel: string
-  company_email: string
-  company_web: string
+type BankProfile = {
+  label: string
+  bank_name: string; bank_branch: string; bank_account_type: string
+  bank_account_no: string; bank_account_holder: string; bank_note: string
 }
+const EMPTY_COMPANY: CompanyProfile = { label: '', company_name: '', company_regno: '', company_contact: '', company_address: '', company_tel: '', company_email: '', company_web: '' }
+const EMPTY_BANK: BankProfile = { label: '', bank_name: '', bank_branch: '', bank_account_type: '普通', bank_account_no: '', bank_account_holder: '', bank_note: '' }
 
 // ── 공급사별 CSV 템플릿 정의 ─────────────────────────────────
 type SupplierTemplate = {
@@ -110,21 +105,22 @@ export default function SettingsPage() {
   const [syncProg, setSyncProg] = useState<{ phase: string; page: number; maxPage: number; done: number; total: number; imported: number }>({ phase: '', page: 0, maxPage: 0, done: 0, total: 0, imported: 0 })
   const [syncResult, setSyncResult] = useState<{ total: number; imported: number } | null>(null)
 
-  // 계좌 설정
-  const [bank, setBank] = useState<BankSettings>({
-    bank_name: '', bank_branch: '', bank_account_type: '普通',
-    bank_account_no: '', bank_account_holder: '', bank_note: '',
-  })
+  // 계좌 프로필 (여러 개, 선택)
+  const [bankProfiles, setBankProfiles] = useState<BankProfile[]>([{ ...EMPTY_BANK, label: '기본' }])
   const [bankSaving, setBankSaving] = useState(false)
   const [bankSaved, setBankSaved] = useState(false)
 
-  // 발행처 정보 설정
-  const [company, setCompany] = useState<CompanySettings>({
-    company_name: '', company_regno: '', company_contact: '', company_address: '',
-    company_tel: '', company_email: '', company_web: '',
-  })
+  // 발행처 프로필 (여러 개, 선택)
+  const [companyProfiles, setCompanyProfiles] = useState<CompanyProfile[]>([{ ...EMPTY_COMPANY, label: '기본' }])
   const [companySaving, setCompanySaving] = useState(false)
   const [companySaved, setCompanySaved] = useState(false)
+
+  const updCompany = (i: number, key: keyof CompanyProfile, val: string) => setCompanyProfiles(prev => prev.map((p, idx) => idx === i ? { ...p, [key]: val } : p))
+  const addCompany = () => setCompanyProfiles(prev => [...prev, { ...EMPTY_COMPANY, label: `프로필 ${prev.length + 1}` }])
+  const rmCompany = (i: number) => setCompanyProfiles(prev => prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== i))
+  const updBank = (i: number, key: keyof BankProfile, val: string) => setBankProfiles(prev => prev.map((p, idx) => idx === i ? { ...p, [key]: val } : p))
+  const addBank = () => setBankProfiles(prev => [...prev, { ...EMPTY_BANK, label: `계좌 ${prev.length + 1}` }])
+  const rmBank = (i: number) => setBankProfiles(prev => prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== i))
 
   const loadStats = async () => {
     setStatsLoading(true)
@@ -166,20 +162,28 @@ export default function SettingsPage() {
     loadStats()
     loadRates()
     fetch('/api/settings').then(r => r.json()).then(data => {
-      setBank(data)
-      setCompany({
-        company_name: data.company_name ?? '', company_regno: data.company_regno ?? '',
-        company_contact: data.company_contact ?? '',
-        company_address: data.company_address ?? '', company_tel: data.company_tel ?? '',
-        company_email: data.company_email ?? '', company_web: data.company_web ?? '',
-      })
+      // 발행처 프로필: JSON 배열이 있으면 사용, 없으면 레거시 단일키로 1개 시드
+      let cps: CompanyProfile[] = []
+      try { cps = JSON.parse(data.company_profiles || '[]') } catch { /* ignore */ }
+      if (!Array.isArray(cps) || !cps.length) cps = [{ label: '기본',
+        company_name: data.company_name ?? '', company_regno: data.company_regno ?? '', company_contact: data.company_contact ?? '',
+        company_address: data.company_address ?? '', company_tel: data.company_tel ?? '', company_email: data.company_email ?? '', company_web: data.company_web ?? '' }]
+      setCompanyProfiles(cps)
+      // 계좌 프로필
+      let bps: BankProfile[] = []
+      try { bps = JSON.parse(data.bank_profiles || '[]') } catch { /* ignore */ }
+      if (!Array.isArray(bps) || !bps.length) bps = [{ label: '기본',
+        bank_name: data.bank_name ?? '', bank_branch: data.bank_branch ?? '', bank_account_type: data.bank_account_type ?? '普通',
+        bank_account_no: data.bank_account_no ?? '', bank_account_holder: data.bank_account_holder ?? '', bank_note: data.bank_note ?? '' }]
+      setBankProfiles(bps)
     }).catch(() => {})
   }, [])
 
   const handleBankSave = async () => {
     setBankSaving(true)
     try {
-      await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bank) })
+      const { label: _bl, ...first } = bankProfiles[0] || EMPTY_BANK   // 첫 프로필을 레거시 단일키로도 저장
+      await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bank_profiles: JSON.stringify(bankProfiles), ...first }) })
       setBankSaved(true)
       setTimeout(() => setBankSaved(false), 2000)
     } catch { /* ignore */ }
@@ -189,7 +193,8 @@ export default function SettingsPage() {
   const handleCompanySave = async () => {
     setCompanySaving(true)
     try {
-      await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(company) })
+      const { label: _cl, ...first } = companyProfiles[0] || EMPTY_COMPANY
+      await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company_profiles: JSON.stringify(companyProfiles), ...first }) })
       setCompanySaved(true)
       setTimeout(() => setCompanySaved(false), 2000)
     } catch { /* ignore */ }
@@ -296,35 +301,44 @@ export default function SettingsPage() {
             <Building2 className="w-4 h-4 text-blue-500" />
             {t.settings.companyInfoTitle}
           </h2>
-          <button
-            onClick={handleCompanySave}
-            disabled={companySaving}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            {companySaved ? <CheckCircle className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-            {companySaved ? t.common.saved : companySaving ? t.common.saving : t.common.save}
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={addCompany} className="text-sm text-blue-600 hover:text-blue-700 font-medium">+ 프로필 추가</button>
+            <button
+              onClick={handleCompanySave}
+              disabled={companySaving}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              {companySaved ? <CheckCircle className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+              {companySaved ? t.common.saved : companySaving ? t.common.saving : t.common.save}
+            </button>
+          </div>
         </div>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">{t.settings.companyInfoDesc}</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[
-            { key: 'company_name', label: t.settings.companyName, placeholder: 'ARICO' },
-            { key: 'company_regno', label: t.settings.companyRegno, placeholder: 'T1234567890123' },
-            { key: 'company_contact', label: t.settings.companyContact, placeholder: '山田 太郎' },
-            { key: 'company_tel', label: 'TEL', placeholder: '+81-3-0000-0000' },
-            { key: 'company_email', label: 'Email', placeholder: 'sbs@arico.co.jp' },
-            { key: 'company_web', label: 'Web', placeholder: 'arico-archery.com' },
-            { key: 'company_address', label: t.settings.companyAddress, placeholder: '東京都...' },
-          ].map(({ key, label, placeholder }) => (
-            <div key={key}>
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1 block">{label}</label>
-              <input
-                type="text"
-                value={company[key as keyof CompanySettings]}
-                onChange={e => setCompany(prev => ({ ...prev, [key]: e.target.value }))}
-                placeholder={placeholder}
-                className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
-              />
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">{t.settings.companyInfoDesc} · 문서 발행 시 선택</p>
+        <div className="space-y-4">
+          {companyProfiles.map((prof, i) => (
+            <div key={i} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <input value={prof.label} onChange={e => updCompany(i, 'label', e.target.value)} placeholder={`프로필 ${i + 1}`}
+                  className="font-semibold text-sm border-b border-gray-200 dark:border-gray-600 bg-transparent px-1 py-0.5 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-blue-500" />
+                {companyProfiles.length > 1 && <button onClick={() => rmCompany(i)} className="ml-auto text-xs text-red-500 hover:text-red-700">{t.common.delete}</button>}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {([
+                  { key: 'company_name', label: t.settings.companyName, placeholder: 'ARICO' },
+                  { key: 'company_regno', label: t.settings.companyRegno, placeholder: 'T1234567890123' },
+                  { key: 'company_contact', label: t.settings.companyContact, placeholder: '山田 太郎' },
+                  { key: 'company_tel', label: 'TEL', placeholder: '+81-3-0000-0000' },
+                  { key: 'company_email', label: 'Email', placeholder: 'sbs@arico.co.jp' },
+                  { key: 'company_web', label: 'Web', placeholder: 'arico-archery.com' },
+                  { key: 'company_address', label: t.settings.companyAddress, placeholder: '東京都...' },
+                ] as const).map(({ key, label, placeholder }) => (
+                  <div key={key}>
+                    <label className="text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1 block">{label}</label>
+                    <input type="text" value={prof[key]} onChange={e => updCompany(i, key, e.target.value)} placeholder={placeholder}
+                      className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>
@@ -337,33 +351,43 @@ export default function SettingsPage() {
             <Building2 className="w-4 h-4 text-green-500" />
             {t.settings.bankInfoTitle}
           </h2>
-          <button
-            onClick={handleBankSave}
-            disabled={bankSaving}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
-          >
-            {bankSaved ? <CheckCircle className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-            {bankSaved ? t.common.saved : bankSaving ? t.common.saving : t.common.save}
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={addBank} className="text-sm text-green-600 hover:text-green-700 font-medium">+ 계좌 추가</button>
+            <button
+              onClick={handleBankSave}
+              disabled={bankSaving}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
+            >
+              {bankSaved ? <CheckCircle className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+              {bankSaved ? t.common.saved : bankSaving ? t.common.saving : t.common.save}
+            </button>
+          </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[
-            { key: 'bank_name', label: '銀行名', placeholder: '例) 三菱UFJ銀行' },
-            { key: 'bank_branch', label: '支店名', placeholder: '例) 渋谷支店' },
-            { key: 'bank_account_type', label: '口座種別', placeholder: '普通 / 当座' },
-            { key: 'bank_account_no', label: '口座番号', placeholder: '例) 1234567' },
-            { key: 'bank_account_holder', label: '口座名義', placeholder: '例) カ）アリコ' },
-            { key: 'bank_note', label: '備考', placeholder: '振込手数料はご負担ください' },
-          ].map(({ key, label, placeholder }) => (
-            <div key={key}>
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1 block">{label}</label>
-              <input
-                type="text"
-                value={bank[key as keyof BankSettings]}
-                onChange={e => setBank(prev => ({ ...prev, [key]: e.target.value }))}
-                placeholder={placeholder}
-                className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-300"
-              />
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">청구서 발행 시 선택</p>
+        <div className="space-y-4">
+          {bankProfiles.map((prof, i) => (
+            <div key={i} className="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <input value={prof.label} onChange={e => updBank(i, 'label', e.target.value)} placeholder={`계좌 ${i + 1}`}
+                  className="font-semibold text-sm border-b border-gray-200 dark:border-gray-600 bg-transparent px-1 py-0.5 text-gray-900 dark:text-gray-100 focus:outline-none focus:border-green-500" />
+                {bankProfiles.length > 1 && <button onClick={() => rmBank(i)} className="ml-auto text-xs text-red-500 hover:text-red-700">{t.common.delete}</button>}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {([
+                  { key: 'bank_name', label: '銀行名', placeholder: '例) 三菱UFJ銀行' },
+                  { key: 'bank_branch', label: '支店名', placeholder: '例) 渋谷支店' },
+                  { key: 'bank_account_type', label: '口座種別', placeholder: '普通 / 当座' },
+                  { key: 'bank_account_no', label: '口座番号', placeholder: '例) 1234567' },
+                  { key: 'bank_account_holder', label: '口座名義', placeholder: '例) カ）アリコ' },
+                  { key: 'bank_note', label: '備考', placeholder: '振込手数料はご負担ください' },
+                ] as const).map(({ key, label, placeholder }) => (
+                  <div key={key}>
+                    <label className="text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1 block">{label}</label>
+                    <input type="text" value={prof[key]} onChange={e => updBank(i, key, e.target.value)} placeholder={placeholder}
+                      className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-300" />
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>

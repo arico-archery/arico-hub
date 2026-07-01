@@ -10,13 +10,14 @@ const TYPE_LABEL: Record<DocType, Record<DocLang, string>> = {
 }
 
 export default function DocToolbar({
-  type, id, lang, backHref,
-}: { type: DocType; id: string; lang: DocLang; backHref: string }) {
+  type, id, lang, backHref, issuers = [], issuerIdx = 0, banks = [], bankIdx = 0,
+}: { type: DocType; id: string; lang: DocLang; backHref: string; issuers?: string[]; issuerIdx?: number; banks?: string[]; bankIdx?: number }) {
   // 청구서 ↔ 견적서는 같은 주문 데이터라 상호 전환 가능. 발주서는 단독.
   const orderTypes: DocType[] = ['invoice', 'quote']
   const showTypeSwitch = type !== 'po'
 
-  const link = (t: DocType, l: DocLang) => `/documents/${t}/${id}?lang=${l}`
+  const link = (t: DocType, l: DocLang) => `/documents/${t}/${id}?lang=${l}&issuer=${issuerIdx}&bank=${bankIdx}`
+  const goProfile = (iss: number, bnk: number) => { window.location.href = `/documents/${type}/${id}?lang=${lang}&issuer=${iss}&bank=${bnk}` }
 
   return (
     <div className="max-w-3xl mx-auto mb-4 flex flex-wrap items-center gap-3 print:hidden">
@@ -58,11 +59,26 @@ export default function DocToolbar({
         ))}
       </div>
 
+      {/* 발행처 프로필 선택 (여러 개일 때) */}
+      {issuers.length > 1 && (
+        <select value={issuerIdx} onChange={e => goProfile(Number(e.target.value), bankIdx)}
+          className="px-2 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200">
+          {issuers.map((lbl, i) => <option key={i} value={i}>발행처: {lbl}</option>)}
+        </select>
+      )}
+      {/* 계좌 프로필 선택 (청구서, 여러 개일 때) */}
+      {banks.length > 1 && (
+        <select value={bankIdx} onChange={e => goProfile(issuerIdx, Number(e.target.value))}
+          className="px-2 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200">
+          {banks.map((lbl, i) => <option key={i} value={i}>계좌: {lbl}</option>)}
+        </select>
+      )}
+
       <div className="ml-auto flex items-center gap-2">
         {/* 발주서는 공급사 전달용 Excel(.xlsx) 다운로드 제공 */}
         {type === 'po' && (
           <a
-            href={`/api/purchase-orders/${id}/excel?lang=${lang}`}
+            href={`/api/purchase-orders/${id}/excel?lang=${lang}&issuer=${issuerIdx}`}
             className="flex items-center gap-2 bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-800 transition-colors"
           >
             <FileSpreadsheet className="w-4 h-4" />

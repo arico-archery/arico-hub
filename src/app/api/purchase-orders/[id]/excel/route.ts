@@ -20,8 +20,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const settings = Object.fromEntries(
     (await prisma.setting.findMany({ select: { key: true, value: true } })).map(r => [r.key, r.value]),
   )
-  const sellerName = settings.company_name || 'ARICO'
-  const sellerContact = settings.company_contact || ''
+  // 발행처 프로필 선택 (?issuer=N). 없으면 레거시 단일키 fallback.
+  let companyProfiles: Record<string, string>[] = []
+  try { const a = JSON.parse(settings.company_profiles || '[]'); if (Array.isArray(a)) companyProfiles = a } catch { /* ignore */ }
+  const issuerIdx = Math.min(Math.max(0, Number(new URL(req.url).searchParams.get('issuer')) || 0), Math.max(0, companyProfiles.length - 1))
+  const cp = companyProfiles[issuerIdx] || {}
+  const sellerName = cp.company_name || settings.company_name || 'ARICO'
+  const sellerContact = cp.company_contact || settings.company_contact || ''
   const contactLbl = lang === 'ja' ? '担当者' : lang === 'ko' ? '담당자' : 'Contact'
 
   const r = (n: number) => Math.round(n)

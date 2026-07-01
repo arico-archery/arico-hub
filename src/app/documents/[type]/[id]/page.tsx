@@ -22,7 +22,7 @@ export default async function DocumentPage({
   params, searchParams,
 }: {
   params: Promise<{ type: string; id: string }>
-  searchParams: Promise<{ lang?: string }>
+  searchParams: Promise<{ lang?: string; issuer?: string; bank?: string }>
 }) {
   const { type, id } = await params
   const sp = await searchParams
@@ -32,15 +32,24 @@ export default async function DocumentPage({
   const T = DOC_TEXT[lang]
   const settings = await getSettings()
 
-  // 발행처(ARICO) 정보 — 설정값 우선, 없으면 기본값
+  // 발행처·계좌 프로필 (여러 개 중 ?issuer=N / ?bank=M 로 선택). 없으면 레거시 단일키 fallback.
+  const parseProfiles = (s: string | undefined): Record<string, string>[] => {
+    try { const a = JSON.parse(s || '[]'); return Array.isArray(a) ? a : [] } catch { return [] }
+  }
+  const companyProfiles = parseProfiles(settings.company_profiles)
+  const bankProfiles = parseProfiles(settings.bank_profiles)
+  const issuerIdx = Math.min(Math.max(0, Number(sp.issuer) || 0), Math.max(0, companyProfiles.length - 1))
+  const bankIdx = Math.min(Math.max(0, Number(sp.bank) || 0), Math.max(0, bankProfiles.length - 1))
+  const cp = companyProfiles[issuerIdx] || {}
+
   const seller = {
-    name: settings.company_name || 'ARICO',
-    regNo: settings.company_regno || '',
-    contact: settings.company_contact || '',
-    address: settings.company_address || '',
-    tel: settings.company_tel || '',
-    email: settings.company_email || 'sbs@arico.co.jp',
-    web: settings.company_web || 'arico-archery.com',
+    name: cp.company_name || settings.company_name || 'ARICO',
+    regNo: cp.company_regno || settings.company_regno || '',
+    contact: cp.company_contact || settings.company_contact || '',
+    address: cp.company_address || settings.company_address || '',
+    tel: cp.company_tel || settings.company_tel || '',
+    email: cp.company_email || settings.company_email || 'sbs@arico.co.jp',
+    web: cp.company_web || settings.company_web || 'arico-archery.com',
   }
 
   // ── 데이터 정규화 ────────────────────────────────────
@@ -141,14 +150,17 @@ export default async function DocumentPage({
   }
 
   const totalQty = rows.reduce((s, r) => s + r.qty, 0)
+  const bp = bankProfiles[bankIdx] || {}
   const bank = {
-    name: settings.bank_name, branch: settings.bank_branch, type: settings.bank_account_type,
-    no: settings.bank_account_no, holder: settings.bank_account_holder, note: settings.bank_note,
+    name: bp.bank_name || settings.bank_name, branch: bp.bank_branch || settings.bank_branch, type: bp.bank_account_type || settings.bank_account_type,
+    no: bp.bank_account_no || settings.bank_account_no, holder: bp.bank_account_holder || settings.bank_account_holder, note: bp.bank_note || settings.bank_note,
   }
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-slate-900 p-8 print:bg-white print:p-0">
-      <DocToolbar type={docType} id={id} lang={lang} backHref={backHref} />
+      <DocToolbar type={docType} id={id} lang={lang} backHref={backHref}
+        issuers={companyProfiles.map((p, i) => p.label || `프로필 ${i + 1}`)} issuerIdx={issuerIdx}
+        banks={docType === 'invoice' ? bankProfiles.map((p, i) => p.label || `계좌 ${i + 1}`) : []} bankIdx={bankIdx} />
 
       <div className="max-w-3xl mx-auto bg-white shadow-lg rounded-xl overflow-hidden print:shadow-none print:rounded-none" id="document">
         {/* Header */}
