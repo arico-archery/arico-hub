@@ -17,6 +17,7 @@ type BankSettings = {
 type CompanySettings = {
   company_name: string
   company_regno: string
+  company_contact: string
   company_address: string
   company_tel: string
   company_email: string
@@ -119,7 +120,7 @@ export default function SettingsPage() {
 
   // 발행처 정보 설정
   const [company, setCompany] = useState<CompanySettings>({
-    company_name: '', company_regno: '', company_address: '',
+    company_name: '', company_regno: '', company_contact: '', company_address: '',
     company_tel: '', company_email: '', company_web: '',
   })
   const [companySaving, setCompanySaving] = useState(false)
@@ -168,6 +169,7 @@ export default function SettingsPage() {
       setBank(data)
       setCompany({
         company_name: data.company_name ?? '', company_regno: data.company_regno ?? '',
+        company_contact: data.company_contact ?? '',
         company_address: data.company_address ?? '', company_tel: data.company_tel ?? '',
         company_email: data.company_email ?? '', company_web: data.company_web ?? '',
       })
@@ -308,6 +310,7 @@ export default function SettingsPage() {
           {[
             { key: 'company_name', label: t.settings.companyName, placeholder: 'ARICO' },
             { key: 'company_regno', label: t.settings.companyRegno, placeholder: 'T1234567890123' },
+            { key: 'company_contact', label: t.settings.companyContact, placeholder: '山田 太郎' },
             { key: 'company_tel', label: 'TEL', placeholder: '+81-3-0000-0000' },
             { key: 'company_email', label: 'Email', placeholder: 'sbs@arico.co.jp' },
             { key: 'company_web', label: 'Web', placeholder: 'arico-archery.com' },

@@ -21,6 +21,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     (await prisma.setting.findMany({ select: { key: true, value: true } })).map(r => [r.key, r.value]),
   )
   const sellerName = settings.company_name || 'ARICO'
+  const sellerContact = settings.company_contact || ''
+  const contactLbl = lang === 'ja' ? '担当者' : lang === 'ko' ? '담당자' : 'Contact'
 
   const r = (n: number) => Math.round(n)
   const itemRows = po.items.map((it, i) => {
@@ -33,7 +35,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     [T.title.po],
     [`${T.docNo.po}: ${po.poNo}`],
     [`${T.to}: ${po.supplier.name} (${po.supplierCode})`],
-    [`${T.from}: ${sellerName}`],
+    [`${T.from}: ${sellerName}${sellerContact ? `  (${contactLbl}: ${sellerContact})` : ''}`],
     [`${T.issueDate}: ${fmtDocDate(po.orderDate, lang)}`],
     ...(po.expectedDate ? [[`${T.expectedDate}: ${fmtDocDate(po.expectedDate, lang)}`]] : []),
     [],

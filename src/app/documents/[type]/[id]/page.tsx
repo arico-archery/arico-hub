@@ -36,6 +36,7 @@ export default async function DocumentPage({
   const seller = {
     name: settings.company_name || 'ARICO',
     regNo: settings.company_regno || '',
+    contact: settings.company_contact || '',
     address: settings.company_address || '',
     tel: settings.company_tel || '',
     email: settings.company_email || 'sbs@arico.co.jp',
@@ -192,6 +193,7 @@ export default async function DocumentPage({
             <div className="mt-3 pt-3 border-t border-gray-100">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">{T.from}</p>
               <p className="font-bold text-gray-900 text-sm">{seller.name}</p>
+              {seller.contact && <p className="text-gray-500 text-xs">{T.contactLabel}: {seller.contact}</p>}
               {seller.regNo && <p className="text-gray-500 text-xs">{T.regNo}: {seller.regNo}</p>}
               {seller.address && <p className="text-gray-500 text-xs">{seller.address}</p>}
               {seller.tel && <p className="text-gray-500 text-xs">TEL: {seller.tel}</p>}
