@@ -10,9 +10,13 @@ export async function GET(req: Request) {
   const limit    = Number(searchParams.get('limit') ?? '30')
   const skip     = (page - 1) * limit
 
+  // status는 쉼표 구분 다중 값 지원 (예: "ordered,partial,confirmed" = 입고 대기)
+  const statusFilter = status.includes(',')
+    ? { status: { in: status.split(',').map(s => s.trim()) } }
+    : status ? { status } : {}
   const where = {
     ...(supplier ? { supplierCode: supplier } : {}),
-    ...(status   ? { status } : {}),
+    ...statusFilter,
   }
 
   const [orders, total] = await Promise.all([

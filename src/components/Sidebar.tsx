@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, Package, ShoppingCart, CreditCard,
-  Users, BarChart3, Settings, RefreshCw, Globe, Truck, ClipboardList, BookOpen, LogOut,
+  Users, BarChart3, Settings, RefreshCw, Globe, Truck, ClipboardList, BookOpen, LogOut, PackageCheck,
   Sun, Moon
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -48,6 +48,7 @@ export default function Sidebar() {
         { href: '/payments',         label: t.nav.payments,        icon: CreditCard },
         { href: '/backorders',       label: t.nav.backorders,      icon: ClipboardList },
         { href: '/purchase-orders',  label: t.nav.purchaseOrders,  icon: Truck },
+        { href: '/receiving',        label: t.nav.receiving,       icon: PackageCheck },
       ],
     },
     {
