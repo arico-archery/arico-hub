@@ -120,12 +120,18 @@ export default async function DocumentPage({
       amount: it.salePriceJpy * it.quantity,
     }))
 
+    // 소계(할인 전) / 할인 / 합계(순액). 레거시 주문은 subtotalJpy=0 → 합계를 소계로 사용
+    const subtotal = order.subtotalJpy > 0 ? order.subtotalJpy : order.totalAmountJpy
+    const discountValue = Math.max(0, subtotal - order.totalAmountJpy)
+    const discountLabel = T.discount + (order.discountRate > 0 ? ` (${order.discountRate}%)` : '')
+
     if (docType === 'invoice') {
       dateRows = [
         { label: T.issueDate, value: fmtDocDate(order.orderDate, lang) },
         { label: T.dueDate, value: fmtDocDate(order.dueDate, lang) },
       ]
-      totals = [{ label: T.subtotal, value: order.totalAmountJpy }]
+      totals = [{ label: T.subtotal, value: subtotal }]
+      if (discountValue > 0) totals.push({ label: discountLabel, value: discountValue, minus: true })
       if (order.paidAmountJpy > 0) totals.push({ label: T.paidAmount, value: order.paidAmountJpy, minus: true })
       totals.push({ label: T.balanceDue, value: order.totalAmountJpy - order.paidAmountJpy, bold: true })
       showBank = true
@@ -141,10 +147,9 @@ export default async function DocumentPage({
         { label: T.issueDate, value: fmtDocDate(order.orderDate, lang) },
         { label: T.validUntil, value: fmtDocDate(valid, lang) },
       ]
-      totals = [
-        { label: T.subtotal, value: order.totalAmountJpy },
-        { label: T.total, value: order.totalAmountJpy, bold: true },
-      ]
+      totals = [{ label: T.subtotal, value: subtotal }]
+      if (discountValue > 0) totals.push({ label: discountLabel, value: discountValue, minus: true })
+      totals.push({ label: T.total, value: order.totalAmountJpy, bold: true })
     }
     notes = order.memo
   }

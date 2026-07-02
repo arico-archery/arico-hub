@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { calcDiscount } from '@/lib/utils'
 
 type EditItem = { productId: number; quantity: number; salePriceJpy: number; costPriceJpy: number; optionMemo?: string }
 
@@ -8,12 +9,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const body = await req.json()
   const orderId = Number(id)
 
-  // 품목 편집(추가/삭제/수정): items 배열이 오면 기존 품목 전체 교체 + 합계 재계산
+  // 품목 편집(추가/삭제/수정): items 배열이 오면 기존 품목 전체 교체 + 합계·할인 재계산
   if (Array.isArray(body.items)) {
-    let totalAmountJpy = 0
+    let subtotalJpy = 0
     let totalCostJpy = 0
     const itemsData = (body.items as EditItem[]).map(it => {
-      totalAmountJpy += it.salePriceJpy * it.quantity
+      subtotalJpy += it.salePriceJpy * it.quantity
       totalCostJpy += it.costPriceJpy * it.quantity
       return {
         productId: it.productId, quantity: it.quantity,
@@ -21,11 +22,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         optionMemo: it.optionMemo ?? '',
       }
     })
+    // 할인: 본문에 오면 사용, 없으면 기존 주문 스냅샷 유지
+    let discountRate = Number(body.discountRate)
+    let discountAmount = Number(body.discountAmount)
+    if (!Number.isFinite(discountRate) || !Number.isFinite(discountAmount)) {
+      const cur = await prisma.order.findUnique({ where: { id: orderId }, select: { discountRate: true, discountAmount: true } })
+      if (!Number.isFinite(discountRate)) discountRate = cur?.discountRate ?? 0
+      if (!Number.isFinite(discountAmount)) discountAmount = cur?.discountAmount ?? 0
+    }
+    const totalAmountJpy = subtotalJpy - calcDiscount(subtotalJpy, discountRate, discountAmount)
     await prisma.$transaction([
       prisma.orderItem.deleteMany({ where: { orderId } }),
       prisma.order.update({
         where: { id: orderId },
-        data: { totalAmountJpy, totalCostJpy, items: { create: itemsData } },
+        data: { subtotalJpy, discountRate, discountAmount, totalAmountJpy, totalCostJpy, items: { create: itemsData } },
       }),
     ])
   }

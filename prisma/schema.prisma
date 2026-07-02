@@ -86,6 +86,8 @@ model Customer {
   billingAddress String @default("")           // 청구지(배송지와 다를 수 있음)
   contactPerson  String @default("")           // 수신 담당자 担当者
   honorific      String @default("")           // 様 / 御中 (비우면 구분따라 자동)
+  discountRate   Float  @default(0)             // 거래처 기본 할인율 % (주문 시 자동 적용)
+  discountAmount Float  @default(0)             // 거래처 기본 정액 할인 JPY (퍼센트 차감 후 추가 차감)
   orders      Order[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -106,7 +108,10 @@ model Order {
   shippingDate      DateTime?
   deliveryDate      DateTime?
   trackingNo        String      @default("")
-  totalAmountJpy    Float       @default(0)
+  subtotalJpy       Float       @default(0)   // 할인 전 소계(품목 합)
+  discountRate      Float       @default(0)   // 적용 할인율 % (주문 시점 스냅샷)
+  discountAmount    Float       @default(0)   // 적용 정액 할인 JPY (주문 시점 스냅샷)
+  totalAmountJpy    Float       @default(0)   // 할인 후 최종 청구액(순액)
   totalCostJpy      Float       @default(0)
   paidAmountJpy     Float       @default(0)
   memo              String      @default("")

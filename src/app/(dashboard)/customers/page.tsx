@@ -12,6 +12,7 @@ type Customer = {
   email: string; phone: string; address: string; memo: string
   customerType: string; taxRegNo: string; legalName: string
   postalCode: string; billingAddress: string; contactPerson: string
+  discountRate: number; discountAmount: number
   _count: { orders: number }
   orders: { totalAmountJpy: number; paidAmountJpy: number }[]
 }
@@ -20,10 +21,12 @@ type FormState = {
   name: string; company: string; phone: string; email: string; address: string; memo: string
   customerType: string; taxRegNo: string; legalName: string
   postalCode: string; billingAddress: string; contactPerson: string
+  discountRate: string; discountAmount: string
 }
 const EMPTY_FORM: FormState = {
   name: '', company: '', phone: '', email: '', address: '', memo: '',
   customerType: 'individual', taxRegNo: '', legalName: '', postalCode: '', billingAddress: '', contactPerson: '',
+  discountRate: '', discountAmount: '',
 }
 
 const CUSTOMER_TYPES: { v: string; key: 'typeIndividual' | 'typeInstitution' | 'typeCorporation' }[] = [
@@ -94,6 +97,15 @@ function CustomerFormFields({ form, patch }: { form: FormState; patch: (p: Parti
           </div>
         </div>
       )}
+      {/* 할인 (주문 등록 시 자동 적용 · 청구서/견적서 반영) */}
+      <div className="rounded-lg border border-gray-100 dark:border-gray-700 p-3">
+        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">{t.customers.discountTitle}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <InputField label={t.customers.discountRate} placeholder="0" value={form.discountRate} onChange={v => patch({ discountRate: v.replace(/[^0-9.]/g, '') })} />
+          <InputField label={t.customers.discountAmount} placeholder="0" value={form.discountAmount} onChange={v => patch({ discountAmount: v.replace(/[^0-9]/g, '') })} />
+        </div>
+        <p className="text-xs text-gray-400 mt-1.5">{t.customers.discountHint}</p>
+      </div>
       <InputField label={t.customers.labelMemo} placeholder={t.common.memoPlaceholder} value={form.memo} onChange={v => patch({ memo: v })} />
     </div>
   )
@@ -143,6 +155,7 @@ export default function CustomersPage() {
         address: f.address || '', memo: f.title || '', customerType: f.customerType || 'individual',
         taxRegNo: f.taxRegNo || '', legalName: '', postalCode: f.postalCode || '',
         billingAddress: '', contactPerson: f.contactPerson || '',
+        discountRate: '', discountAmount: '',
       })
       setShowForm(true); setEditingId(null); setImportOpen(false)
       setErrorMsg('')
@@ -192,6 +205,7 @@ export default function CustomersPage() {
       name: c.name, company: c.company, phone: c.phone, email: c.email, address: c.address, memo: c.memo,
       customerType: c.customerType || 'individual', taxRegNo: c.taxRegNo || '', legalName: c.legalName || '',
       postalCode: c.postalCode || '', billingAddress: c.billingAddress || '', contactPerson: c.contactPerson || '',
+      discountRate: c.discountRate ? String(c.discountRate) : '', discountAmount: c.discountAmount ? String(c.discountAmount) : '',
     })
     setErrorMsg('')
   }
@@ -387,6 +401,11 @@ export default function CustomersPage() {
                               <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 ${TYPE_BADGE[c.customerType || 'individual'] || TYPE_BADGE.individual}`}>
                                 {t.customers[(CUSTOMER_TYPES.find(x => x.v === (c.customerType || 'individual')) || CUSTOMER_TYPES[0]).key]}
                               </span>
+                              {(c.discountRate > 0 || c.discountAmount > 0) && (
+                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                                  {t.customers.discountBadge} {[c.discountRate > 0 ? `${c.discountRate}%` : '', c.discountAmount > 0 ? formatJpy(c.discountAmount) : ''].filter(Boolean).join('+')}
+                                </span>
+                              )}
                             </div>
                             {c.company && <p className="text-xs text-gray-500 dark:text-gray-400">{c.company}</p>}
                           </div>

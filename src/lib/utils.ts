@@ -24,6 +24,14 @@ export function calcProfitRate(saleJpy: number, costJpy: number) {
   return { wongarate, margin, profit }
 }
 
+// 거래처 할인 계산: 소계 → 퍼센트(rate%) 먼저 차감 → 정액(amount) 추가 차감.
+// 결과는 0 이상 소계 이하로 클램프. 반환값은 반올림된 할인액(JPY).
+export function calcDiscount(subtotal: number, rate: number, amount: number): number {
+  const byRate = subtotal * (Math.max(0, rate) / 100)
+  const raw = Math.round(byRate) + Math.max(0, amount)
+  return Math.min(Math.max(0, raw), Math.max(0, subtotal))
+}
+
 export function profitColor(margin: number): string {
   if (margin >= 40) return 'text-green-600'
   if (margin >= 25) return 'text-yellow-600'

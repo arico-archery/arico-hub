@@ -17,6 +17,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const body = await req.json()
+  if (body.discountRate !== undefined) body.discountRate = Number(body.discountRate) || 0
+  if (body.discountAmount !== undefined) body.discountAmount = Number(body.discountAmount) || 0
   const customer = await prisma.customer.update({
     where: { id: Number(id) },
     data: body,

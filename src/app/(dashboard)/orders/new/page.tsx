@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Search, Plus, Trash2, ArrowLeft, ShoppingCart, Filter, Tag, Link2, RefreshCw, FileText, Image as ImageIcon, Clock } from 'lucide-react'
-import { formatJpy, formatNumber, calcProfitRate, calcCostJpy, SUPPLIER_COLORS, SUPPLIER_LIST } from '@/lib/utils'
+import { formatJpy, formatNumber, calcProfitRate, calcCostJpy, calcDiscount, SUPPLIER_COLORS, SUPPLIER_LIST } from '@/lib/utils'
 import SupplierBadge from '@/components/SupplierBadge'
 import ProfitBar from '@/components/ProfitBar'
 import DateInput from '@/components/DateInput'
@@ -33,7 +33,7 @@ type CatalogItem = {
   options?: string   // ARICO 자사몰 옵션 JSON: [{label, values:[...]}]
   imageUrl1?: string // ARICO 자사몰 대표 이미지
 }
-type Customer = { id: number; name: string; company: string; code: string; _count?: { orders: number } }
+type Customer = { id: number; name: string; company: string; code: string; discountRate?: number; discountAmount?: number; _count?: { orders: number } }
 const RECENT_CUSTOMERS_KEY = 'arico_recent_customers'
 type ExchangeRate = { currency: string; rateToJpy: number }
 type OrderLine = {
@@ -110,6 +110,8 @@ export default function NewOrderPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [customerSearch, setCustomerSearch] = useState('')
   const [recentCustomerIds, setRecentCustomerIds] = useState<number[]>([])
+  const [discountRate, setDiscountRate] = useState(0)      // 적용 할인율 %
+  const [discountAmount, setDiscountAmount] = useState(0)  // 적용 정액 할인 JPY
   const [rates, setRates] = useState<ExchangeRate[]>([])
   const [lines, setLines] = useState<OrderLine[]>([])
 
@@ -142,6 +144,8 @@ export default function NewOrderPage() {
   const pickCustomer = useCallback((c: Customer) => {
     setSelectedCustomer(c)
     setCustomerSearch('')
+    setDiscountRate(c.discountRate ?? 0)
+    setDiscountAmount(c.discountAmount ?? 0)
     setRecentCustomerIds(prev => {
       const next = [c.id, ...prev.filter(id => id !== c.id)].slice(0, 8)
       try { localStorage.setItem(RECENT_CUSTOMERS_KEY, JSON.stringify(next)) } catch { /* ignore */ }
@@ -159,6 +163,8 @@ export default function NewOrderPage() {
       setSelectedCustomer({ id: order.customer.id, name: order.customer.name, company: order.customer.company, code: order.customer.code })
       setDueDate(order.dueDate ? String(order.dueDate).slice(0, 10) : '')
       setMemo(order.memo ?? '')
+      setDiscountRate(order.discountRate ?? 0)
+      setDiscountAmount(order.discountAmount ?? 0)
       type LoadedItem = { quantity: number; salePriceJpy: number; costPriceJpy: number; optionMemo: string; product: Product & { supplier: Supplier } }
       setLines((order.items as LoadedItem[]).map((it) => ({
         product: {
@@ -440,8 +446,10 @@ export default function NewOrderPage() {
     setLines(prev => prev.filter((_, i) => i !== idx))
   }
 
-  const totalSale = lines.reduce((a, l) => a + l.salePriceJpy * l.quantity, 0)
+  const subtotalSale = lines.reduce((a, l) => a + l.salePriceJpy * l.quantity, 0)
   const totalCost = lines.reduce((a, l) => a + l.costPriceJpy * l.quantity, 0)
+  const discountValue = calcDiscount(subtotalSale, discountRate, discountAmount)
+  const totalSale = subtotalSale - discountValue   // 할인 후 최종 판매액
   const { margin } = calcProfitRate(totalSale, totalCost)
 
   // openInvoice=true 면 등록/저장 후 견적서를 새 탭으로 연다 (주문등록 ↔ 견적서열기 구분)
@@ -468,6 +476,8 @@ export default function NewOrderPage() {
       customerId: selectedCustomer.id,
       dueDate: dueDate || null,
       memo,
+      discountRate,
+      discountAmount,
       items: lines.map(l => ({
         productId:    l.product.id,
         quantity:     l.quantity,
@@ -534,7 +544,7 @@ export default function NewOrderPage() {
                   )}
                 </div>
                 <button
-                  onClick={() => setSelectedCustomer(null)}
+                  onClick={() => { setSelectedCustomer(null); setDiscountRate(0); setDiscountAmount(0) }}
                   className="shrink-0 flex items-center gap-1 text-xs font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-800/40 px-2.5 py-1.5 rounded-lg transition-colors"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
@@ -958,6 +968,30 @@ export default function NewOrderPage() {
                 <span className="text-gray-500 dark:text-gray-400">{t.orders.newTotalCost}</span>
                 <span className="font-medium text-gray-700 dark:text-gray-300">{formatJpy(totalCost)}</span>
               </div>
+              {discountValue > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500 dark:text-gray-400">{t.orders.newSubtotal}</span>
+                  <span className="font-medium text-gray-500 dark:text-gray-400">{formatJpy(subtotalSale)}</span>
+                </div>
+              )}
+              {/* 할인 (거래처 기본값 자동 적용 · 주문별 수정 가능) */}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-gray-500 dark:text-gray-400 shrink-0">{t.customers.discountBadge}</span>
+                <div className="flex items-center gap-1">
+                  <input type="text" inputMode="decimal" value={discountRate || ''} onChange={e => setDiscountRate(Number(e.target.value.replace(/[^0-9.]/g, '')) || 0)}
+                    className="w-12 text-right border border-gray-200 dark:border-gray-600 rounded px-1.5 py-1 text-xs text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="0" />
+                  <span className="text-xs text-gray-400">%</span>
+                  <input type="text" inputMode="numeric" value={discountAmount || ''} onChange={e => setDiscountAmount(Number(e.target.value.replace(/[^0-9]/g, '')) || 0)}
+                    className="w-16 text-right border border-gray-200 dark:border-gray-600 rounded px-1.5 py-1 text-xs text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="0" />
+                  <span className="text-xs text-gray-400">¥</span>
+                </div>
+              </div>
+              {discountValue > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span></span>
+                  <span className="tabular-nums">- {formatJpy(discountValue)}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-gray-500 dark:text-gray-400">{t.orders.newTotalSale}</span>
                 <span className="font-bold text-gray-900 dark:text-gray-100">{formatJpy(totalSale)}</span>

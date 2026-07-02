@@ -17,6 +17,8 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const body = await req.json()
+  if (body.discountRate !== undefined) body.discountRate = Number(body.discountRate) || 0
+  if (body.discountAmount !== undefined) body.discountAmount = Number(body.discountAmount) || 0
   // 코드를 직접 지정한 경우: 그대로 생성(충돌 시 에러로 알림)
   if (body.code) {
     const customer = await prisma.customer.create({ data: body })

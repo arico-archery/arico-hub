@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createWithSeqRetry } from '@/lib/seq'
+import { calcDiscount } from '@/lib/utils'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -124,10 +125,10 @@ export async function POST(req: Request) {
     productId: number; quantity: number; salePriceJpy: number
     costPriceJpy: number; optionMemo?: string; catalogId?: number | null
   }
-  let totalAmountJpy = 0
+  let subtotalJpy = 0
   let totalCostJpy = 0
   const itemsData = (items as OrderItemInput[]).map((item) => {
-    totalAmountJpy += item.salePriceJpy * item.quantity
+    subtotalJpy += item.salePriceJpy * item.quantity
     totalCostJpy += item.costPriceJpy * item.quantity
     return {
       productId: item.productId,
@@ -137,6 +138,20 @@ export async function POST(req: Request) {
       optionMemo: item.optionMemo ?? '',
     }
   })
+
+  // 할인: 본문에 값이 오면 사용(주문별 수정), 없으면 거래처 기본 할인 적용.
+  let discountRate = Number(body.discountRate)
+  let discountAmount = Number(body.discountAmount)
+  if (!Number.isFinite(discountRate) || !Number.isFinite(discountAmount)) {
+    const cust = await prisma.customer.findUnique({
+      where: { id: Number(customerId) },
+      select: { discountRate: true, discountAmount: true },
+    })
+    if (!Number.isFinite(discountRate)) discountRate = cust?.discountRate ?? 0
+    if (!Number.isFinite(discountAmount)) discountAmount = cust?.discountAmount ?? 0
+  }
+  const discountValue = calcDiscount(subtotalJpy, discountRate, discountAmount)
+  const totalAmountJpy = subtotalJpy - discountValue
 
   const order = await createWithSeqRetry(
     async (attempt) => {
@@ -150,6 +165,9 @@ export async function POST(req: Request) {
         customerId: Number(customerId),
         memo: memo ?? '',
         dueDate: dueDate ? new Date(dueDate) : null,
+        subtotalJpy,
+        discountRate,
+        discountAmount,
         totalAmountJpy,
         totalCostJpy,
         items: { create: itemsData },

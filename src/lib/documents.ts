@@ -35,6 +35,7 @@ export type DocText = {
   unitPrice: string
   amount: string
   subtotal: string
+  discount: string
   total: string
   paidAmount: string
   balanceDue: string
@@ -66,7 +67,7 @@ export const DOC_TEXT: Record<DocLang, DocText> = {
     to: '宛先', from: '発行元', honorific: '御中', honorificPerson: '様', contactLabel: '担当',
     issueDate: '発行日', dueDate: 'お支払期限', validUntil: '有効期限', expectedDate: '納品予定日',
     no: 'No.', itemName: '品名', remarks: '備考', qty: '数量', unitPrice: '単価', amount: '金額',
-    subtotal: '小計', total: '合計', paidAmount: '入金額', balanceDue: 'ご請求額', totalQty: '合計数量',
+    subtotal: '小計', discount: '割引', total: '合計', paidAmount: '入金額', balanceDue: 'ご請求額', totalQty: '合計数量',
     paymentStatus: 'お支払状況', statusPaid: '入金済', statusPartial: '一部入金', statusUnpaid: '未入金',
     bankTitle: 'お振込先', bankName: '銀行名', bankBranch: '支店名', bankAccountType: '種別',
     bankAccountNo: '口座番号', bankAccountHolder: '口座名義',
@@ -83,7 +84,7 @@ export const DOC_TEXT: Record<DocLang, DocText> = {
     to: '수신', from: '발행처', honorific: '귀중', honorificPerson: '님', contactLabel: '담당',
     issueDate: '발행일', dueDate: '결제 기한', validUntil: '유효 기한', expectedDate: '입고 예정일',
     no: 'No.', itemName: '품명', remarks: '비고', qty: '수량', unitPrice: '단가', amount: '금액',
-    subtotal: '소계', total: '합계', paidAmount: '입금액', balanceDue: '청구 금액', totalQty: '총 수량',
+    subtotal: '소계', discount: '할인', total: '합계', paidAmount: '입금액', balanceDue: '청구 금액', totalQty: '총 수량',
     paymentStatus: '입금 상태', statusPaid: '입금 완료', statusPartial: '부분 입금', statusUnpaid: '미입금',
     bankTitle: '입금 계좌', bankName: '은행명', bankBranch: '지점', bankAccountType: '예금 종류',
     bankAccountNo: '계좌번호', bankAccountHolder: '예금주',
@@ -100,7 +101,7 @@ export const DOC_TEXT: Record<DocLang, DocText> = {
     to: 'To', from: 'From', honorific: '', honorificPerson: '', contactLabel: 'Attn',
     issueDate: 'Issue Date', dueDate: 'Due Date', validUntil: 'Valid Until', expectedDate: 'Expected Delivery',
     no: 'No.', itemName: 'Description', remarks: 'Remarks', qty: 'Qty', unitPrice: 'Unit Price', amount: 'Amount',
-    subtotal: 'Subtotal', total: 'Total', paidAmount: 'Paid', balanceDue: 'Balance Due', totalQty: 'Total Qty',
+    subtotal: 'Subtotal', discount: 'Discount', total: 'Total', paidAmount: 'Paid', balanceDue: 'Balance Due', totalQty: 'Total Qty',
     paymentStatus: 'Payment Status', statusPaid: 'Paid', statusPartial: 'Partially Paid', statusUnpaid: 'Unpaid',
     bankTitle: 'Bank Details', bankName: 'Bank', bankBranch: 'Branch', bankAccountType: 'Account Type',
     bankAccountNo: 'Account No.', bankAccountHolder: 'Account Holder',
