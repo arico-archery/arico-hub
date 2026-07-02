@@ -17,6 +17,7 @@ type Order = {
   id: number; orderNo: string; orderDate: string; paymentStatus: string
   status: string; dueDate?: string; shippingDate?: string; trackingNo: string; memo: string
   totalAmountJpy: number; totalCostJpy: number; paidAmountJpy: number
+  subtotalJpy: number; discountRate: number; discountAmount: number
   customer: { name: string; company: string }
   items: OrderItem[]
 }
@@ -328,6 +329,9 @@ function OrderCard({ order, isOverdue, daysOverdue, expanded, onToggle, paying, 
 
         <div className="text-right shrink-0">
           <p className={`font-bold text-lg ${isOverdue ? 'text-red-600' : 'text-gray-800 dark:text-gray-200'}`}>{formatJpy(remain)}</p>
+          {order.subtotalJpy > order.totalAmountJpy && (
+            <p className="text-green-600 text-xs">{t.customers.discountBadge} - {formatJpy(order.subtotalJpy - order.totalAmountJpy)}</p>
+          )}
           {order.paidAmountJpy > 0 && <p className="text-gray-500 dark:text-gray-400 text-xs">{t.payments.paidAmount} {formatJpy(order.paidAmountJpy)}</p>}
         </div>
 
@@ -394,6 +398,18 @@ function OrderCard({ order, isOverdue, daysOverdue, expanded, onToggle, paying, 
 
             <div className="w-44 shrink-0 space-y-2 text-sm">
               <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-100 dark:border-gray-600 space-y-1.5">
+                {order.subtotalJpy > order.totalAmountJpy && (
+                  <>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-500 dark:text-gray-400">{t.orders.newSubtotal}</span>
+                      <span className="text-gray-500 dark:text-gray-400 line-through">{formatJpy(order.subtotalJpy)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-green-600">{t.customers.discountBadge} {[order.discountRate > 0 ? `${order.discountRate}%` : '', order.discountAmount > 0 ? formatJpy(order.discountAmount) : ''].filter(Boolean).join('+')}</span>
+                      <span className="text-green-600">- {formatJpy(order.subtotalJpy - order.totalAmountJpy)}</span>
+                    </div>
+                  </>
+                )}
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-700 dark:text-gray-400">{t.payments.orderAmount}</span>
                   <span className="font-medium dark:text-gray-200">{formatJpy(order.totalAmountJpy)}</span>

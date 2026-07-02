@@ -18,6 +18,7 @@ const PAGE_SIZE = 30
 type Order = {
   id: number; orderNo: string; orderDate: string; status: string; paymentStatus: string
   totalAmountJpy: number; totalCostJpy: number; paidAmountJpy: number
+  subtotalJpy: number; discountRate: number; discountAmount: number
   dueDate?: string; delayNotifyDate?: string; shippingDate?: string
   deliveryDate?: string; completedAt?: string; trackingNo: string; memo: string
   customer: { id: number; name: string; company: string }
@@ -402,7 +403,13 @@ export default function OrdersPage() {
 
                     {/* 금액 */}
                     <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100 tabular-nums">
+                      {order.subtotalJpy > order.totalAmountJpy && (
+                        <p className="text-gray-400 text-xs line-through">{formatJpy(order.subtotalJpy)}</p>
+                      )}
                       {formatJpy(order.totalAmountJpy)}
+                      {order.subtotalJpy > order.totalAmountJpy && (
+                        <p className="text-green-600 text-xs">{t.customers.discountBadge} {[order.discountRate > 0 ? `${order.discountRate}%` : '', order.discountAmount > 0 ? formatJpy(order.discountAmount) : ''].filter(Boolean).join('+')}</p>
+                      )}
                       {unpaid > 0 && (
                         <p className="text-red-500 text-xs">{t.orders.unpaidAmount} {formatJpy(unpaid)}</p>
                       )}
@@ -466,6 +473,22 @@ export default function OrdersPage() {
                                   <span className="font-medium text-gray-900 dark:text-gray-100">{formatJpy(item.salePriceJpy * item.quantity)}</span>
                                 </div>
                               ))}
+                              {order.subtotalJpy > order.totalAmountJpy && (
+                                <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700 text-xs space-y-0.5">
+                                  <div className="flex justify-between text-gray-500 dark:text-gray-400">
+                                    <span>{t.orders.newSubtotal}</span>
+                                    <span className="tabular-nums">{formatJpy(order.subtotalJpy)}</span>
+                                  </div>
+                                  <div className="flex justify-between text-green-600">
+                                    <span>{t.customers.discountBadge} {[order.discountRate > 0 ? `${order.discountRate}%` : '', order.discountAmount > 0 ? formatJpy(order.discountAmount) : ''].filter(Boolean).join('+')}</span>
+                                    <span className="tabular-nums">- {formatJpy(order.subtotalJpy - order.totalAmountJpy)}</span>
+                                  </div>
+                                  <div className="flex justify-between font-semibold text-gray-900 dark:text-gray-100">
+                                    <span>{t.orders.newTotalSale}</span>
+                                    <span className="tabular-nums">{formatJpy(order.totalAmountJpy)}</span>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
 
