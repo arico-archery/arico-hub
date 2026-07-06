@@ -215,9 +215,12 @@ export default function BackordersPage() {
 
   const createPO = () => submitPO(Array.from(selected))
 
-  // 이 공급사 미발주 전체를 한 번에 발주
+  // 이 공급사 미발주 전체를 한 번에 발주 (확인 후 진행)
   const createPOForGroup = (groupItems: BackorderItem[]) => {
     const ids = groupItems.filter(i => i.procureStatus === 'needed').map(i => i.id)
+    if (ids.length === 0) return
+    const sc = groupItems[0]?.product.supplierCode ?? ''
+    if (!window.confirm(`${sc} · ${ids.length}${t.common.cases}\n${t.backorders.orderAllConfirm}`)) return
     submitPO(ids)
   }
 
