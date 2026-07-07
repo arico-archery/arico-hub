@@ -56,6 +56,7 @@ export default function ReceivingPage() {
     setInputs(prev => ({ ...prev, [poId]: { ...(prev[poId] || {}), [itemId]: v.replace(/[^0-9]/g, '') } }))
 
   const submit = async (po: PO, mode: 'all' | 'confirm') => {
+    if (mode === 'all' && !window.confirm(`${po.supplierCode} · ${po.poNo}\n${t.receiving.receiveAllConfirm}`)) return
     setSavingId(po.id)
     const map = inputs[po.id] || {}
     const receiveItems = po.items.map(it => ({

@@ -741,6 +741,7 @@ const T = {
       partialHint: '발주보다 적게 오면 그 수량만 입고 → 나머지는 입고대기로 유지됩니다',
       noWaiting: '입고 대기 중인 발주가 없습니다',
       saved: '입고 반영됨',
+      receiveAllConfirm: '이 발주의 모든 품목을 전량 입고 처리하시겠습니까?',
     },
   },
 
@@ -1484,6 +1485,7 @@ const T = {
       partialHint: '発注より少なく届いた場合はその数量のみ入荷 → 残りは入荷待ちのまま',
       noWaiting: '入荷待ちの発注はありません',
       saved: '入荷を反映しました',
+      receiveAllConfirm: 'この発注の全品目を全量入荷として処理しますか？',
     },
   },
 } as const
