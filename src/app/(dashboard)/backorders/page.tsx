@@ -10,6 +10,7 @@ import {
 import { formatJpy, SUPPLIER_COLORS, SUPPLIER_LIST } from '@/lib/utils'
 import SupplierBadge from '@/components/SupplierBadge'
 import DateInput from '@/components/DateInput'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { useT } from '@/lib/i18n'
 
 // ── 타입 ──────────────────────────────────────────────
@@ -81,6 +82,7 @@ export default function BackordersPage() {
   const [memo, setMemo]             = useState('')
   const [creating, setCreating]     = useState(false)
   const [lastResult, setLastResult] = useState<{ poNo: string; supplierCode: string; itemCount: number }[] | null>(null)
+  const [confirmGroup, setConfirmGroup] = useState<{ ids: number[]; sc: string } | null>(null)  // 전체발주 확인 대상
   // 백오더 단계 변형(옵션) 선택: orderItemId → {axes, list, sel}
   const [vData, setVData] = useState<Record<number, { axes: VariantAxis[]; list: VItem[]; sel: Record<string, string> } | 'none'>>({})
 
@@ -215,13 +217,12 @@ export default function BackordersPage() {
 
   const createPO = () => submitPO(Array.from(selected))
 
-  // 이 공급사 미발주 전체를 한 번에 발주 (확인 후 진행)
+  // 이 공급사 미발주 전체를 한 번에 발주 (확인 모달 후 진행)
   const createPOForGroup = (groupItems: BackorderItem[]) => {
     const ids = groupItems.filter(i => i.procureStatus === 'needed').map(i => i.id)
     if (ids.length === 0) return
     const sc = groupItems[0]?.product.supplierCode ?? ''
-    if (!window.confirm(`${sc} · ${ids.length}${t.common.cases}\n${t.backorders.orderAllConfirm}`)) return
-    submitPO(ids)
+    setConfirmGroup({ ids, sc })
   }
 
   const grouped = groupBySupplier(items)
@@ -632,6 +633,16 @@ export default function BackordersPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!confirmGroup}
+        title={confirmGroup ? `${confirmGroup.sc} · ${confirmGroup.ids.length}${t.common.cases}` : ''}
+        message={t.backorders.orderAllConfirm}
+        confirmText={t.backorders.orderAllInGroup}
+        cancelText={t.common.cancel}
+        onConfirm={() => { const g = confirmGroup; setConfirmGroup(null); if (g) submitPO(g.ids) }}
+        onCancel={() => setConfirmGroup(null)}
+      />
     </div>
   )
 }

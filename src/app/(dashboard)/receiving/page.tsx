@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useApiCache } from '@/lib/useApiCache'
 import { PackageCheck, ChevronDown, ChevronUp, Truck, Check } from 'lucide-react'
 import SupplierBadge from '@/components/SupplierBadge'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { useT } from '@/lib/i18n'
 
 type POItem = {
@@ -36,6 +37,7 @@ export default function ReceivingPage() {
   const [savingId, setSavingId] = useState<number | null>(null)
   const [supplierFilter, setSupplierFilter] = useState('')
   const [partialOnly, setPartialOnly] = useState(false)
+  const [confirmPO, setConfirmPO] = useState<PO | null>(null)  // 전량 입고 확인 대상
 
   const suppliers = [...new Set(pos.map(p => p.supplierCode))]
   const filtered = pos.filter(p =>
@@ -56,7 +58,6 @@ export default function ReceivingPage() {
     setInputs(prev => ({ ...prev, [poId]: { ...(prev[poId] || {}), [itemId]: v.replace(/[^0-9]/g, '') } }))
 
   const submit = async (po: PO, mode: 'all' | 'confirm') => {
-    if (mode === 'all' && !window.confirm(`${po.supplierCode} · ${po.poNo}\n${t.receiving.receiveAllConfirm}`)) return
     setSavingId(po.id)
     const map = inputs[po.id] || {}
     const receiveItems = po.items.map(it => ({
@@ -159,7 +160,7 @@ export default function ReceivingPage() {
                       </div>
                       <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">{t.receiving.progressLabel} {done}/{totalItems}</span>
                     </div>
-                    <button onClick={() => submit(po, 'all')} disabled={saving}
+                    <button onClick={() => setConfirmPO(po)} disabled={saving}
                       className="flex items-center gap-1.5 bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
                       <Truck className="w-3.5 h-3.5" />{t.receiving.receiveAll}
                     </button>
@@ -227,6 +228,16 @@ export default function ReceivingPage() {
           })}
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!confirmPO}
+        title={confirmPO ? `${confirmPO.supplierCode} · ${confirmPO.poNo}` : ''}
+        message={t.receiving.receiveAllConfirm}
+        confirmText={t.receiving.receiveAll}
+        cancelText={t.common.cancel}
+        onConfirm={() => { const po = confirmPO; setConfirmPO(null); if (po) submit(po, 'all') }}
+        onCancel={() => setConfirmPO(null)}
+      />
     </div>
   )
 }
