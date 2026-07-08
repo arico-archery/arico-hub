@@ -331,7 +331,8 @@ export default function CatalogPage() {
       const res = await fetch('/api/makeshop/sync-products', { method: 'POST' })
       const d = await res.json()
       if (!res.ok || !d.ok) {
-        setMsResult('⚠️ ' + (d.error === 'not_configured' ? (d.hint || 'API 미설정') : (d.error || res.status)))
+        const detail = d.detail ? (typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail)) : ''
+        setMsResult('⚠️ ' + (d.error === 'not_configured' ? (d.hint || 'API 미설정') : `${d.error}${detail ? ' — ' + detail.slice(0, 500) : ''}`))
       } else {
         setMsResult(`✅ ${d.fetched}건 조회 · 신규 ${d.created} · 갱신 ${d.updated}${d.skipped ? ` · 스킵 ${d.skipped}` : ''}`)
         fetchItems(page); fetchStats()
