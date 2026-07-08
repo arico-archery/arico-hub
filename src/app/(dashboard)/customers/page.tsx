@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useCachedState } from '@/lib/useApiCache'
 import Link from 'next/link'
-import { Users, Plus, Phone, Mail, MapPin, Pencil, Check, X, Trash2, Search, ShoppingCart, Upload, FileDown, FileSpreadsheet, Camera, Download } from 'lucide-react'
+import { Users, Plus, Phone, Mail, MapPin, Pencil, Check, X, Trash2, Search, ShoppingCart, Upload, FileDown, FileSpreadsheet, Camera, Download, ChevronLeft, ChevronRight } from 'lucide-react'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { formatJpy } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
@@ -120,6 +120,9 @@ export default function CustomersPage() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [searchQ, setSearchQ] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('all')   // all | individual | institution | corporation
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 20
+  useEffect(() => { setPage(1) }, [searchQ, typeFilter])
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editForm, setEditForm] = useState<FormState>(EMPTY_FORM)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
@@ -248,6 +251,16 @@ export default function CustomersPage() {
     setCustomers(prev => prev.filter(c => c.id !== id))
     setDeleteConfirm(null)
   }
+
+  // 필터된 목록 (검색·구분) — tbody와 페이지네이션이 공유
+  const filteredCustomers = customers.filter(c => {
+    if (typeFilter !== 'all' && (c.customerType || 'individual') !== typeFilter) return false
+    if (!searchQ) return true
+    const q = searchQ.toLowerCase()
+    return c.name.toLowerCase().includes(q) || c.company.toLowerCase().includes(q) || c.phone.toLowerCase().includes(q) || c.code.toLowerCase().includes(q)
+  })
+  const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / PAGE_SIZE))
+  useEffect(() => { if (page > totalPages) setPage(totalPages) }, [totalPages, page])
 
   return (
     <div className="p-4 md:p-6">
@@ -382,19 +395,14 @@ export default function CustomersPage() {
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
               {(() => {
-                const filtered = customers.filter(c => {
-                  if (typeFilter !== 'all' && (c.customerType || 'individual') !== typeFilter) return false
-                  if (!searchQ) return true
-                  const q = searchQ.toLowerCase()
-                  return c.name.toLowerCase().includes(q) || c.company.toLowerCase().includes(q) || c.phone.toLowerCase().includes(q) || c.code.toLowerCase().includes(q)
-                })
+                const filtered = filteredCustomers
                 if (filtered.length === 0) return (
                   <tr><td colSpan={8} className="text-center py-16 text-gray-400">
                     <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
                     <p>{searchQ ? `"${searchQ}" ${t.common.noData}` : t.customers.noCustomers}</p>
                   </td></tr>
                 )
-                return filtered.map(c => {
+                return filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(c => {
                   const totalSales = c.orders.reduce((a, o) => a + o.totalAmountJpy, 0)
                   const totalPaid  = c.orders.reduce((a, o) => a + o.paidAmountJpy, 0)
                   const unpaid = totalSales - totalPaid
@@ -489,6 +497,36 @@ export default function CustomersPage() {
               })()}
             </tbody>
           </table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredCustomers.length)} / {filteredCustomers.length}
+              </p>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+                  className="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-30">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
+                  let pp: number
+                  if (totalPages <= 7) pp = i + 1
+                  else if (page <= 4) pp = i + 1
+                  else if (page >= totalPages - 3) pp = totalPages - 6 + i
+                  else pp = page - 3 + i
+                  return (
+                    <button key={pp} onClick={() => setPage(pp)}
+                      className={`px-2.5 py-1 rounded text-xs font-medium ${page === pp ? 'bg-blue-600 text-white' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
+                      {pp}
+                    </button>
+                  )
+                })}
+                <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                  className="p-1.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-30">
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
