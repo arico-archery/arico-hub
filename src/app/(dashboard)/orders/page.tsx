@@ -6,12 +6,13 @@ import {
   ShoppingCart, Plus, FileText, Truck, CreditCard, Search,
   Download, ChevronLeft, ChevronRight, CheckCircle2, Circle,
   Package, Banknote, ClipboardList, MapPin, CheckCheck, Trash2, Pencil,
-  Image as ImageIcon, X
+  Image as ImageIcon, X, RefreshCw
 } from 'lucide-react'
 import { formatJpy, calcProfitRate, formatNumber } from '@/lib/utils'
 import SupplierBadge from '@/components/SupplierBadge'
 import DateInput from '@/components/DateInput'
-import { useT } from '@/lib/i18n'
+import ConfirmDialog from '@/components/ConfirmDialog'
+import { useT, useI18n } from '@/lib/i18n'
 
 const PAGE_SIZE = 30
 
@@ -144,6 +145,25 @@ export default function OrdersPage() {
   // 기존 호출부 유지: fetchOrders(page) / fetchOrders() → 현재 URL 재검증
   const fetchOrders = useCallback((_p?: number) => refresh(), [refresh])
 
+  // MakeShop 수신 (수동)
+  const { lang } = useI18n()
+  const [msImporting, setMsImporting] = useState(false)
+  const [msResult, setMsResult] = useState<string | null>(null)
+  const [msConfirm, setMsConfirm] = useState(false)
+  const importMakeshop = async () => {
+    setMsImporting(true); setMsResult(null)
+    try {
+      const res = await fetch('/api/makeshop/import-orders', { method: 'POST' })
+      const d = await res.json()
+      if (!res.ok || !d.ok) {
+        setMsResult('⚠️ ' + (d.error === 'not_configured' ? (lang === 'ja' ? 'MakeShop連携が未設定' : 'MakeShop 연결 미설정') : `${d.error}${d.detail ? ' — ' + JSON.stringify(d.detail).slice(0, 200) : ''}`))
+      } else {
+        setMsResult(`✅ ${t.orders.msImported} ${d.created} · ${t.orders.msDup} ${d.dup} · ${t.orders.msPartial} ${d.partial}`)
+        refresh()
+      }
+    } catch (e) { setMsResult('⚠️ ' + String(e)) } finally { setMsImporting(false) }
+  }
+
   // 필터/탭 변경 시 1페이지로 (목록 로드는 useApiCache가 ordersUrl 변경으로 처리)
   useEffect(() => { setPage(1) }, [statusFilter, payFilter, searchQ, tab])
 
@@ -230,6 +250,13 @@ export default function OrdersPage() {
           <p className="text-gray-600 dark:text-gray-400 font-medium text-sm mt-1">{t.common.total} {total}{t.common.cases}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setMsConfirm(true)}
+            disabled={msImporting}
+            className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors disabled:opacity-60"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${msImporting ? 'animate-spin' : ''}`} /> {t.orders.msReceive}
+          </button>
           <a
             href={`/api/orders?format=csv&completed=${tab === 'done' ? '1' : '0'}${statusFilter ? `&status=${statusFilter}` : ''}${payFilter ? `&paymentStatus=${payFilter}` : ''}${searchQ ? `&q=${encodeURIComponent(searchQ)}` : ''}`}
             className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
@@ -241,6 +268,14 @@ export default function OrdersPage() {
           </a>
         </div>
       </div>
+
+      {/* MakeShop 수신 결과 */}
+      {msResult && (
+        <div className="mb-4 flex items-center justify-between gap-3 px-4 py-2.5 rounded-lg text-sm font-medium bg-indigo-50 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-700">
+          <span>{msResult}</span>
+          <button onClick={() => setMsResult(null)} className="text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-100"><X className="w-4 h-4" /></button>
+        </div>
+      )}
 
       {/* 진행중 / 완료 탭 */}
       <div className="flex gap-1 mb-4">
@@ -744,6 +779,16 @@ export default function OrdersPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={msConfirm}
+        title={t.orders.msReceiveTitle}
+        message={t.orders.msReceiveMsg}
+        confirmText={t.orders.msReceiveLoad}
+        cancelText={t.common.cancel}
+        onConfirm={() => { setMsConfirm(false); importMakeshop() }}
+        onCancel={() => setMsConfirm(false)}
+      />
     </div>
   )
 }

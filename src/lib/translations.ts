@@ -197,6 +197,11 @@ const T = {
     orders: {
       title: '주문 관리',
       newOrder: '신규 주문',
+      msReceive: 'MakeShop 수신',
+      msReceiveTitle: 'MakeShop 주문 수신',
+      msReceiveMsg: '최근 주문을 MakeShop에서 가져옵니다.\n중복 제외 · 미매칭 품목은 ETC 상품으로 생성 · 배송상태/거래처 자동 반영.\n진행할까요?',
+      msReceiveLoad: '가져오기',
+      msImported: '생성', msDup: '중복제외', msPartial: '일부미매칭',
       searchPlaceholder: '고객명, 주문번호 검색...',
       tabActive: '진행중',
       tabReady: '배송대기',
@@ -960,6 +965,11 @@ const T = {
     orders: {
       title: '受注管理',
       newOrder: '新規受注',
+      msReceive: 'MakeShop取込',
+      msReceiveTitle: 'MakeShop受注取込',
+      msReceiveMsg: '最近の受注をMakeShopから取り込みます。\n重複除外 · 未マッチ品はETC商品として作成 · 配送状態/取引先も自動反映。\n進めますか？',
+      msReceiveLoad: '取込',
+      msImported: '作成', msDup: '重複除外', msPartial: '一部未マッチ',
       searchPlaceholder: '取引先名、受注番号検索...',
       tabActive: '進行中',
       tabReady: '配送待ち',
