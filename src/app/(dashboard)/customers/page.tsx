@@ -191,15 +191,28 @@ export default function CustomersPage() {
   const handleImport = async () => {
     if (!importFile) return
     setImporting(true); setImportResult(null); setImportProgress(null)
-    const LIMIT = 150   // 청크 크기(타임아웃 회피). 클라이언트가 offset을 증가시키며 반복 호출
+    const LIMIT = 400   // 청크 크기. 서버는 createMany 일괄+갱신 병렬이라 크게 잡아도 빠름
     const agg = { imported: 0, updated: 0, skipped: 0, errors: 0 }
     let offset = 0, total = 0, guard = 0
     try {
+      type ChunkResp = { imported: number; updated: number; skipped: number; errors: number; total: number; nextOffset: number; done: boolean; error?: string }
       do {
-        const fd = new FormData(); fd.append('file', importFile)
-        const res = await fetch(`/api/customers/import?offset=${offset}&limit=${LIMIT}`, { method: 'POST', body: fd })
-        const d = await res.json()
-        if (!res.ok) { setImportResult(`⚠️ ${offset}행부터 실패: ${d.error || res.status} (여기까지: ${agg.imported}등록/${agg.updated}갱신)`); return }
+        // 일시적 실패 대비 청크 1회 재시도
+        let d: ChunkResp | null = null
+        for (let attempt = 0; attempt < 2 && !d; attempt++) {
+          const fd = new FormData(); fd.append('file', importFile)
+          const res = await fetch(`/api/customers/import?offset=${offset}&limit=${LIMIT}`, { method: 'POST', body: fd })
+          const text = await res.text()
+          let parsed: Partial<ChunkResp> | null = null
+          try { parsed = JSON.parse(text) as Partial<ChunkResp> } catch { parsed = null }
+          if (res.ok && parsed && typeof parsed.total === 'number') { d = parsed as ChunkResp; break }
+          if (attempt === 1) {
+            const msg = parsed?.error || text.slice(0, 120) || String(res.status)
+            setImportResult(`⚠️ ${offset.toLocaleString()}행부터 실패: ${msg} (여기까지 ${agg.imported}등록/${agg.updated}갱신)`)
+            return
+          }
+        }
+        if (!d) return
         agg.imported += d.imported; agg.updated += d.updated; agg.skipped += d.skipped; agg.errors += d.errors
         total = d.total; offset = d.nextOffset
         setImportProgress(`${Math.min(offset, total).toLocaleString()} / ${total.toLocaleString()} 처리 중…`)

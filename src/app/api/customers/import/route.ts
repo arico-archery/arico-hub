@@ -92,64 +92,88 @@ export async function POST(req: Request) {
   const last = await prisma.customer.findFirst({ where: { code: { startsWith: 'C' } }, orderBy: { code: 'desc' }, select: { code: true } })
   let seq = last ? (parseInt(last.code.slice(1), 10) || 0) : 0
 
-  let imported = 0, updated = 0, skipped = 0
+  let skipped = 0
   const errors: string[] = []
+  // 왕복 최소화: 생성은 createMany 일괄, 갱신은 병렬 처리(크로스리전 지연 완화)
+  const creates: Record<string, unknown>[] = []
+  const updates: { id: number; data: Record<string, unknown> }[] = []
+  const resEmail = new Set<string>(), resPhone = new Set<string>(), resExt = new Set<string>()  // 청크 내 중복 예약
 
   for (const row of slice) {
-    try {
-      const name = pick(row, ['이름', 'name', '名前', '氏名', '고객명', '顧客名', 'お名前', '会員名'])
-      if (!name) { skipped++; continue }
-      const nameKana = pick(row, ['카타카나', '후리가나', 'namekana', 'kana', 'furigana', 'フリガナ', 'ふりがな', 'カナ', 'お名前（フリガナ）', '会員名（フリガナ）'])
-      const email = pick(row, ['이메일', 'email', 'メール', 'e-mail', 'メールアドレス'])
-      const phone = pick(row, ['전화', '전화번호', 'phone', 'tel', '電話', '電話番号'])
-      const postalCode = pick(row, ['우편번호', 'postalcode', 'zip', '郵便番号'])
-      // 주소: 都道府県 + 市区町村 + それ以降の住所 결합(상세주소 포함). 없으면 단일 주소 컬럼.
-      const prefecture = pick(row, ['都道府県', '도도부현'])
-      const city = pick(row, ['市区町村', '시구정촌'])
-      const rest = pick(row, ['それ以降の住所', '以降の住所', '상세주소', '번지'])
-      let address = joinAddr([prefecture, city, rest])
-      if (!address) address = pick(row, ['주소', 'address', '住所'])
-      const company = pick(row, ['회사', '회사/단체', 'company', '会社', '団体', '소속', '所属先', '所属'])
-      const memo = pick(row, ['메모', 'memo', 'note', '備考', '会員情報メモ', '会員メモ'])
-      const extId = pick(row, ['会員ID', 'memberid', '회원id', '회원번호'])
-      const typeRaw = pick(row, ['구분', 'type', '区分'])
-      const taxRegNo = pick(row, ['등록번호', 'taxregno', 'regno', '登録番号', '사업자번호', '法人番号'])
-      const legalName = pick(row, ['정식상호', 'legalname', '正式名称'])
-      const billingAddress = pick(row, ['청구지', '청구지주소', 'billingaddress', '請求先住所'])
-      const contactPerson = pick(row, ['담당자', 'contact', 'contactperson', '担当', '担当者'])
+    const name = pick(row, ['이름', 'name', '名前', '氏名', '고객명', '顧客名', 'お名前', '会員名'])
+    if (!name) { skipped++; continue }
+    const nameKana = pick(row, ['카타카나', '후리가나', 'namekana', 'kana', 'furigana', 'フリガナ', 'ふりがな', 'カナ', 'お名前（フリガナ）', '会員名（フリガナ）'])
+    const email = pick(row, ['이메일', 'email', 'メール', 'e-mail', 'メールアドレス'])
+    const phone = pick(row, ['전화', '전화번호', 'phone', 'tel', '電話', '電話番号'])
+    const postalCode = pick(row, ['우편번호', 'postalcode', 'zip', '郵便番号'])
+    // 주소: 都道府県 + 市区町村 + それ以降の住所 결합(상세주소 포함). 없으면 단일 주소 컬럼.
+    const prefecture = pick(row, ['都道府県', '도도부현'])
+    const city = pick(row, ['市区町村', '시구정촌'])
+    const rest = pick(row, ['それ以降の住所', '以降の住所', '상세주소', '번지'])
+    let address = joinAddr([prefecture, city, rest])
+    if (!address) address = pick(row, ['주소', 'address', '住所'])
+    const company = pick(row, ['회사', '회사/단체', 'company', '会社', '団体', '소속', '所属先', '所属'])
+    const memo = pick(row, ['메모', 'memo', 'note', '備考', '会員情報メモ', '会員メモ'])
+    const extId = pick(row, ['会員ID', 'memberid', '회원id', '회원번호'])
+    const typeRaw = pick(row, ['구분', 'type', '区分'])
+    const taxRegNo = pick(row, ['등록번호', 'taxregno', 'regno', '登録番号', '사업자번호', '法人番号'])
+    const legalName = pick(row, ['정식상호', 'legalname', '正式名称'])
+    const billingAddress = pick(row, ['청구지', '청구지주소', 'billingaddress', '請求先住所'])
+    const contactPerson = pick(row, ['담당자', 'contact', 'contactperson', '担当', '担当者'])
 
-      // 값이 있는 필드만 반영(빈 값으로 기존 데이터 덮어쓰지 않음)
-      const data: Record<string, unknown> = { name }
-      if (nameKana) data.nameKana = nameKana
-      if (email) data.email = email
-      if (phone) data.phone = phone
-      if (postalCode) data.postalCode = postalCode
-      if (address) data.address = address
-      if (company) data.company = company
-      if (memo) data.memo = memo
-      if (extId) data.externalMemberId = extId
-      if (typeRaw) data.customerType = mapType(typeRaw)
-      if (taxRegNo) data.taxRegNo = taxRegNo
-      if (legalName) data.legalName = legalName
-      if (billingAddress) data.billingAddress = billingAddress
-      if (contactPerson) data.contactPerson = contactPerson
+    // 값이 있는 필드만 반영(빈 값으로 기존 데이터 덮어쓰지 않음)
+    const data: Record<string, unknown> = { name }
+    if (nameKana) data.nameKana = nameKana
+    if (email) data.email = email
+    if (phone) data.phone = phone
+    if (postalCode) data.postalCode = postalCode
+    if (address) data.address = address
+    if (company) data.company = company
+    if (memo) data.memo = memo
+    if (extId) data.externalMemberId = extId
+    if (typeRaw) data.customerType = mapType(typeRaw)
+    if (taxRegNo) data.taxRegNo = taxRegNo
+    if (legalName) data.legalName = legalName
+    if (billingAddress) data.billingAddress = billingAddress
+    if (contactPerson) data.contactPerson = contactPerson
 
-      const existId = (extId && byExt.get(extId)) || (email && byEmail.get(email)) || (phone && byPhone.get(phone)) || null
-      if (existId) {
-        await prisma.customer.update({ where: { id: existId }, data: data as Parameters<typeof prisma.customer.update>[0]['data'] })
-        updated++
-      } else {
-        seq += 1
-        const createData = { code: `C${String(seq).padStart(3, '0')}`, customerType: typeRaw ? mapType(typeRaw) : 'individual', ...data }
-        const c = await prisma.customer.create({ data: createData as Parameters<typeof prisma.customer.create>[0]['data'] })
-        if (extId) byExt.set(extId, c.id)
-        if (email) byEmail.set(email, c.id)
-        if (phone) byPhone.set(phone, c.id)
-        imported++
-      }
-    } catch (e) {
-      errors.push(String(e))
+    const existId = (extId && byExt.get(extId)) || (email && byEmail.get(email)) || (phone && byPhone.get(phone)) || null
+    if (existId) {
+      updates.push({ id: existId, data })
+    } else if ((extId && resExt.has(extId)) || (email && resEmail.has(email)) || (phone && resPhone.has(phone))) {
+      skipped++   // 같은 파일 내 중복(이미 생성 예약됨) → 스킵
+    } else {
+      seq += 1
+      // createMany는 균일한 키 셋이 안전 → 전체 컬럼을 기본값과 함께 채운다
+      creates.push({
+        code: `C${String(seq).padStart(3, '0')}`, name,
+        nameKana: nameKana || '', company: company || '', email: email || '', phone: phone || '',
+        address: address || '', postalCode: postalCode || '', memo: memo || '',
+        customerType: typeRaw ? mapType(typeRaw) : 'individual',
+        taxRegNo: taxRegNo || '', legalName: legalName || '', billingAddress: billingAddress || '',
+        contactPerson: contactPerson || '', externalMemberId: extId || '',
+      })
+      if (extId) resExt.add(extId)
+      if (email) resEmail.add(email)
+      if (phone) resPhone.add(phone)
     }
+  }
+
+  let imported = 0, updated = 0
+  try {
+    if (creates.length) {
+      await prisma.customer.createMany({ data: creates as NonNullable<Parameters<typeof prisma.customer.createMany>[0]>['data'] })
+      imported = creates.length
+    }
+    // 갱신은 10개씩 병렬
+    const CONC = 10
+    for (let i = 0; i < updates.length; i += CONC) {
+      const batch = updates.slice(i, i + CONC)
+      const res = await Promise.allSettled(batch.map(u => prisma.customer.update({ where: { id: u.id }, data: u.data as Parameters<typeof prisma.customer.update>[0]['data'] })))
+      for (const r of res) { if (r.status === 'fulfilled') updated++; else errors.push(String(r.reason)) }
+    }
+  } catch (e) {
+    return NextResponse.json({ error: 'db_error', detail: String(e), imported, updated, skipped }, { status: 500 })
   }
 
   const nextOffset = offset + slice.length
