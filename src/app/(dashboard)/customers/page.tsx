@@ -139,7 +139,7 @@ export default function CustomersPage() {
       const res = await fetch('/api/makeshop/sync-members', { method: 'POST' })
       const d = await res.json()
       if (!res.ok || !d.ok) setMsResult('⚠️ ' + (d.error === 'not_configured' ? (d.hint || 'API 미설정') : `${d.error}${d.detail ? ' — ' + JSON.stringify(d.detail).slice(0, 200) : ''}`))
-      else { setMsResult(`✅ ${d.fetched}명 조회 · 신규 ${d.created} · 갱신 ${d.updated}`); loadCustomers() }
+      else { setMsResult(`✅ ${d.fetched}${t.customers.msFetchedMembers} · ${t.customers.msNew} ${d.created} · ${t.customers.msUpdated} ${d.updated}`); loadCustomers() }
     } catch (e) { setMsResult('⚠️ ' + String(e)) } finally { setMsSyncing(false) }
   }
 
@@ -287,10 +287,10 @@ export default function CustomersPage() {
             onClick={() => setMsConfirm(true)}
             disabled={msSyncing}
             className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-            title="MakeShop 회원을 거래처로 불러오기/갱신"
+            title={t.customers.msMembersTooltip}
           >
             <Download className={`w-4 h-4 ${msSyncing ? 'animate-spin' : ''}`} />
-            MakeShop 회원
+            {t.customers.msMembers}
           </button>
           <button
             onClick={() => { setShowForm(true); setEditingId(null) }}
@@ -345,7 +345,7 @@ export default function CustomersPage() {
       )}
       {msResult && (
         <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/50 text-indigo-800 dark:text-indigo-200 text-sm px-4 py-3 rounded-lg mb-4 flex items-center justify-between">
-          <span className="break-all">MakeShop 회원: {msResult}</span>
+          <span className="break-all">{t.customers.msMembersLabel}: {msResult}</span>
           <button onClick={() => setMsResult(null)}><X className="w-4 h-4 shrink-0" /></button>
         </div>
       )}
@@ -494,9 +494,9 @@ export default function CustomersPage() {
 
       <ConfirmDialog
         open={msConfirm}
-        title="MakeShop 회원 불러오기"
-        message={'MakeShop 전체 회원을 거래처로 가져와 이름·이메일·전화·주소·우편번호를 채웁니다.\n기존 연동 거래처는 갱신, 신규는 생성됩니다. 진행할까요?'}
-        confirmText="불러오기"
+        title={t.customers.msMembersTitle}
+        message={t.customers.msMembersMsg}
+        confirmText={t.customers.msMembersLoad}
         cancelText={t.common.cancel}
         onConfirm={() => { setMsConfirm(false); syncMembers() }}
         onCancel={() => setMsConfirm(false)}

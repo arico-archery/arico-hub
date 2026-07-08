@@ -334,7 +334,7 @@ export default function CatalogPage() {
         const detail = d.detail ? (typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail)) : ''
         setMsResult('⚠️ ' + (d.error === 'not_configured' ? (d.hint || 'API 미설정') : `${d.error}${detail ? ' — ' + detail.slice(0, 500) : ''}`))
       } else {
-        setMsResult(`✅ ${d.fetched}건 조회 · 신규 ${d.created} · 갱신 ${d.updated}${d.skipped ? ` · 스킵 ${d.skipped}` : ''}`)
+        setMsResult(`✅ ${d.fetched} ${t.catalog.msFetched} · ${t.catalog.msNew} ${d.created} · ${t.catalog.msUpdated} ${d.updated}${d.skipped ? ` · ${t.catalog.msSkipped} ${d.skipped}` : ''}`)
         fetchItems(page); fetchStats()
       }
     } catch (e) {
@@ -468,13 +468,13 @@ export default function CatalogPage() {
             <RefreshCw className="w-3.5 h-3.5" />{t.catalog.importBtn}
           </button>
           <button
-            onClick={() => setConfirm({ title: 'MakeShop 상품 동기화', message: 'MakeShop 상품을 가져와 카탈로그에 반영합니다. 진행할까요?', confirmLabel: 'MakeShop 동기화', onConfirm: syncMakeshop })}
+            onClick={() => setConfirm({ title: t.catalog.msSyncTitle, message: t.catalog.msSyncMsg, confirmLabel: t.catalog.msSync, onConfirm: syncMakeshop })}
             disabled={msSyncing}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-            title="MakeShop 상품을 아리코 카탈로그에 동기화 (searchProduct)"
+            title={t.catalog.msSyncTooltip}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${msSyncing ? 'animate-spin' : ''}`} />
-            MakeShop 동기화
+            {t.catalog.msSync}
           </button>
           <button
             onClick={() => setConfirm({ title: t.catalog.previewConfirmTitle, message: t.catalog.previewConfirmMsg, confirmLabel: t.catalog.preview, onConfirm: () => handleAutoMatch(true) })}
@@ -547,7 +547,7 @@ export default function CatalogPage() {
       {/* 자동 매칭 결과 */}
       {msResult && (
         <div className="mb-3 p-3 rounded-xl text-sm flex items-center justify-between gap-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/50 text-indigo-800 dark:text-indigo-200">
-          <span>MakeShop 동기화: {msResult}</span>
+          <span>{t.catalog.msSync}: {msResult}</span>
           <button onClick={() => setMsResult(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 shrink-0"><X className="w-4 h-4" /></button>
         </div>
       )}
