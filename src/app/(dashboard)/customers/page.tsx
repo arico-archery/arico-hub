@@ -7,9 +7,10 @@ import { Users, Plus, Phone, Mail, MapPin, Pencil, Check, X, Trash2, Search, Sho
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { formatJpy } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
+import * as XLSX from 'xlsx'
 
 type Customer = {
-  id: number; code: string; name: string; company: string
+  id: number; code: string; name: string; nameKana: string; company: string
   email: string; phone: string; address: string; memo: string
   customerType: string; taxRegNo: string; legalName: string
   postalCode: string; billingAddress: string; contactPerson: string
@@ -19,13 +20,13 @@ type Customer = {
 }
 
 type FormState = {
-  name: string; company: string; phone: string; email: string; address: string; memo: string
+  name: string; nameKana: string; company: string; phone: string; email: string; address: string; memo: string
   customerType: string; taxRegNo: string; legalName: string
   postalCode: string; billingAddress: string; contactPerson: string
   discountRate: string; discountAmount: string
 }
 const EMPTY_FORM: FormState = {
-  name: '', company: '', phone: '', email: '', address: '', memo: '',
+  name: '', nameKana: '', company: '', phone: '', email: '', address: '', memo: '',
   customerType: 'individual', taxRegNo: '', legalName: '', postalCode: '', billingAddress: '', contactPerson: '',
   discountRate: '', discountAmount: '',
 }
@@ -80,6 +81,7 @@ function CustomerFormFields({ form, patch }: { form: FormState; patch: (p: Parti
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <InputField label={t.customers.labelName} placeholder={t.customers.placeholderName} value={form.name} onChange={v => patch({ name: v })} />
+        <InputField label={t.customers.labelNameKana} placeholder={t.customers.placeholderNameKana} value={form.nameKana} onChange={v => patch({ nameKana: v })} />
         <InputField label={t.customers.labelCompany} placeholder={t.customers.placeholderCompany} value={form.company} onChange={v => patch({ company: v })} />
         <InputField label={t.customers.labelPhone} placeholder="090-0000-0000" value={form.phone} onChange={v => patch({ phone: v })} />
         <InputField label={t.customers.labelEmail} placeholder="email@example.com" value={form.email} onChange={v => patch({ email: v })} />
@@ -147,11 +149,13 @@ export default function CustomersPage() {
   }
 
   const downloadCustomerTemplate = () => {
-    const headers = ['이름', '구분', '회사', '전화', '이메일', '우편번호', '주소', '등록번호', '담당자', '청구지', '메모']
-    const sample = ['홍길동', '기업', '○○양궁장', '090-0000-0000', 'a@b.com', '150-0001', '東京都…', 'T0000000000000', '田中', '', '']
-    const csv = '﻿' + headers.join(',') + '\n' + sample.join(',')
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-    const a = document.createElement('a'); a.href = url; a.download = 'customers_template.csv'; a.click(); URL.revokeObjectURL(url)
+    const headers = ['이름', '카타카나', '구분', '회사', '전화', '이메일', '우편번호', '주소', '등록번호', '담당자', '청구지', '메모']
+    const sample = ['홍길동', 'ホン・ギルドン', '기업', '○○양궁장', '090-0000-0000', 'a@b.com', '150-0001', '東京都…', 'T0000000000000', '田中', '', '']
+    const ws = XLSX.utils.aoa_to_sheet([headers, sample])
+    ws['!cols'] = headers.map(() => ({ wch: 16 }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'customers')
+    XLSX.writeFile(wb, 'customers_template.xlsx')
   }
 
   // 명함 스캔(OCR) → 인식 결과로 등록 폼 프리필 (사람 확인 후 저장)
@@ -168,7 +172,7 @@ export default function CustomersPage() {
       if (!res.ok || !d.fields) { setErrorMsg(t.customers.scanFailed); return }
       const f = d.fields
       setForm({
-        name: f.name || '', company: f.company || '', phone: f.phone || '', email: f.email || '',
+        name: f.name || '', nameKana: f.nameKana || '', company: f.company || '', phone: f.phone || '', email: f.email || '',
         address: f.address || '', memo: f.title || '', customerType: f.customerType || 'individual',
         taxRegNo: f.taxRegNo || '', legalName: '', postalCode: f.postalCode || '',
         billingAddress: '', contactPerson: f.contactPerson || '',
@@ -219,7 +223,7 @@ export default function CustomersPage() {
   const startEdit = (c: Customer) => {
     setEditingId(c.id)
     setEditForm({
-      name: c.name, company: c.company, phone: c.phone, email: c.email, address: c.address, memo: c.memo,
+      name: c.name, nameKana: c.nameKana || '', company: c.company, phone: c.phone, email: c.email, address: c.address, memo: c.memo,
       customerType: c.customerType || 'individual', taxRegNo: c.taxRegNo || '', legalName: c.legalName || '',
       postalCode: c.postalCode || '', billingAddress: c.billingAddress || '', contactPerson: c.contactPerson || '',
       discountRate: c.discountRate ? String(c.discountRate) : '', discountAmount: c.discountAmount ? String(c.discountAmount) : '',
@@ -434,6 +438,7 @@ export default function CustomersPage() {
                         <div className="flex items-center gap-2">
                           <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium px-1.5 py-0.5 rounded shrink-0">{c.code}</span>
                           <div>
+                            {c.nameKana && <p className="text-[11px] text-gray-400 dark:text-gray-500 leading-tight">{c.nameKana}</p>}
                             <div className="flex items-center gap-1.5">
                               <p className="font-semibold text-gray-900 dark:text-gray-100">{c.name}</p>
                               <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 ${TYPE_BADGE[c.customerType || 'individual'] || TYPE_BADGE.individual}`}>

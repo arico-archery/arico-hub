@@ -74,6 +74,7 @@ export async function POST(req: Request) {
         data: {
           code: `C${String(seq).padStart(3, '0')}`,
           name,
+          nameKana: pick(row, ['카타카나', '후리가나', 'namekana', 'kana', 'furigana', 'フリガナ', 'ふりがな', 'カナ', '名前カナ']),
           company: pick(row, ['회사', '회사/단체', 'company', '会社', '団体', '소속']),
           email, phone,
           address: pick(row, ['주소', 'address', '住所']),

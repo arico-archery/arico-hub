@@ -73,6 +73,7 @@ model Customer {
   id          Int       @id @default(autoincrement())
   code        String    @unique
   name        String
+  nameKana    String    @default("")   // 카타카나(후리가나) 이름 フリガナ
   company     String    @default("")
   email       String    @default("")
   phone       String    @default("")

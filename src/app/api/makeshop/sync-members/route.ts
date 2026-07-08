@@ -22,6 +22,7 @@ export async function POST() {
       if (!m.memberId) continue
       const data: Record<string, string> = {}
       if (m.name) data.name = m.name
+      if (m.nameKana) data.nameKana = m.nameKana
       if (m.email) data.email = m.email
       if (m.tel) data.phone = m.tel
       const addr = memberAddress(m); if (addr) data.address = addr
@@ -32,7 +33,7 @@ export async function POST() {
         updated++
       } else {
         seq += 1
-        const c = await prisma.customer.create({ data: { code: `C${String(seq).padStart(3, '0')}`, name: data.name || m.memberId, externalMemberId: m.memberId, email: data.email || '', phone: data.phone || '', address: data.address || '', postalCode: data.postalCode || '' } })
+        const c = await prisma.customer.create({ data: { code: `C${String(seq).padStart(3, '0')}`, name: data.name || m.memberId, nameKana: data.nameKana || '', externalMemberId: m.memberId, email: data.email || '', phone: data.phone || '', address: data.address || '', postalCode: data.postalCode || '' } })
         existing.set(m.memberId, c.id)
         created++
       }

@@ -158,7 +158,7 @@ export async function POST(req: Request) {
         custSeq += 1
         const c = await prisma.customer.create({ data: {
           code: `C${String(custSeq).padStart(3, '0')}`,
-          name: r.customerName || r.memberId, externalMemberId: r.memberId,
+          name: r.customerName || r.memberId, nameKana: m?.nameKana || '', externalMemberId: r.memberId,
           email: m?.email || '', phone: m?.tel || '',
           address: memberAddress(m), postalCode: memberPostal(m),
         } })
@@ -169,6 +169,7 @@ export async function POST(req: Request) {
         // 기존 거래처 갱신 — 회원에 값 있는 필드만 덮어씀
         const data: Record<string, string> = {}
         if (m.name) data.name = m.name
+        if (m.nameKana) data.nameKana = m.nameKana
         if (m.email) data.email = m.email
         if (m.tel) data.phone = m.tel
         const addr = memberAddress(m); if (addr) data.address = addr
