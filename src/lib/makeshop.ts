@@ -200,7 +200,18 @@ export function memberPostal(m?: MakeshopMemberDetail | null): string {
   const z = (m?.hpost ?? '').replace(/[^0-9]/g, '')
   return z.length === 7 ? `${z.slice(0, 3)}-${z.slice(3)}` : z
 }
-// 회원 주소 = 도도부현 + 시구정촌
+// 회원 주소 = 도도부현/시구정촌 + 상세주소(それ以降の住所)까지 전부 결합. 중복 접두는 제거.
 export function memberAddress(m?: MakeshopMemberDetail | null): string {
-  return m ? [m.haddressAddr, m.haddress2].filter(Boolean).join(' ') : ''
+  if (!m) return ''
+  const acc: string[] = []
+  for (const raw of [m.haddressAddr, m.haddress2, m.haddress1]) {
+    const p = (raw || '').trim()
+    if (!p) continue
+    if (acc.length) {
+      if (acc.join(' ').includes(p)) continue
+      if (p.startsWith(acc[acc.length - 1])) { acc[acc.length - 1] = p; continue }
+    }
+    acc.push(p)
+  }
+  return acc.join(' ')
 }

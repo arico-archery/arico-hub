@@ -195,7 +195,7 @@ export default function CustomersPage() {
       const res = await fetch('/api/customers/import', { method: 'POST', body: fd })
       const d = await res.json()
       if (!res.ok) { setImportResult('⚠️ ' + (d.error || res.status)); return }
-      setImportResult(`✅ ${d.imported}건 등록 / ${d.skipped} 스킵${d.errors ? ` / ${d.errors} 오류` : ''}`)
+      setImportResult(`✅ ${d.imported}건 등록${d.updated ? ` / ${d.updated} 갱신` : ''} / ${d.skipped} 스킵${d.errors ? ` / ${d.errors} 오류` : ''}`)
       setImportFile(null)
       loadCustomers()
     } catch (e) {
