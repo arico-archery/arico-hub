@@ -170,10 +170,23 @@ export type MakeshopMemberDetail = {
   memberId: string; name: string; nameKana: string; email: string
   tel: string; etcphone: string; hpost: string; haddress1: string; haddressAddr: string; haddress2: string
 }
-export async function searchMemberDetail(memberId: string): Promise<MakeshopMemberDetail | null> {
+const MEMBER_DETAIL_FIELDS = `memberId name nameKana email tel etcphone hpost haddress1 haddressAddr haddress2`
+
+export async function searchMemberDetailedPage(page = 1, limit = 1000): Promise<MakeshopMemberDetail[]> {
   const data = await makeshopQuery<{ searchMember?: { members?: MakeshopMemberDetail[] } }>(
-    `query searchMember($input: SearchMemberRequest!){ searchMember(input: $input){ members { memberId name nameKana email tel etcphone hpost haddress1 haddressAddr haddress2 } } }`,
-    { input: { memberId, page: 1, limit: 1 } },
+    `query searchMember($input: SearchMemberRequest!){ searchMember(input: $input){ members { ${MEMBER_DETAIL_FIELDS} } } }`,
+    { input: { page, limit } },
   )
-  return data.searchMember?.members?.[0] ?? null
+  return data.searchMember?.members ?? []
+}
+
+// 전 회원 상세 수집 (이메일·전화·주소 포함).
+export async function getAllMembersDetailed(limit = 1000, maxPages = 100): Promise<MakeshopMemberDetail[]> {
+  const out: MakeshopMemberDetail[] = []
+  for (let page = 1; page <= maxPages; page++) {
+    const chunk = await searchMemberDetailedPage(page, limit)
+    out.push(...chunk)
+    if (chunk.length < limit) break
+  }
+  return out
 }
