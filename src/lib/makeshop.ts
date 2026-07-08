@@ -110,3 +110,51 @@ export function fmtOrderDate(d: Date): string {
   const p = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
 }
+
+// ── 주문 상세 (searchOrder, 품목·입금·수령인 포함) ─────────────────
+// 실제 스키마: 주문 품목은 deliveryInfos[].basketInfos[] 에 있음.
+export type MakeshopBasket = {
+  productCode: string; variationCustomCode: string; janCode: string
+  amount: number; price: number; productName: string
+}
+export type MakeshopDelivery = { deliveryStatus: string; shippingCharge: number; basketInfos: MakeshopBasket[] }
+export type MakeshopOrderDetail = {
+  systemOrderNumber: string; displayOrderNumber: string; orderDate: string; memberId: string
+  sumPrice: number; paymentStatusCode: string
+  receiverName: string; receiverTel: string; receiverPost: string
+  receiverPrefecture: string; receiverAddress: string; receiverAddress2: string
+  deliveryInfos: MakeshopDelivery[]
+}
+
+const ORDER_DETAIL_QUERY = `query searchOrder($input: SearchOrderRequest!){
+  searchOrder(input: $input){
+    orders {
+      systemOrderNumber displayOrderNumber orderDate memberId sumPrice paymentStatusCode
+      receiverName receiverTel receiverPost receiverPrefecture receiverAddress receiverAddress2
+      deliveryInfos {
+        deliveryStatus shippingCharge
+        basketInfos { productCode variationCustomCode janCode amount price productName }
+      }
+    }
+  }
+}`
+
+export async function searchOrdersDetailed(startOrderDate: string, endOrderDate: string, page = 1, limit = 50): Promise<MakeshopOrderDetail[]> {
+  const data = await makeshopQuery<{ searchOrder?: { orders?: MakeshopOrderDetail[] } }>(
+    ORDER_DETAIL_QUERY, { input: { startOrderDate, endOrderDate, page, limit } },
+  )
+  return data.searchOrder?.orders ?? []
+}
+
+// ── 회원 상세 (searchMember, 연락처·주소 포함) ─────────────────
+export type MakeshopMemberDetail = {
+  memberId: string; name: string; nameKana: string; email: string
+  tel: string; etcphone: string; hpost: string; haddress1: string; haddressAddr: string; haddress2: string
+}
+export async function searchMemberDetail(memberId: string): Promise<MakeshopMemberDetail | null> {
+  const data = await makeshopQuery<{ searchMember?: { members?: MakeshopMemberDetail[] } }>(
+    `query searchMember($input: SearchMemberRequest!){ searchMember(input: $input){ members { memberId name nameKana email tel etcphone hpost haddress1 haddressAddr haddress2 } } }`,
+    { input: { memberId, page: 1, limit: 1 } },
+  )
+  return data.searchMember?.members?.[0] ?? null
+}
