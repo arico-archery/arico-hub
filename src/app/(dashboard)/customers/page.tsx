@@ -389,6 +389,7 @@ export default function CustomersPage() {
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700">
                 <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300">{t.customers.colName}</th>
+                <th className="hidden sm:table-cell text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300 w-40">{t.customers.colNameKana}</th>
                 <th className="hidden md:table-cell text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300 w-36">{t.customers.colPhone}</th>
                 <th className="hidden md:table-cell text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300 w-48">{t.customers.colEmail}</th>
                 <th className="hidden lg:table-cell text-left px-4 py-3 font-semibold text-gray-600 dark:text-gray-300">{t.customers.colAddress}</th>
@@ -402,7 +403,7 @@ export default function CustomersPage() {
               {(() => {
                 const filtered = filteredCustomers
                 if (filtered.length === 0) return (
-                  <tr><td colSpan={8} className="text-center py-16 text-gray-400">
+                  <tr><td colSpan={9} className="text-center py-16 text-gray-400">
                     <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
                     <p>{searchQ ? `"${searchQ}" ${t.common.noData}` : t.customers.noCustomers}</p>
                   </td></tr>
@@ -416,7 +417,7 @@ export default function CustomersPage() {
 
                   if (isEditing) return (
                     <tr key={c.id} className="bg-blue-50/40 dark:bg-blue-900/10">
-                      <td colSpan={8} className="px-4 py-3">
+                      <td colSpan={9} className="px-4 py-3">
                         <div className="mb-2">
                           <CustomerFormFields form={editForm} patch={p => setEditForm(f => ({ ...f, ...p }))} />
                         </div>
@@ -438,7 +439,7 @@ export default function CustomersPage() {
                         <div className="flex items-center gap-2">
                           <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium px-1.5 py-0.5 rounded shrink-0">{c.code}</span>
                           <div>
-                            {c.nameKana && <p className="text-[11px] text-gray-400 dark:text-gray-500 leading-tight">{c.nameKana}</p>}
+                            {c.nameKana && <p className="sm:hidden text-[11px] text-gray-400 dark:text-gray-500 leading-tight">{c.nameKana}</p>}
                             <div className="flex items-center gap-1.5">
                               <p className="font-semibold text-gray-900 dark:text-gray-100">{c.name}</p>
                               <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 ${TYPE_BADGE[c.customerType || 'individual'] || TYPE_BADGE.individual}`}>
@@ -459,6 +460,9 @@ export default function CustomersPage() {
                           {c.phone && <p className="flex items-center gap-1 text-gray-500 dark:text-gray-400 text-[11px]"><Phone className="w-2.5 h-2.5 shrink-0" />{c.phone}</p>}
                           {c.email && <p className="flex items-center gap-1 text-gray-500 dark:text-gray-400 text-[11px] truncate max-w-44"><Mail className="w-2.5 h-2.5 shrink-0" />{c.email}</p>}
                         </div>
+                      </td>
+                      <td className="hidden sm:table-cell px-4 py-3 align-top">
+                        <span className="text-gray-500 dark:text-gray-400 text-xs">{c.nameKana || '—'}</span>
                       </td>
                       <td className="hidden md:table-cell px-4 py-3">
                         {c.phone && <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400 text-xs"><Phone className="w-3 h-3 shrink-0" />{c.phone}</div>}
