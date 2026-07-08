@@ -322,6 +322,27 @@ export default function CatalogPage() {
   // 통계 캐시 (fetchStats = refresh)
   const { data: stats = null, refresh: fetchStats } = useApiCache<CatalogStats>('/api/arico-catalog?stats=1')
 
+  // MakeShop 상품 동기화 (searchProduct → AricoCatalog upsert)
+  const [msSyncing, setMsSyncing] = useState(false)
+  const [msResult, setMsResult] = useState<string | null>(null)
+  const syncMakeshop = async () => {
+    setMsSyncing(true); setMsResult(null)
+    try {
+      const res = await fetch('/api/makeshop/sync-products', { method: 'POST' })
+      const d = await res.json()
+      if (!res.ok || !d.ok) {
+        setMsResult('⚠️ ' + (d.error === 'not_configured' ? (d.hint || 'API 미설정') : (d.error || res.status)))
+      } else {
+        setMsResult(`✅ ${d.fetched}건 조회 · 신규 ${d.created} · 갱신 ${d.updated}${d.skipped ? ` · 스킵 ${d.skipped}` : ''}`)
+        fetchItems(page); fetchStats()
+      }
+    } catch (e) {
+      setMsResult('⚠️ ' + String(e))
+    } finally {
+      setMsSyncing(false)
+    }
+  }
+
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
   const handleMatch = (catalogId: number, product: SupplierProduct | null, barcode?: string) => {
@@ -446,6 +467,15 @@ export default function CatalogPage() {
             <RefreshCw className="w-3.5 h-3.5" />{t.catalog.importBtn}
           </button>
           <button
+            onClick={syncMakeshop}
+            disabled={msSyncing}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            title="MakeShop 상품을 아리코 카탈로그에 동기화 (searchProduct)"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${msSyncing ? 'animate-spin' : ''}`} />
+            MakeShop 동기화
+          </button>
+          <button
             onClick={() => setConfirm({ title: t.catalog.previewConfirmTitle, message: t.catalog.previewConfirmMsg, confirmLabel: t.catalog.preview, onConfirm: () => handleAutoMatch(true) })}
             disabled={autoMatching}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
@@ -514,6 +544,12 @@ export default function CatalogPage() {
       })()}
 
       {/* 자동 매칭 결과 */}
+      {msResult && (
+        <div className="mb-3 p-3 rounded-xl text-sm flex items-center justify-between gap-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/50 text-indigo-800 dark:text-indigo-200">
+          <span>MakeShop 동기화: {msResult}</span>
+          <button onClick={() => setMsResult(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 shrink-0"><X className="w-4 h-4" /></button>
+        </div>
+      )}
       {autoMatchResult && (
         <div className={`mb-3 p-3 rounded-xl text-sm flex items-start justify-between gap-4 ${autoMatchResult.dryRun ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200' : 'bg-green-50 dark:bg-green-900/20 border border-green-200'}`}>
           <div>
