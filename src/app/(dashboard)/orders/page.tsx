@@ -6,7 +6,7 @@ import {
   ShoppingCart, Plus, FileText, Truck, CreditCard, Search,
   Download, ChevronLeft, ChevronRight, CheckCircle2, Circle,
   Package, Banknote, ClipboardList, MapPin, CheckCheck, Trash2, Pencil,
-  Image as ImageIcon
+  Image as ImageIcon, X
 } from 'lucide-react'
 import { formatJpy, calcProfitRate, formatNumber } from '@/lib/utils'
 import SupplierBadge from '@/components/SupplierBadge'
@@ -280,11 +280,12 @@ export default function OrdersPage() {
         <div className="relative min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
-            className="pl-9 pr-4 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+            className="pl-9 pr-9 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
             placeholder={t.orders.searchPlaceholder}
             value={searchQ}
             onChange={e => setSearchQ(e.target.value)}
           />
+          {searchQ && <button type="button" onClick={() => setSearchQ('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X className="w-3.5 h-3.5" /></button>}
         </div>
         {tab === 'active' && (
           <>

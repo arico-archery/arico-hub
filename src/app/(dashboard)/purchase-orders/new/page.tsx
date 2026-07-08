@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, Trash2, ArrowLeft, Truck, Filter } from 'lucide-react'
+import { Search, Plus, Trash2, ArrowLeft, Truck, Filter, X } from 'lucide-react'
 import { formatJpy, calcCostJpy, SUPPLIER_COLORS, SUPPLIER_LIST } from '@/lib/utils'
 import SupplierBadge from '@/components/SupplierBadge'
 import DateInput from '@/components/DateInput'
@@ -176,11 +176,12 @@ export default function NewPurchaseOrderPage() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
-                className="w-full pl-9 pr-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-9 pr-9 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder={t.purchaseOrders.newSearchPlaceholder}
                 value={productSearch}
                 onChange={e => setProductSearch(e.target.value)}
               />
+              {productSearch && <button type="button" onClick={() => setProductSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 z-10"><X className="w-3.5 h-3.5" /></button>}
               {searchResults.length > 0 && (
                 <div className="absolute top-full mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-10 max-h-64 overflow-y-auto">
                   {searchResults.map(p => {
