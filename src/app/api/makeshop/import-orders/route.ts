@@ -126,14 +126,15 @@ export async function POST(req: Request) {
       return lite
     }
 
-    let created = 0, skipped = 0, etcCreated = 0
+    let created = 0, skipped = 0, etcCreated = 0, custCreated = 0, custUpdated = 0
     const etcSeen = new Set<string>()
+    const custSynced = new Set<string>()   // 이번 실행에서 갱신한 회원(중복 update 방지)
     for (const r of targets) {
       // 거래처 확보 (전부 연동, 회원 연락처·주소까지)
+      const m = memberMap.get(r.memberId)
       let customerId = custByMember.get(r.memberId)
       if (!customerId) {
         custSeq += 1
-        const m = memberMap.get(r.memberId)
         const c = await prisma.customer.create({ data: {
           code: `C${String(custSeq).padStart(3, '0')}`,
           name: r.customerName || r.memberId, externalMemberId: r.memberId,
@@ -142,6 +143,17 @@ export async function POST(req: Request) {
         } })
         customerId = c.id
         custByMember.set(r.memberId, customerId)
+        custCreated++
+      } else if (m && !custSynced.has(r.memberId)) {
+        // 기존 거래처 갱신 — 회원에 값 있는 필드만 덮어씀
+        const data: Record<string, string> = {}
+        if (m.name) data.name = m.name
+        if (m.email) data.email = m.email
+        if (m.tel) data.phone = m.tel
+        const addr = memberAddress(m); if (addr) data.address = addr
+        const pc = memberPostal(m); if (pc) data.postalCode = pc
+        if (Object.keys(data).length) { await prisma.customer.update({ where: { id: customerId }, data }); custUpdated++ }
+        custSynced.add(r.memberId)
       }
       // 품목 데이터 (미매칭은 ETC 상품으로)
       const itemsData: { productId: number; quantity: number; salePriceJpy: number; costPriceJpy: number; optionMemo: string }[] = []
@@ -177,7 +189,7 @@ export async function POST(req: Request) {
       created++
     }
     skipped = rows.filter(r => r.dup).length
-    return NextResponse.json({ ok: true, created, skipped, dup: skipped, etcCreated, partial: rows.filter(r => !r.dup && !r.allMatched).length })
+    return NextResponse.json({ ok: true, created, skipped, dup: skipped, etcCreated, custCreated, custUpdated, partial: rows.filter(r => !r.dup && !r.allMatched).length })
   } catch (e) {
     const err = e instanceof MakeshopError ? { error: e.message, detail: e.detail } : { error: String(e) }
     return NextResponse.json({ ok: false, ...err }, { status: 502 })

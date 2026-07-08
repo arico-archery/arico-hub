@@ -46,7 +46,7 @@ export default function MakeshopPage() {
       const res = await fetch(`/api/makeshop/import-orders?days=${days}`, { method: 'POST' })
       const d = await res.json()
       if (!res.ok || !d.ok) { setErr(`${d.error}${d.detail ? ' — ' + JSON.stringify(d.detail).slice(0, 300) : ''}`); return }
-      setResult(L(`✅ ${d.created}건 생성 · 중복 제외 ${d.dup} · 일부 미매칭 ${d.partial} · ETC 상품 ${d.etcCreated} 생성`, `✅ ${d.created}件作成 · 重複除外 ${d.dup} · 一部未マッチ ${d.partial} · ETC商品 ${d.etcCreated}作成`))
+      setResult(L(`✅ 주문 ${d.created}건 생성 · 거래처 신규 ${d.custCreated}·갱신 ${d.custUpdated} · 중복제외 ${d.dup} · 일부미매칭 ${d.partial} · ETC상품 ${d.etcCreated}`, `✅ 受注 ${d.created}件作成 · 取引先 新規 ${d.custCreated}·更新 ${d.custUpdated} · 重複除外 ${d.dup} · 一部未マッチ ${d.partial} · ETC商品 ${d.etcCreated}`))
       loadPreview()
     } catch (e) { setErr(String(e)) } finally { setImporting(false) }
   }
