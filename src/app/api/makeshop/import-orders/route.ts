@@ -13,10 +13,27 @@ function mapPayment(code: string): 'paid' | 'unpaid' {
   return code === '0002' ? 'paid' : 'unpaid'
 }
 
+// YYYYMMDDHHmmss → Date
+function parseMsDate(s: string | null | undefined): Date | null {
+  if (!s || !/^\d{14}$/.test(s)) return null
+  return new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8)), Number(s.slice(8, 10)), Number(s.slice(10, 12)), Number(s.slice(12, 14)))
+}
+// 배송상태 매핑: deliveryStatus Y = 발송/배송완료(송장·발송일), キャンセル/返金 = 취소, 그 외 = 접수.
+type DeliveryMap = { orderStatus: 'pending' | 'delivered' | 'cancelled'; trackingNo: string; shipDate: Date | null }
+function mapDelivery(o: { deliveryInfos: { deliveryStatus: string; slipNumber: string; deliveryDate: string }[] }): DeliveryMap {
+  const d = (o.deliveryInfos || [])[0]
+  const status = d?.deliveryStatus || ''
+  const slip = d?.slipNumber || ''
+  if (status === 'Y') return { orderStatus: 'delivered', trackingNo: slip, shipDate: parseMsDate(d?.deliveryDate) }
+  if (/キャンセル|返金|取消|キャンセ/.test(slip)) return { orderStatus: 'cancelled', trackingNo: '', shipDate: null }
+  return { orderStatus: 'pending', trackingNo: '', shipDate: null }
+}
+
 type PreviewItem = { productCode: string; productName: string; amount: number; price: number; matched: boolean; supplierCode: string | null; catalogName: string | null }
 type PreviewRow = {
   externalOrderNo: string; displayOrderNumber: string; orderDate: string; memberId: string; customerName: string
   sumPrice: number; shipping: number; itemsSubtotal: number; payment: 'paid' | 'unpaid'
+  orderStatus: 'pending' | 'delivered' | 'cancelled'; trackingNo: string; shipDate: string | null
   dup: boolean; allMatched: boolean; items: PreviewItem[]
 }
 
@@ -53,10 +70,12 @@ async function buildPreview(days: number) {
       }
     })
     const itemsSubtotal = items.reduce((s, it) => s + it.price * it.amount, 0)
+    const del = mapDelivery(o)
     return {
       externalOrderNo: o.systemOrderNumber, displayOrderNumber: o.displayOrderNumber,
       orderDate: o.orderDate, memberId: o.memberId, customerName: memberMap.get(o.memberId)?.name || o.memberId,
       sumPrice: Number(o.sumPrice) || 0, shipping, itemsSubtotal, payment: mapPayment(o.paymentStatusCode),
+      orderStatus: del.orderStatus, trackingNo: del.trackingNo, shipDate: del.shipDate ? del.shipDate.toISOString() : null,
       dup: imported.has(o.systemOrderNumber), allMatched: items.length > 0 && items.every(i => i.matched), items,
     }
   })
@@ -160,6 +179,7 @@ export async function POST(req: Request) {
       const paid = r.payment === 'paid'
       const orderDate = new Date(r.orderDate)
       const dateStr = fmtOrderDate(orderDate).slice(0, 8)
+      const shipDate = r.shipDate ? new Date(r.shipDate) : null
       const memo = `[MakeShop ${r.displayOrderNumber}] 결제총액 ¥${r.sumPrice.toLocaleString()}${r.shipping ? ` (배송비 ¥${r.shipping.toLocaleString()})` : ''}`
 
       await createWithSeqRetry(
@@ -173,6 +193,11 @@ export async function POST(req: Request) {
             orderNo, customerId: customerId!, externalOrderNo: r.externalOrderNo, orderDate,
             paymentStatus: paid ? 'paid' : 'unpaid', paidAmountJpy: paid ? subtotal : 0,
             paymentDate: paid ? orderDate : null,
+            // 배송상태 반영: 배송완료 시 발송일·송장·완료일 세팅
+            status: r.orderStatus,
+            ...(r.trackingNo ? { trackingNo: r.trackingNo } : {}),
+            ...(shipDate ? { shippingDate: shipDate } : {}),
+            ...(r.orderStatus === 'delivered' && shipDate ? { deliveryDate: shipDate, completedAt: shipDate } : {}),
             subtotalJpy: subtotal, totalAmountJpy: subtotal, totalCostJpy: totalCost, memo,
             items: { create: itemsData },
           },

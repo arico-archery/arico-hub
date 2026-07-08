@@ -11,6 +11,7 @@ type PreviewItem = { productCode: string; productName: string; amount: number; p
 type Row = {
   externalOrderNo: string; displayOrderNumber: string; orderDate: string; memberId: string; customerName: string
   sumPrice: number; shipping: number; itemsSubtotal: number; payment: 'paid' | 'unpaid'
+  orderStatus: 'pending' | 'delivered' | 'cancelled'; trackingNo: string; shipDate: string | null
   dup: boolean; allMatched: boolean; items: PreviewItem[]
 }
 type Summary = { total: number; dup: number; importable: number; hasUnmatched: number }
@@ -133,8 +134,12 @@ export default function MakeshopPage() {
                 <tr key={r.externalOrderNo} className={`align-top ${r.dup ? 'opacity-50' : ''}`}>
                   <td className="px-4 py-3">{badge(r)}</td>
                   <td className="px-4 py-3">
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{r.displayOrderNumber}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{r.orderDate} · {r.customerName}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-medium text-gray-900 dark:text-gray-100">{r.displayOrderNumber}</p>
+                      {r.orderStatus === 'delivered' && <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300">{L('배송완료', '配送完了')}</span>}
+                      {r.orderStatus === 'cancelled' && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300">{L('취소', 'キャンセル')}</span>}
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{r.orderDate} · {r.customerName}{r.trackingNo ? ` · ${L('송장', '伝票')} ${r.trackingNo}` : ''}</p>
                   </td>
                   <td className="px-4 py-3">
                     <div className="space-y-0.5">
