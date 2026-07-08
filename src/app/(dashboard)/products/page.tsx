@@ -91,6 +91,10 @@ export default function ProductsPage() {
   const [viewMode, setViewMode] = useState<'flat' | 'grouped'>('flat')
   const [expanded, setExpanded] = useState<string | null>(null)
   const [expVariants, setExpVariants] = useState<Record<string, GroupVariant[]>>({})
+  // 그룹 판매가 일괄 입력 (원가 동일 변형 전체 적용)
+  const [groupPrice, setGroupPrice] = useState<Record<string, string>>({})
+  const [groupSavingCode, setGroupSavingCode] = useState<string | null>(null)
+  const [groupToast, setGroupToast] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/exchange-rates').then(r => r.json()).then(setRates)
@@ -217,6 +221,43 @@ export default function ProductsPage() {
         const d = await res.json()
         if (Array.isArray(d.variants)) setExpVariants(prev => ({ ...prev, [g.groupCode]: d.variants }))
       } catch { /* noop */ }
+    }
+  }
+
+  // 그룹 판매가 일괄 적용: 입력한 판매가를 "대표 변형과 원가가 같은" 전 변형에 적용.
+  // (원가가 다른 변형은 제외 → 원가 같으면 같은 판매가)
+  const applyGroupPrice = async (g: GroupRow) => {
+    const raw = groupPrice[g.groupCode]
+    const val = Number(raw)
+    if (raw === undefined || raw === '' || isNaN(val) || val <= 0) return
+    setGroupSavingCode(g.groupCode)
+    try {
+      let vs = expVariants[g.groupCode]
+      if (!vs) {
+        const d = await fetch(`/api/products/variants?productId=${g.repId}`).then(r => r.json())
+        vs = Array.isArray(d.variants) ? d.variants : []
+        setExpVariants(prev => ({ ...prev, [g.groupCode]: vs! }))
+      }
+      let updates: { id: number; salePriceJpy: number }[]
+      let skipped = 0
+      if (!vs.length) {
+        // 변형 목록이 없으면(단일 상품) 대표 상품만 적용
+        updates = [{ id: g.repId, salePriceJpy: val }]
+      } else {
+        const costOf = (v: GroupVariant) => Math.round(calcCostJpy({ costPrice: v.costPrice, brand: v.brand, supplierCode: v.supplierCode, name: v.name, supplier: v.supplier }, rates))
+        const rep = vs.find(v => v.id === g.repId) ?? vs[0]
+        const repCost = costOf(rep)
+        const targets = vs.filter(v => costOf(v) === repCost)
+        skipped = vs.length - targets.length
+        updates = targets.map(v => ({ id: v.id, salePriceJpy: val }))
+      }
+      await fetch('/api/products', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ updates }) })
+      setGroupToast(`${g.base}: ${updates.length}${t.common.items}${skipped > 0 ? ` · ${skipped}${t.products.groupPriceSkipped}` : ''}`)
+      setGroupPrice(prev => { const n = { ...prev }; delete n[g.groupCode]; return n })
+      refreshGroups()
+      setTimeout(() => setGroupToast(null), 4000)
+    } finally {
+      setGroupSavingCode(null)
     }
   }
 
@@ -578,6 +619,18 @@ export default function ProductsPage() {
         )}
       </div>
 
+      {viewMode === 'grouped' && (
+        <div className="mb-2 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 px-1">
+          <Layers className="w-3.5 h-3.5 shrink-0" />
+          <span>{t.products.groupPriceHint}</span>
+          {groupToast && (
+            <span className="ml-auto flex items-center gap-1 text-green-600 dark:text-green-400 font-medium">
+              <CheckCircle className="w-3.5 h-3.5" />{groupToast}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Table */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 overflow-x-auto">
         {viewMode === 'flat' ? (
@@ -779,10 +832,27 @@ export default function ProductsPage() {
                         </span>
                       ) : <span className="text-xs text-gray-400">—</span>}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-gray-900 dark:text-gray-100 font-medium">
-                      {g.pricedCount === 0 ? <span className="text-xs text-gray-400">{t.products.needInput}</span>
-                        : g.minSale === g.maxSale ? formatJpy(g.minSale)
-                        : <span className="text-xs">{formatJpy(g.minSale)} ~ {formatJpy(g.maxSale)}</span>}
+                    <td className="px-4 py-2 text-right" onClick={e => e.stopPropagation()}>
+                      {g.count > 1 ? (
+                        <div className="flex items-center gap-1 justify-end">
+                          <input
+                            type="number"
+                            title={t.products.groupPriceHint}
+                            className="w-24 text-right border border-gray-200 dark:border-gray-600 rounded px-2 py-1 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 tabular-nums"
+                            placeholder={g.pricedCount > 0 ? (g.minSale === g.maxSale ? formatNumber(g.minSale) : `${formatNumber(g.minSale)}~${formatNumber(g.maxSale)}`) : '0'}
+                            value={groupPrice[g.groupCode] ?? (g.pricedCount === g.count && g.minSale === g.maxSale ? String(g.minSale) : '')}
+                            onChange={e => setGroupPrice(prev => ({ ...prev, [g.groupCode]: e.target.value }))}
+                            onBlur={() => applyGroupPrice(g)}
+                            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                            disabled={groupSavingCode === g.groupCode}
+                          />
+                          {groupSavingCode === g.groupCode && <span className="text-gray-400 text-xs animate-pulse">…</span>}
+                        </div>
+                      ) : (
+                        g.pricedCount === 0
+                          ? <span className="text-xs text-gray-400">{t.products.needInput}</span>
+                          : <span className="tabular-nums font-medium text-gray-900 dark:text-gray-100">{formatJpy(g.minSale)}</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right">
                       {g.inStockCount > 0
