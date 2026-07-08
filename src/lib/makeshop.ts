@@ -147,11 +147,22 @@ const ORDER_DETAIL_QUERY = `query searchOrder($input: SearchOrderRequest!){
   }
 }`
 
-export async function searchOrdersDetailed(startOrderDate: string, endOrderDate: string, page = 1, limit = 50): Promise<MakeshopOrderDetail[]> {
+export async function searchOrdersDetailed(startOrderDate: string, endOrderDate: string, page = 1, limit = 1000): Promise<MakeshopOrderDetail[]> {
   const data = await makeshopQuery<{ searchOrder?: { orders?: MakeshopOrderDetail[] } }>(
     ORDER_DETAIL_QUERY, { input: { startOrderDate, endOrderDate, page, limit } },
   )
   return data.searchOrder?.orders ?? []
+}
+
+// 기간 내 전 주문 수집 (페이지네이션). limit 미만이 오면 마지막 페이지.
+export async function getAllOrdersDetailed(startOrderDate: string, endOrderDate: string, limit = 1000, maxPages = 100): Promise<MakeshopOrderDetail[]> {
+  const out: MakeshopOrderDetail[] = []
+  for (let page = 1; page <= maxPages; page++) {
+    const chunk = await searchOrdersDetailed(startOrderDate, endOrderDate, page, limit)
+    out.push(...chunk)
+    if (chunk.length < limit) break
+  }
+  return out
 }
 
 // ── 회원 상세 (searchMember, 연락처·주소 포함) ─────────────────

@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { createWithSeqRetry } from '@/lib/seq'
 import { calcCostJpy } from '@/lib/utils'
 import {
-  searchOrdersDetailed, getAllMembers, fmtOrderDate,
+  getAllOrdersDetailed, getAllMembers, fmtOrderDate,
   makeshopConfigured, MakeshopError,
 } from '@/lib/makeshop'
 
@@ -24,7 +24,7 @@ async function buildPreview(days: number) {
   const now = new Date()
   const start = fmtOrderDate(new Date(now.getTime() - days * 86400000))
   const end = fmtOrderDate(now)
-  const orders = await searchOrdersDetailed(start, end, 1, 200)
+  const orders = await getAllOrdersDetailed(start, end)
 
   // 카탈로그: productCode → {supplierProductId, name}
   const cats = await prisma.aricoCatalog.findMany({ select: { productCode: true, name: true, supplierProductId: true } })
