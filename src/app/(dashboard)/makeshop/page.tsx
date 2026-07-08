@@ -46,7 +46,7 @@ export default function MakeshopPage() {
       const res = await fetch(`/api/makeshop/import-orders?days=${days}`, { method: 'POST' })
       const d = await res.json()
       if (!res.ok || !d.ok) { setErr(`${d.error}${d.detail ? ' — ' + JSON.stringify(d.detail).slice(0, 300) : ''}`); return }
-      setResult(L(`✅ ${d.created}건 생성 · 중복 ${d.dup} · 미매칭 ${d.unmatched}`, `✅ ${d.created}件作成 · 重複 ${d.dup} · 未マッチ ${d.unmatched}`))
+      setResult(L(`✅ ${d.created}건 생성 · 중복 제외 ${d.dup} · 일부 미매칭 ${d.partial} · ETC 상품 ${d.etcCreated} 생성`, `✅ ${d.created}件作成 · 重複除外 ${d.dup} · 一部未マッチ ${d.partial} · ETC商品 ${d.etcCreated}作成`))
       loadPreview()
     } catch (e) { setErr(String(e)) } finally { setImporting(false) }
   }
@@ -55,7 +55,7 @@ export default function MakeshopPage() {
     ? <span className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500">{L('중복', '重複')}</span>
     : r.allMatched
       ? <span className="text-[11px] px-1.5 py-0.5 rounded bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300">{L('가져오기', '取込可')}</span>
-      : <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">{L('미매칭 품목', '未マッチ品')}</span>
+      : <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300" title={L('미매칭 품목은 ETC 상품으로 생성 후 주문관리에서 수정', '未マッチ品はETC商品として作成し受注管理で修正')}>{L('일부 미매칭', '一部未マッチ')}</span>
 
   return (
     <div className="p-4 md:p-6">
@@ -94,7 +94,7 @@ export default function MakeshopPage() {
           {[
             { label: L('전체', '全体'), value: summary.total, cls: 'text-gray-900 dark:text-white' },
             { label: L('가져올 수 있음', '取込可'), value: summary.importable, cls: 'text-green-600' },
-            { label: L('미매칭 품목', '未マッチ品'), value: summary.hasUnmatched, cls: 'text-amber-600' },
+            { label: L('일부 미매칭', '一部未マッチ'), value: summary.hasUnmatched, cls: 'text-amber-600' },
             { label: L('이미 수신', '取込済み'), value: summary.dup, cls: 'text-gray-400' },
           ].map(c => (
             <div key={c.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-4">
@@ -169,7 +169,7 @@ export default function MakeshopPage() {
       <ConfirmDialog
         open={confirmOpen}
         title={L('MakeShop 주문 가져오기', 'MakeShop受注取込')}
-        message={L(`가져올 수 있는 ${summary?.importable ?? 0}건의 주문을 생성합니다. (중복·미매칭 품목 주문은 제외)\n진행할까요?`, `取込可能な${summary?.importable ?? 0}件の受注を作成します。(重複・未マッチ品の受注は除外)\n進めますか？`)}
+        message={L(`${summary?.importable ?? 0}건의 주문을 생성합니다. (중복만 제외 · 미매칭 품목은 ETC 상품으로 생성 → 주문관리에서 수정)\n거래처도 자동 연동됩니다. 진행할까요?`, `${summary?.importable ?? 0}件の受注を作成します。(重複のみ除外 · 未マッチ品はETC商品として作成 → 受注管理で修正)\n取引先も自動連携。進めますか？`)}
         confirmText={L('가져오기', '取込')}
         cancelText={L('취소', 'キャンセル')}
         onConfirm={() => { setConfirmOpen(false); runImport() }}

@@ -68,7 +68,8 @@ export async function GET(req: Request) {
   const days = Math.min(365, Math.max(1, Number(new URL(req.url).searchParams.get('days')) || 90))
   try {
     const { start, end, rows } = await buildPreview(days)
-    const importable = rows.filter(r => !r.dup && r.allMatched).length
+    // 미매칭 품목이 있어도 가져온다(ETC 상품 생성). 가져올 수 있음 = 중복 아닌 전부.
+    const importable = rows.filter(r => !r.dup).length
     return NextResponse.json({
       ok: true, range: { start, end },
       summary: { total: rows.length, dup: rows.filter(r => r.dup).length, importable, hasUnmatched: rows.filter(r => !r.dup && !r.allMatched).length },
@@ -86,7 +87,7 @@ export async function POST(req: Request) {
   const days = Math.min(365, Math.max(1, Number(new URL(req.url).searchParams.get('days')) || 90))
   try {
     const { rows, catMap, prodMap, rates } = await buildPreview(days)
-    const targets = rows.filter(r => !r.dup && r.allMatched)
+    const targets = rows.filter(r => !r.dup)   // 중복 아닌 전부 (미매칭 품목 포함)
 
     // 거래처 코드 러닝 카운터
     const lastCust = await prisma.customer.findFirst({ where: { code: { startsWith: 'C' } }, orderBy: { code: 'desc' }, select: { code: true } })
@@ -94,9 +95,32 @@ export async function POST(req: Request) {
     // externalMemberId → customerId 캐시
     const custByMember = new Map((await prisma.customer.findMany({ where: { externalMemberId: { not: '' } }, select: { id: true, externalMemberId: true } })).map(c => [c.externalMemberId, c.id]))
 
-    let created = 0, skipped = 0
+    // 미매칭 품목 → ETC 상품 확보(productCode별 생성/재사용). 주문관리에서 수정 가능.
+    type ProdLite = { id: number; costPrice: number; brand: string; supplierCode: string; name: string; supplier: { currency: string; taxRate: number; discount: number } }
+    const etcCache = new Map<string, ProdLite>()
+    const resolveProduct = async (productCode: string, productName: string, price: number): Promise<ProdLite> => {
+      const cat = catMap.get(productCode)
+      if (cat?.supplierProductId != null) {
+        const prod = prodMap.get(cat.supplierProductId)
+        if (prod) return prod as unknown as ProdLite
+      }
+      if (etcCache.has(productCode)) return etcCache.get(productCode)!
+      let prod = await prisma.product.findUnique({ where: { supplierCode_productCode: { supplierCode: 'ETC', productCode } }, include: { supplier: true } })
+      if (!prod) {
+        prod = await prisma.product.create({
+          data: { supplierCode: 'ETC', productCode, name: productName || productCode, brand: '', category: '', costPrice: 0, salePriceJpy: Math.round(price), unit: '1' },
+          include: { supplier: true },
+        })
+      }
+      const lite = prod as unknown as ProdLite
+      etcCache.set(productCode, lite)
+      return lite
+    }
+
+    let created = 0, skipped = 0, etcCreated = 0
+    const etcSeen = new Set<string>()
     for (const r of targets) {
-      // 거래처 확보
+      // 거래처 확보 (전부 연동)
       let customerId = custByMember.get(r.memberId)
       if (!customerId) {
         custSeq += 1
@@ -104,13 +128,14 @@ export async function POST(req: Request) {
         customerId = c.id
         custByMember.set(r.memberId, customerId)
       }
-      // 품목 데이터
-      const itemsData = r.items.map(it => {
-        const cat = catMap.get(it.productCode)!
-        const prod = prodMap.get(cat.supplierProductId!)!
+      // 품목 데이터 (미매칭은 ETC 상품으로)
+      const itemsData: { productId: number; quantity: number; salePriceJpy: number; costPriceJpy: number; optionMemo: string }[] = []
+      for (const it of r.items) {
+        const prod = await resolveProduct(it.productCode, it.productName, it.price)
+        if (!it.matched && !etcSeen.has(it.productCode)) { etcSeen.add(it.productCode); etcCreated++ }
         const costJpy = Math.round(calcCostJpy(prod, rates))
-        return { productId: prod.id, quantity: it.amount, salePriceJpy: Math.round(it.price), costPriceJpy: costJpy, optionMemo: '' }
-      })
+        itemsData.push({ productId: prod.id, quantity: it.amount, salePriceJpy: Math.round(it.price), costPriceJpy: costJpy, optionMemo: '' })
+      }
       const subtotal = itemsData.reduce((s, it) => s + it.salePriceJpy * it.quantity, 0)
       const totalCost = itemsData.reduce((s, it) => s + it.costPriceJpy * it.quantity, 0)
       const paid = r.payment === 'paid'
@@ -136,8 +161,8 @@ export async function POST(req: Request) {
       )
       created++
     }
-    skipped = rows.length - targets.length
-    return NextResponse.json({ ok: true, created, skipped, dup: rows.filter(r => r.dup).length, unmatched: rows.filter(r => !r.dup && !r.allMatched).length })
+    skipped = rows.filter(r => r.dup).length
+    return NextResponse.json({ ok: true, created, skipped, dup: skipped, etcCreated, partial: rows.filter(r => !r.dup && !r.allMatched).length })
   } catch (e) {
     const err = e instanceof MakeshopError ? { error: e.message, detail: e.detail } : { error: String(e) }
     return NextResponse.json({ ok: false, ...err }, { status: 502 })
