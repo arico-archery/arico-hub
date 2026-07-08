@@ -153,7 +153,7 @@ export default function OrdersPage() {
   const importMakeshop = async () => {
     setMsImporting(true); setMsResult(null)
     try {
-      const res = await fetch('/api/makeshop/import-orders', { method: 'POST' })
+      const res = await fetch('/api/makeshop/import-orders?days=30', { method: 'POST' })
       const d = await res.json()
       if (!res.ok || !d.ok) {
         setMsResult('⚠️ ' + (d.error === 'not_configured' ? (lang === 'ja' ? 'MakeShop連携が未設定' : 'MakeShop 연결 미설정') : `${d.error}${d.detail ? ' — ' + JSON.stringify(d.detail).slice(0, 200) : ''}`))
