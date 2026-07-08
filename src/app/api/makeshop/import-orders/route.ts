@@ -166,13 +166,15 @@ export async function POST(req: Request) {
         if (Object.keys(data).length) { await prisma.customer.update({ where: { id: customerId }, data }); custUpdated++ }
         custSynced.add(r.memberId)
       }
-      // 품목 데이터 (미매칭은 ETC 상품으로)
-      const itemsData: { productId: number; quantity: number; salePriceJpy: number; costPriceJpy: number; optionMemo: string }[] = []
+      // 품목 데이터 (미매칭은 ETC 상품으로).
+      // 배송완료·취소 주문은 이미 발주·입고 끝난 것 → 조달상태 received(백오더 제외).
+      const procureStatus = (r.orderStatus === 'delivered' || r.orderStatus === 'cancelled') ? 'received' : 'needed'
+      const itemsData: { productId: number; quantity: number; salePriceJpy: number; costPriceJpy: number; optionMemo: string; procureStatus: string }[] = []
       for (const it of r.items) {
         const prod = await resolveProduct(it.productCode, it.productName, it.price)
         if (!it.matched && !etcSeen.has(it.productCode)) { etcSeen.add(it.productCode); etcCreated++ }
         const costJpy = Math.round(calcCostJpy(prod, rates))
-        itemsData.push({ productId: prod.id, quantity: it.amount, salePriceJpy: Math.round(it.price), costPriceJpy: costJpy, optionMemo: '' })
+        itemsData.push({ productId: prod.id, quantity: it.amount, salePriceJpy: Math.round(it.price), costPriceJpy: costJpy, optionMemo: '', procureStatus })
       }
       const subtotal = itemsData.reduce((s, it) => s + it.salePriceJpy * it.quantity, 0)
       const totalCost = itemsData.reduce((s, it) => s + it.costPriceJpy * it.quantity, 0)
