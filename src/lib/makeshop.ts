@@ -121,8 +121,6 @@ export type MakeshopDelivery = { deliveryStatus: string; shippingCharge: number;
 export type MakeshopOrderDetail = {
   systemOrderNumber: string; displayOrderNumber: string; orderDate: string; memberId: string
   sumPrice: number; paymentStatusCode: string
-  receiverName: string; receiverTel: string; receiverPost: string
-  receiverPrefecture: string; receiverAddress: string; receiverAddress2: string
   deliveryInfos: MakeshopDelivery[]
 }
 
@@ -130,7 +128,6 @@ const ORDER_DETAIL_QUERY = `query searchOrder($input: SearchOrderRequest!){
   searchOrder(input: $input){
     orders {
       systemOrderNumber displayOrderNumber orderDate memberId sumPrice paymentStatusCode
-      receiverName receiverTel receiverPost receiverPrefecture receiverAddress receiverAddress2
       deliveryInfos {
         deliveryStatus shippingCharge
         basketInfos { productCode variationCustomCode janCode amount price productName }
