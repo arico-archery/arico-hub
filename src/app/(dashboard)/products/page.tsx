@@ -796,14 +796,13 @@ export default function ProductsPage() {
               <th className="text-left px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.products.colName}</th>
               <th className="text-center px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.products.colVariants}</th>
               <th className="text-right px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.products.colPriceRange}</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.products.colStock}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
             {groupsLoading && groups.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-16 text-gray-400">{t.common.loading}</td></tr>
+              <tr><td colSpan={5} className="text-center py-16 text-gray-400">{t.common.loading}</td></tr>
             ) : groups.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-16 text-gray-400">
+              <tr><td colSpan={5} className="text-center py-16 text-gray-400">
                 <Package className="w-8 h-8 mx-auto mb-2 opacity-30" />
                 <p>{t.products.noProducts}</p>
               </td></tr>
@@ -854,15 +853,10 @@ export default function ProductsPage() {
                           : <span className="tabular-nums font-medium text-gray-900 dark:text-gray-100">{formatJpy(g.minSale)}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      {g.inStockCount > 0
-                        ? <span className="text-xs font-medium text-green-600">{g.inStockCount}/{g.count}</span>
-                        : <span className="text-xs text-gray-400">0/{g.count}</span>}
-                    </td>
                   </tr>
                   {isOpen && g.count > 1 && (
                     vs.length === 0 ? (
-                      <tr className="bg-gray-50/50 dark:bg-gray-900/20"><td></td><td colSpan={5} className="px-4 py-3 text-xs text-gray-400">{t.common.loading}</td></tr>
+                      <tr className="bg-gray-50/50 dark:bg-gray-900/20"><td></td><td colSpan={4} className="px-4 py-3 text-xs text-gray-400">{t.common.loading}</td></tr>
                     ) : vs.map(v => {
                       const cv = calcCostJpy({ costPrice: v.costPrice, brand: v.brand, supplierCode: v.supplierCode, name: v.name, supplier: v.supplier }, rates)
                       return (
@@ -884,7 +878,6 @@ export default function ProductsPage() {
                             <span className="text-gray-900 dark:text-gray-100 text-sm">{v.salePriceJpy > 0 ? formatJpy(v.salePriceJpy) : <span className="text-gray-400 text-xs">{t.products.needInput}</span>}</span>
                             <p className="text-gray-400 text-[10px]">{t.products.colCost} {sym(v.supplier.currency)}{formatNumber(v.costPrice)} ≈ {formatJpy(cv)}</p>
                           </td>
-                          <td></td>
                         </tr>
                       )
                     })
