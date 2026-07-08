@@ -86,12 +86,23 @@ export async function getAllProducts(limit = 1000, maxPages = 200): Promise<Make
 
 // ── 회원 (searchMember) ─────────────────────────────
 export type MakeshopMember = { groupId: string; groupName: string; memberId: string; name: string }
-export async function searchMemberPage(page = 1, limit = 100): Promise<MakeshopMember[]> {
+export async function searchMemberPage(page = 1, limit = 1000): Promise<MakeshopMember[]> {
   const data = await makeshopQuery<{ searchMember?: { members?: MakeshopMember[] } }>(
     `query searchMember($input: SearchMemberRequest!){ searchMember(input: $input){ members { groupId groupName memberId name } } }`,
     { input: { page, limit } },
   )
   return data.searchMember?.members ?? []
+}
+
+// 전 회원 수집 (memberId→name 매핑용). 검증된 최소 필드만 사용.
+export async function getAllMembers(limit = 1000, maxPages = 100): Promise<MakeshopMember[]> {
+  const out: MakeshopMember[] = []
+  for (let page = 1; page <= maxPages; page++) {
+    const chunk = await searchMemberPage(page, limit)
+    out.push(...chunk)
+    if (chunk.length < limit) break
+  }
+  return out
 }
 
 // ── 주문 (searchOrder) ─────────────────────────────

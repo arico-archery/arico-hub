@@ -88,6 +88,7 @@ model Customer {
   honorific      String @default("")           // 様 / 御中 (비우면 구분따라 자동)
   discountRate   Float  @default(0)             // 거래처 기본 할인율 % (주문 시 자동 적용)
   discountAmount Float  @default(0)             // 거래처 기본 정액 할인 JPY (퍼센트 차감 후 추가 차감)
+  externalMemberId String @default("")          // MakeShop 회원ID (주문 수신 시 거래처 연결/중복방지)
   orders      Order[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -108,6 +109,7 @@ model Order {
   shippingDate      DateTime?
   deliveryDate      DateTime?
   trackingNo        String      @default("")
+  externalOrderNo   String      @default("")   // MakeShop systemOrderNumber (수신 중복방지)
   subtotalJpy       Float       @default(0)   // 할인 전 소계(품목 합)
   discountRate      Float       @default(0)   // 적용 할인율 % (주문 시점 스냅샷)
   discountAmount    Float       @default(0)   // 적용 정액 할인 JPY (주문 시점 스냅샷)

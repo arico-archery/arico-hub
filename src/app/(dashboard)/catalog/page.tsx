@@ -468,7 +468,7 @@ export default function CatalogPage() {
             <RefreshCw className="w-3.5 h-3.5" />{t.catalog.importBtn}
           </button>
           <button
-            onClick={syncMakeshop}
+            onClick={() => setConfirm({ title: 'MakeShop 상품 동기화', message: 'MakeShop 상품을 가져와 카탈로그에 반영합니다. 진행할까요?', confirmLabel: 'MakeShop 동기화', onConfirm: syncMakeshop })}
             disabled={msSyncing}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
             title="MakeShop 상품을 아리코 카탈로그에 동기화 (searchProduct)"
