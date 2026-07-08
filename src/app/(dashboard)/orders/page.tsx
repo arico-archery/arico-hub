@@ -145,24 +145,65 @@ export default function OrdersPage() {
   // 기존 호출부 유지: fetchOrders(page) / fetchOrders() → 현재 URL 재검증
   const fetchOrders = useCallback((_p?: number) => refresh(), [refresh])
 
-  // MakeShop 수신 (수동)
+  // MakeShop 수신 (수동) — 상태를 서버(Setting)에 기록하고 폴링해서 탭 이동/새로고침에도 유지.
   const { lang } = useI18n()
-  const [msImporting, setMsImporting] = useState(false)
-  const [msResult, setMsResult] = useState<string | null>(null)
+  type MsStatus = { state: 'idle' | 'running' | 'done' | 'error'; startedAt?: string; finishedAt?: string; created?: number; dup?: number; partial?: number; error?: string }
+  const [msStatus, setMsStatus] = useState<MsStatus | null>(null)
   const [msConfirm, setMsConfirm] = useState(false)
-  const importMakeshop = async () => {
-    setMsImporting(true); setMsResult(null)
-    try {
-      const res = await fetch('/api/makeshop/import-orders?days=30', { method: 'POST' })
-      const d = await res.json()
-      if (!res.ok || !d.ok) {
-        setMsResult('⚠️ ' + (d.error === 'not_configured' ? (lang === 'ja' ? 'MakeShop連携が未設定' : 'MakeShop 연결 미설정') : `${d.error}${d.detail ? ' — ' + JSON.stringify(d.detail).slice(0, 200) : ''}`))
+  const [msDismissed, setMsDismissed] = useState(false)
+  const msPollingRef = React.useRef(false)
+  const expectingRef = React.useRef(false)   // 이 화면에서 수신을 시작함 → 서버 기록을 기다림
+  const sawRunningRef = React.useRef(false)
+  const pollStartRef = React.useRef(0)
+  const prevStateRef = React.useRef<string | null>(null)
+
+  const pollStatus = useCallback(async () => {
+    let s: MsStatus
+    try { s = await (await fetch('/api/makeshop/import-status', { cache: 'no-store' })).json() }
+    catch { msPollingRef.current = false; return }
+
+    let display: MsStatus = s
+    if (expectingRef.current) {
+      if (s.state === 'running') {
+        sawRunningRef.current = true
+      } else if (!sawRunningRef.current) {
+        // 서버가 아직 '시작'을 기록하기 전(직전 실행의 잔상일 수 있음) → 대기 표시
+        if (Date.now() - pollStartRef.current < 180000) {
+          display = { state: 'running', startedAt: new Date(pollStartRef.current).toISOString() }
+        } else {
+          expectingRef.current = false
+          display = { state: 'error', error: 'timeout' }
+        }
       } else {
-        setMsResult(`✅ ${t.orders.msImported} ${d.created} · ${t.orders.msDup} ${d.dup} · ${t.orders.msPartial} ${d.partial}`)
-        refresh()
+        expectingRef.current = false; sawRunningRef.current = false   // 시작을 봤고 이제 끝남
       }
-    } catch (e) { setMsResult('⚠️ ' + String(e)) } finally { setMsImporting(false) }
-  }
+    }
+
+    setMsStatus(display)
+    if (prevStateRef.current === 'running' && display.state !== 'running') { refresh(); setMsDismissed(false) }
+    prevStateRef.current = display.state
+    if (display.state === 'running') setTimeout(pollStatus, 3000)
+    else msPollingRef.current = false
+  }, [refresh])
+
+  const startPolling = useCallback(() => {
+    if (msPollingRef.current) return
+    msPollingRef.current = true
+    pollStatus()
+  }, [pollStatus])
+
+  // 마운트 시 현재 수신상태 확인(진행 중이면 이어서 표시, 끝났으면 마지막 결과 표시)
+  useEffect(() => { startPolling() }, [startPolling])
+
+  const importMakeshop = useCallback(() => {
+    setMsDismissed(false)
+    expectingRef.current = true; sawRunningRef.current = false; pollStartRef.current = Date.now()
+    prevStateRef.current = 'running'
+    setMsStatus({ state: 'running', startedAt: new Date().toISOString() })
+    // 완료를 기다리지 않고 시작만 시킨다(작업은 서버에서 끝까지 실행) → 상태는 폴링으로 추적
+    fetch('/api/makeshop/import-orders?days=30', { method: 'POST' }).catch(() => {})
+    startPolling()
+  }, [startPolling])
 
   // 필터/탭 변경 시 1페이지로 (목록 로드는 useApiCache가 ordersUrl 변경으로 처리)
   useEffect(() => { setPage(1) }, [statusFilter, payFilter, searchQ, tab])
@@ -252,10 +293,11 @@ export default function OrdersPage() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setMsConfirm(true)}
-            disabled={msImporting}
+            disabled={msStatus?.state === 'running'}
             className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors disabled:opacity-60"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${msImporting ? 'animate-spin' : ''}`} /> {t.orders.msReceive}
+            <RefreshCw className={`w-3.5 h-3.5 ${msStatus?.state === 'running' ? 'animate-spin' : ''}`} />
+            {msStatus?.state === 'running' ? (lang === 'ja' ? '取込中…' : '수신 중…') : t.orders.msReceive}
           </button>
           <a
             href={`/api/orders?format=csv&completed=${tab === 'done' ? '1' : '0'}${statusFilter ? `&status=${statusFilter}` : ''}${payFilter ? `&paymentStatus=${payFilter}` : ''}${searchQ ? `&q=${encodeURIComponent(searchQ)}` : ''}`}
@@ -269,11 +311,26 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {/* MakeShop 수신 결과 */}
-      {msResult && (
-        <div className="mb-4 flex items-center justify-between gap-3 px-4 py-2.5 rounded-lg text-sm font-medium bg-indigo-50 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-700">
-          <span>{msResult}</span>
-          <button onClick={() => setMsResult(null)} className="text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-100"><X className="w-4 h-4" /></button>
+      {/* MakeShop 수신 상태 (진행 중/완료/실패 — 탭 이동·새로고침에도 유지) */}
+      {msStatus?.state === 'running' && (
+        <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-indigo-50 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-700">
+          <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
+          <span>{lang === 'ja' ? 'MakeShopから受注を取込中… 他のタブに移動しても処理は続きます。' : 'MakeShop에서 주문 수신 중… 다른 탭으로 이동해도 계속 진행됩니다.'}</span>
+        </div>
+      )}
+      {msStatus?.state === 'done' && !msDismissed && (
+        <div className="mb-4 flex items-center justify-between gap-3 px-4 py-2.5 rounded-lg text-sm font-medium bg-emerald-50 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-700">
+          <span>
+            ✅ {lang === 'ja' ? '取込完了' : '수신 완료'} · {t.orders.msImported} {msStatus.created ?? 0} · {t.orders.msDup} {msStatus.dup ?? 0} · {t.orders.msPartial} {msStatus.partial ?? 0}
+            {msStatus.finishedAt ? ` · ${new Date(msStatus.finishedAt).toLocaleTimeString(lang === 'ja' ? 'ja-JP' : 'ko-KR', { hour: '2-digit', minute: '2-digit' })}` : ''}
+          </span>
+          <button onClick={() => setMsDismissed(true)} className="text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-100 shrink-0"><X className="w-4 h-4" /></button>
+        </div>
+      )}
+      {msStatus?.state === 'error' && !msDismissed && (
+        <div className="mb-4 flex items-center justify-between gap-3 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-700">
+          <span>⚠️ {lang === 'ja' ? '取込失敗' : '수신 실패'}: {msStatus.error || 'unknown'}</span>
+          <button onClick={() => setMsDismissed(true)} className="text-red-500 hover:text-red-700 dark:hover:text-red-100 shrink-0"><X className="w-4 h-4" /></button>
         </div>
       )}
 

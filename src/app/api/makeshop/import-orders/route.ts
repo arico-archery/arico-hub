@@ -102,11 +102,20 @@ export async function GET(req: Request) {
   }
 }
 
+// 수신 진행상태를 Setting에 기록(탭 이동/새로고침에도 유지). 화면이 status API로 조회.
+const STATUS_KEY = 'makeshop_import_status'
+async function writeStatus(s: Record<string, unknown>) {
+  const value = JSON.stringify(s)
+  await prisma.setting.upsert({ where: { key: STATUS_KEY }, create: { key: STATUS_KEY, value }, update: { value } })
+}
+
 // POST — 실제 생성. importable(미중복 & 전품목 매칭)만 생성.
 export async function POST(req: Request) {
   if (!makeshopConfigured()) return NextResponse.json({ ok: false, error: 'not_configured' }, { status: 503 })
   const days = Math.min(365, Math.max(1, Number(new URL(req.url).searchParams.get('days')) || 90))
+  const startedAt = new Date().toISOString()
   try {
+    await writeStatus({ state: 'running', days, startedAt, finishedAt: null, created: 0, dup: 0, partial: 0 })
     const { rows, catMap, prodMap, rates, memberMap } = await buildPreview(days)
     const targets = rows.filter(r => !r.dup)   // 중복 아닌 전부 (미매칭 품목 포함)
 
@@ -209,9 +218,12 @@ export async function POST(req: Request) {
       created++
     }
     skipped = rows.filter(r => r.dup).length
-    return NextResponse.json({ ok: true, created, skipped, dup: skipped, etcCreated, custCreated, custUpdated, partial: rows.filter(r => !r.dup && !r.allMatched).length })
+    const partial = rows.filter(r => !r.dup && !r.allMatched).length
+    await writeStatus({ state: 'done', days, startedAt, finishedAt: new Date().toISOString(), created, dup: skipped, partial, custCreated, custUpdated })
+    return NextResponse.json({ ok: true, created, skipped, dup: skipped, etcCreated, custCreated, custUpdated, partial })
   } catch (e) {
     const err = e instanceof MakeshopError ? { error: e.message, detail: e.detail } : { error: String(e) }
+    await writeStatus({ state: 'error', days, startedAt, finishedAt: new Date().toISOString(), created: 0, dup: 0, partial: 0, error: String(err.error) }).catch(() => {})
     return NextResponse.json({ ok: false, ...err }, { status: 502 })
   }
 }
