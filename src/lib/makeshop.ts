@@ -128,7 +128,11 @@ export type MakeshopBasket = {
   productCode: string; variationCustomCode: string; janCode: string
   amount: number; price: number; productName: string
 }
-export type MakeshopDelivery = { deliveryStatus: string; shippingCharge: number; basketInfos: MakeshopBasket[] }
+export type MakeshopDelivery = {
+  deliveryStatus: string; shippingCharge: number
+  slipNumber: string; deliveryDate: string; estimatedShipmentDate: string
+  basketInfos: MakeshopBasket[]
+}
 export type MakeshopOrderDetail = {
   systemOrderNumber: string; displayOrderNumber: string; orderDate: string; memberId: string
   sumPrice: number; paymentStatusCode: string
@@ -140,7 +144,7 @@ const ORDER_DETAIL_QUERY = `query searchOrder($input: SearchOrderRequest!){
     orders {
       systemOrderNumber displayOrderNumber orderDate memberId sumPrice paymentStatusCode
       deliveryInfos {
-        deliveryStatus shippingCharge
+        deliveryStatus shippingCharge slipNumber deliveryDate estimatedShipmentDate
         basketInfos { productCode variationCustomCode janCode amount price productName }
       }
     }
