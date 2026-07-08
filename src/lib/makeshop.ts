@@ -83,3 +83,30 @@ export async function getAllProducts(limit = 1000, maxPages = 200): Promise<Make
   }
   return out
 }
+
+// ── 회원 (searchMember) ─────────────────────────────
+export type MakeshopMember = { groupId: string; groupName: string; memberId: string; name: string }
+export async function searchMemberPage(page = 1, limit = 100): Promise<MakeshopMember[]> {
+  const data = await makeshopQuery<{ searchMember?: { members?: MakeshopMember[] } }>(
+    `query searchMember($input: SearchMemberRequest!){ searchMember(input: $input){ members { groupId groupName memberId name } } }`,
+    { input: { page, limit } },
+  )
+  return data.searchMember?.members ?? []
+}
+
+// ── 주문 (searchOrder) ─────────────────────────────
+// 날짜는 YYYYMMDDHHmmss (예: 20221230000000).
+export type MakeshopOrder = { systemOrderNumber: string; displayOrderNumber: string; memberId: string; orderDate: string; sumPrice: number }
+export async function searchOrderPage(startOrderDate: string, endOrderDate: string, page = 1, limit = 100): Promise<MakeshopOrder[]> {
+  const data = await makeshopQuery<{ searchOrder?: { orders?: MakeshopOrder[] } }>(
+    `query searchOrder($input: SearchOrderRequest!){ searchOrder(input: $input){ orders { systemOrderNumber displayOrderNumber memberId orderDate sumPrice } } }`,
+    { input: { startOrderDate, endOrderDate, page, limit } },
+  )
+  return data.searchOrder?.orders ?? []
+}
+
+// YYYYMMDDHHmmss
+export function fmtOrderDate(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
+}
