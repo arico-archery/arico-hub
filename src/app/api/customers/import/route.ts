@@ -11,21 +11,32 @@ function cleanHeader(h: string): string {
   return h.replace(/^﻿/, '').replace(/"/g, '').split(/\s{2,}/)[0].trim()
 }
 
-function parseCsvLine(line: string): string[] {
-  const out: string[] = []; let cur = ''; let q = false
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i]
-    if (c === '"') { if (q && line[i + 1] === '"') { cur += '"'; i++ } else q = !q }
-    else if (c === ',' && !q) { out.push(cur.trim()); cur = '' }
-    else cur += c
+// RFC4180 파서: 따옴표 안의 콤마/개행을 올바르게 처리(메이크샵 메모·주소에 개행 포함될 수 있음)
+function parseCsvRecords(text: string): string[][] {
+  const t = text.replace(/^﻿/, '')
+  const records: string[][] = []
+  let field = '', record: string[] = [], inQ = false
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i]
+    if (inQ) {
+      if (c === '"') { if (t[i + 1] === '"') { field += '"'; i++ } else inQ = false }
+      else field += c
+    } else {
+      if (c === '"') inQ = true
+      else if (c === ',') { record.push(field); field = '' }
+      else if (c === '\n') { record.push(field); records.push(record); record = []; field = '' }
+      else if (c === '\r') { /* \r\n / \r → 개행 처리로 통일 */ if (t[i + 1] !== '\n') { record.push(field); records.push(record); record = []; field = '' } }
+      else field += c
+    }
   }
-  out.push(cur.trim()); return out
+  if (field !== '' || record.length) { record.push(field); records.push(record) }
+  return records.filter(r => r.some(v => v.trim() !== ''))
 }
 function parseCSV(text: string): Row[] {
-  const lines = text.replace(/\r\n?/g, '\n').split('\n').filter(l => l.trim())
-  if (lines.length < 2) return []
-  const headers = parseCsvLine(lines[0]).map(cleanHeader)
-  return lines.slice(1).map(l => { const v = parseCsvLine(l); return Object.fromEntries(headers.map((h, i) => [h, v[i] ?? ''])) })
+  const recs = parseCsvRecords(text)
+  if (recs.length < 2) return []
+  const headers = recs[0].map(h => cleanHeader(h.trim()))
+  return recs.slice(1).map(v => Object.fromEntries(headers.map((h, i) => [h, (v[i] ?? '').trim()])))
 }
 function parseExcel(buf: ArrayBuffer): Row[] {
   const wb = XLSX.read(buf, { type: 'array' })
