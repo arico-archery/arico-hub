@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
 import { useApiCache } from '@/lib/useApiCache'
-import { Search, Package, RefreshCw, Save, CheckCircle, ChevronLeft, ChevronRight, ChevronDown, Tag, Tags, Download, Percent, Plus, Pencil, Trash2, X, AlertTriangle, ScanLine, Layers } from 'lucide-react'
+import { Search, Package, RefreshCw, Save, CheckCircle, ChevronLeft, ChevronRight, ChevronDown, Tag, Tags, Download, Percent, Plus, Pencil, Trash2, X, AlertTriangle, ScanLine, Layers, Globe } from 'lucide-react'
 import SupplierBadge from '@/components/SupplierBadge'
 import BarcodeScanner from '@/components/BarcodeScanner'
 import ProfitBar from '@/components/ProfitBar'
@@ -15,6 +15,7 @@ type Product = {
   costPrice: number; msrp: number; salePriceJpy: number; unit: string; availability: string
   imageUrl1: string; url: string; supplierCode: string; supplier: Supplier
   optionSize: string; optionColor: string; shopProductId: string; barcode: string
+  inCatalog?: boolean   // ARICO 카탈로그에 매칭됨
 }
 type ExchangeRate = { currency: string; rateToJpy: number }
 // 통합 보기: 코드 접두부로 묶은 상품 그룹
@@ -57,6 +58,7 @@ export default function ProductsPage() {
   const [brandMsg, setBrandMsg] = useState<string | null>(null)
   const [brandDelConfirm, setBrandDelConfirm] = useState(false)
   const [noPriceOnly, setNoPriceOnly] = useState(false)
+  const [catalogFilter, setCatalogFilter] = useState<'' | 'in' | 'out'>('')   // 카탈로그 등록/미등록 구분
   const [rates, setRates] = useState<ExchangeRate[]>([])
   const [page, setPage] = useState(1)
   const [salePrices, setSalePrices] = useState<Record<number, string>>({})
@@ -170,9 +172,9 @@ export default function ProductsPage() {
   // 클라 캐시: 플랫 목록 (현재 뷰가 flat일 때만 fetch)
   const flatUrl = useMemo(() => {
     if (viewMode !== 'flat') return null
-    const params = new URLSearchParams({ q: debouncedQ, supplier: supplierFilter, category: categoryFilter, brand: brandFilter, limit: String(PAGE_SIZE), page: String(page), ...(noPriceOnly ? { noPrice: '1' } : {}) })
+    const params = new URLSearchParams({ q: debouncedQ, supplier: supplierFilter, category: categoryFilter, brand: brandFilter, limit: String(PAGE_SIZE), page: String(page), ...(noPriceOnly ? { noPrice: '1' } : {}), ...(catalogFilter ? { catalogMatch: catalogFilter } : {}) })
     return `/api/products?${params}`
-  }, [viewMode, debouncedQ, supplierFilter, categoryFilter, brandFilter, noPriceOnly, page])
+  }, [viewMode, debouncedQ, supplierFilter, categoryFilter, brandFilter, noPriceOnly, catalogFilter, page])
   const { data: prodData, isLoading: loading, refresh: refreshFlat } = useApiCache<{ products: Product[]; total: number }>(flatUrl)
   const products = prodData?.products ?? []
   const total = prodData?.total ?? 0
@@ -239,7 +241,7 @@ export default function ProductsPage() {
   useEffect(() => {
     setPage(1)
     setExpanded(null)
-  }, [debouncedQ, supplierFilter, categoryFilter, brandFilter, noPriceOnly, viewMode])
+  }, [debouncedQ, supplierFilter, categoryFilter, brandFilter, noPriceOnly, catalogFilter, viewMode])
 
   const handlePriceChange = (id: number, val: string) => {
     setSalePrices(prev => ({ ...prev, [id]: val }))
@@ -501,6 +503,19 @@ export default function ProductsPage() {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
+        {/* ARICO 카탈로그 등록 / 미등록 구분 (플랫 보기) */}
+        {viewMode === 'flat' && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <Globe className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <span className="text-xs text-gray-500 dark:text-gray-400 mr-0.5">{t.products.catalogFilterLabel}</span>
+            {([['', t.common.all], ['in', t.products.catalogMatched], ['out', t.products.catalogUnmatched]] as const).map(([v, l]) => (
+              <button key={v || 'all'} onClick={() => setCatalogFilter(v)}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${catalogFilter === v ? 'bg-green-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+        )}
         {categories.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
             <Tag className="w-3.5 h-3.5 text-gray-400 shrink-0" />
@@ -637,6 +652,11 @@ export default function ProductsPage() {
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-gray-600 dark:text-gray-400 text-xs font-medium">{p.productCode} · {p.category || '—'}</p>
+                      {p.inCatalog && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 font-medium inline-flex items-center gap-0.5">
+                          <Globe className="w-2.5 h-2.5" />{t.products.catalogBadge}
+                        </span>
+                      )}
                       {p.optionSize && (
                         <span className="text-xs px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium">{p.optionSize}</span>
                       )}

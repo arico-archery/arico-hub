@@ -51,6 +51,16 @@ export async function GET(req: Request) {
   }
 
   const noPrice = searchParams.get('noPrice') === '1'
+  const catalogMatch = searchParams.get('catalogMatch') ?? '' // 'in'=카탈로그 등록 / 'out'=미등록
+
+  // ARICO 카탈로그에 매칭된 공급사 상품 id 집합 (필터 + 행별 플래그용). 매칭분은 소수(~수백)라 가벼움.
+  const matchedRows = await prisma.aricoCatalog.findMany({
+    where: { supplierProductId: { not: null } },
+    select: { supplierProductId: true },
+    distinct: ['supplierProductId'],
+  })
+  const matchedIds = matchedRows.map(r => r.supplierProductId!).filter((v): v is number => v != null)
+  const matchedSet = new Set(matchedIds)
 
   const where = {
     ...(q ? {
@@ -66,6 +76,8 @@ export async function GET(req: Request) {
     ...(category ? { category } : {}),
     ...(brand ? { brand } : {}),
     ...(noPrice ? { salePriceJpy: 0 } : {}),
+    ...(catalogMatch === 'in' ? { id: { in: matchedIds } } : {}),
+    ...(catalogMatch === 'out' ? { id: { notIn: matchedIds } } : {}),
   }
 
   const exportCsv = searchParams.get('format') === 'csv'
@@ -96,7 +108,8 @@ export async function GET(req: Request) {
     })
   }
 
-  return NextResponse.json({ products, total, page, limit })
+  const productsWithFlag = products.map(p => ({ ...p, inCatalog: matchedSet.has(p.id) }))
+  return NextResponse.json({ products: productsWithFlag, total, page, limit })
 }
 
 // POST /api/products — 수동 상품 등록 (기타 브랜드 등)
