@@ -41,7 +41,8 @@ type PreviewRow = {
 async function buildPreview(days: number) {
   const now = new Date()
   const start = fmtOrderDate(new Date(now.getTime() - days * 86400000))
-  const end = fmtOrderDate(now)
+  // 종료일 +1일 버퍼: 서버(UTC)-MakeShop(JST 9h) 시차로 당일 최신 주문이 범위 끝에서 누락되는 것 방지
+  const end = fmtOrderDate(new Date(now.getTime() + 86400000))
   const orders = await getAllOrdersDetailed(start, end)
 
   // 카탈로그: productCode → {supplierProductId, name}
