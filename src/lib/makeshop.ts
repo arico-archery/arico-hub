@@ -190,3 +190,13 @@ export async function getAllMembersDetailed(limit = 1000, maxPages = 100): Promi
   }
   return out
 }
+
+// 회원 우편번호(7자리) → 000-0000
+export function memberPostal(m?: MakeshopMemberDetail | null): string {
+  const z = (m?.hpost ?? '').replace(/[^0-9]/g, '')
+  return z.length === 7 ? `${z.slice(0, 3)}-${z.slice(3)}` : z
+}
+// 회원 주소 = 도도부현 + 시구정촌
+export function memberAddress(m?: MakeshopMemberDetail | null): string {
+  return m ? [m.haddressAddr, m.haddress2].filter(Boolean).join(' ') : ''
+}

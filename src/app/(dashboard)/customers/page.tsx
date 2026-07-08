@@ -3,7 +3,8 @@
 import { useState, useRef } from 'react'
 import { useCachedState } from '@/lib/useApiCache'
 import Link from 'next/link'
-import { Users, Plus, Phone, Mail, MapPin, Pencil, Check, X, Trash2, Search, ShoppingCart, Upload, FileDown, FileSpreadsheet, Camera } from 'lucide-react'
+import { Users, Plus, Phone, Mail, MapPin, Pencil, Check, X, Trash2, Search, ShoppingCart, Upload, FileDown, FileSpreadsheet, Camera, Download } from 'lucide-react'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { formatJpy } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
 
@@ -128,6 +129,19 @@ export default function CustomersPage() {
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<string | null>(null)
+  // MakeShop 회원 불러오기
+  const [msSyncing, setMsSyncing] = useState(false)
+  const [msResult, setMsResult] = useState<string | null>(null)
+  const [msConfirm, setMsConfirm] = useState(false)
+  const syncMembers = async () => {
+    setMsSyncing(true); setMsResult(null)
+    try {
+      const res = await fetch('/api/makeshop/sync-members', { method: 'POST' })
+      const d = await res.json()
+      if (!res.ok || !d.ok) setMsResult('⚠️ ' + (d.error === 'not_configured' ? (d.hint || 'API 미설정') : `${d.error}${d.detail ? ' — ' + JSON.stringify(d.detail).slice(0, 200) : ''}`))
+      else { setMsResult(`✅ ${d.fetched}명 조회 · 신규 ${d.created} · 갱신 ${d.updated}`); loadCustomers() }
+    } catch (e) { setMsResult('⚠️ ' + String(e)) } finally { setMsSyncing(false) }
+  }
 
   const downloadCustomerTemplate = () => {
     const headers = ['이름', '구분', '회사', '전화', '이메일', '우편번호', '주소', '등록번호', '담당자', '청구지', '메모']
@@ -270,6 +284,15 @@ export default function CustomersPage() {
             {t.customers.excelImport}
           </button>
           <button
+            onClick={() => setMsConfirm(true)}
+            disabled={msSyncing}
+            className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            title="MakeShop 회원을 거래처로 불러오기/갱신"
+          >
+            <Download className={`w-4 h-4 ${msSyncing ? 'animate-spin' : ''}`} />
+            MakeShop 회원
+          </button>
+          <button
             onClick={() => { setShowForm(true); setEditingId(null) }}
             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
           >
@@ -318,6 +341,12 @@ export default function CustomersPage() {
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 text-red-700 dark:text-red-400 text-sm px-4 py-3 rounded-lg mb-4 flex items-center justify-between">
           {errorMsg}
           <button onClick={() => setErrorMsg('')}><X className="w-4 h-4" /></button>
+        </div>
+      )}
+      {msResult && (
+        <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/50 text-indigo-800 dark:text-indigo-200 text-sm px-4 py-3 rounded-lg mb-4 flex items-center justify-between">
+          <span className="break-all">MakeShop 회원: {msResult}</span>
+          <button onClick={() => setMsResult(null)}><X className="w-4 h-4 shrink-0" /></button>
         </div>
       )}
 
@@ -462,6 +491,16 @@ export default function CustomersPage() {
           </table>
         </div>
       )}
+
+      <ConfirmDialog
+        open={msConfirm}
+        title="MakeShop 회원 불러오기"
+        message={'MakeShop 전체 회원을 거래처로 가져와 이름·이메일·전화·주소·우편번호를 채웁니다.\n기존 연동 거래처는 갱신, 신규는 생성됩니다. 진행할까요?'}
+        confirmText="불러오기"
+        cancelText={t.common.cancel}
+        onConfirm={() => { setMsConfirm(false); syncMembers() }}
+        onCancel={() => setMsConfirm(false)}
+      />
     </div>
   )
 }

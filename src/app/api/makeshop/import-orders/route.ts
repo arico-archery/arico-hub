@@ -4,17 +4,9 @@ import { createWithSeqRetry } from '@/lib/seq'
 import { calcCostJpy } from '@/lib/utils'
 import {
   getAllOrdersDetailed, getAllMembersDetailed, fmtOrderDate,
-  makeshopConfigured, MakeshopError, type MakeshopMemberDetail,
+  memberPostal, memberAddress,
+  makeshopConfigured, MakeshopError,
 } from '@/lib/makeshop'
-
-// MakeShop 회원 주소/우편번호 → 거래처 필드로 변환
-function memberPostal(m?: MakeshopMemberDetail): string {
-  const z = (m?.hpost ?? '').replace(/[^0-9]/g, '')
-  return z.length === 7 ? `${z.slice(0, 3)}-${z.slice(3)}` : z
-}
-function memberAddress(m?: MakeshopMemberDetail): string {
-  return m ? [m.haddressAddr, m.haddress2].filter(Boolean).join(' ') : ''
-}
 
 // 입금상태 매핑(임시): 0002=입금완료, 그 외=미입금. 실제 코드 뜻 확인되면 보정.
 function mapPayment(code: string): 'paid' | 'unpaid' {
