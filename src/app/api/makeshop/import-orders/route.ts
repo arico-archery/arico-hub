@@ -3,9 +3,18 @@ import { prisma } from '@/lib/prisma'
 import { createWithSeqRetry } from '@/lib/seq'
 import { calcCostJpy } from '@/lib/utils'
 import {
-  getAllOrdersDetailed, getAllMembers, fmtOrderDate,
-  makeshopConfigured, MakeshopError,
+  getAllOrdersDetailed, getAllMembersDetailed, fmtOrderDate,
+  makeshopConfigured, MakeshopError, type MakeshopMemberDetail,
 } from '@/lib/makeshop'
+
+// MakeShop 회원 주소/우편번호 → 거래처 필드로 변환
+function memberPostal(m?: MakeshopMemberDetail): string {
+  const z = (m?.hpost ?? '').replace(/[^0-9]/g, '')
+  return z.length === 7 ? `${z.slice(0, 3)}-${z.slice(3)}` : z
+}
+function memberAddress(m?: MakeshopMemberDetail): string {
+  return m ? [m.haddressAddr, m.haddress2].filter(Boolean).join(' ') : ''
+}
 
 // 입금상태 매핑(임시): 0002=입금완료, 그 외=미입금. 실제 코드 뜻 확인되면 보정.
 function mapPayment(code: string): 'paid' | 'unpaid' {
@@ -34,9 +43,9 @@ async function buildPreview(days: number) {
   const products = await prisma.product.findMany({ where: { id: { in: supIds } }, include: { supplier: true } })
   const prodMap = new Map(products.map(p => [p.id, p]))
   const rates = await prisma.exchangeRate.findMany()
-  // 회원 memberId → name
-  const members = await getAllMembers()
-  const memberMap = new Map(members.map(m => [m.memberId, m.name]))
+  // 회원 memberId → 상세(이름·이메일·전화·주소)
+  const members = await getAllMembersDetailed()
+  const memberMap = new Map(members.map(m => [m.memberId, m]))
   // 이미 수신한 주문
   const imported = new Set((await prisma.order.findMany({ where: { externalOrderNo: { not: '' } }, select: { externalOrderNo: true } })).map(o => o.externalOrderNo))
 
@@ -54,12 +63,12 @@ async function buildPreview(days: number) {
     const itemsSubtotal = items.reduce((s, it) => s + it.price * it.amount, 0)
     return {
       externalOrderNo: o.systemOrderNumber, displayOrderNumber: o.displayOrderNumber,
-      orderDate: o.orderDate, memberId: o.memberId, customerName: memberMap.get(o.memberId) || o.memberId,
+      orderDate: o.orderDate, memberId: o.memberId, customerName: memberMap.get(o.memberId)?.name || o.memberId,
       sumPrice: Number(o.sumPrice) || 0, shipping, itemsSubtotal, payment: mapPayment(o.paymentStatusCode),
       dup: imported.has(o.systemOrderNumber), allMatched: items.length > 0 && items.every(i => i.matched), items,
     }
   })
-  return { start, end, rows, catMap, prodMap, rates }
+  return { start, end, rows, catMap, prodMap, rates, memberMap }
 }
 
 // GET — 미리보기(검수). 쓰기 없음.
@@ -86,7 +95,7 @@ export async function POST(req: Request) {
   if (!makeshopConfigured()) return NextResponse.json({ ok: false, error: 'not_configured' }, { status: 503 })
   const days = Math.min(365, Math.max(1, Number(new URL(req.url).searchParams.get('days')) || 90))
   try {
-    const { rows, catMap, prodMap, rates } = await buildPreview(days)
+    const { rows, catMap, prodMap, rates, memberMap } = await buildPreview(days)
     const targets = rows.filter(r => !r.dup)   // 중복 아닌 전부 (미매칭 품목 포함)
 
     // 거래처 코드 러닝 카운터
@@ -120,11 +129,17 @@ export async function POST(req: Request) {
     let created = 0, skipped = 0, etcCreated = 0
     const etcSeen = new Set<string>()
     for (const r of targets) {
-      // 거래처 확보 (전부 연동)
+      // 거래처 확보 (전부 연동, 회원 연락처·주소까지)
       let customerId = custByMember.get(r.memberId)
       if (!customerId) {
         custSeq += 1
-        const c = await prisma.customer.create({ data: { code: `C${String(custSeq).padStart(3, '0')}`, name: r.customerName || r.memberId, externalMemberId: r.memberId } })
+        const m = memberMap.get(r.memberId)
+        const c = await prisma.customer.create({ data: {
+          code: `C${String(custSeq).padStart(3, '0')}`,
+          name: r.customerName || r.memberId, externalMemberId: r.memberId,
+          email: m?.email || '', phone: m?.tel || '',
+          address: memberAddress(m), postalCode: memberPostal(m),
+        } })
         customerId = c.id
         custByMember.set(r.memberId, customerId)
       }
