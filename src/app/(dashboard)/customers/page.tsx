@@ -69,10 +69,10 @@ function CustomerFormFields({ form, patch }: { form: FormState; patch: (p: Parti
       {/* 구분 탭 (개인/기관/기업) — 탭에 따라 아래 입력 항목이 바뀜 */}
       <div>
         <label className="text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1 block">{t.customers.labelType}</label>
-        <div className="flex rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden">
+        <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden">
           {CUSTOMER_TYPES.map(({ v, key }) => (
             <button key={v} type="button" onClick={() => patch({ customerType: v })}
-              className={`flex-1 px-3 py-2 text-sm font-medium transition-colors border-r last:border-r-0 border-gray-200 dark:border-gray-600 ${form.customerType === v ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
+              className={`px-4 py-1.5 text-sm font-medium transition-colors border-r last:border-r-0 border-gray-200 dark:border-gray-600 ${form.customerType === v ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
               {t.customers[key]}
             </button>
           ))}
