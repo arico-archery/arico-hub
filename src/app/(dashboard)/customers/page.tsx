@@ -134,6 +134,7 @@ export default function CustomersPage() {
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<string | null>(null)
+  const [importProgress, setImportProgress] = useState<string | null>(null)
   // MakeShop 회원 불러오기
   const [msSyncing, setMsSyncing] = useState(false)
   const [msResult, setMsResult] = useState<string | null>(null)
@@ -189,19 +190,29 @@ export default function CustomersPage() {
 
   const handleImport = async () => {
     if (!importFile) return
-    setImporting(true); setImportResult(null)
+    setImporting(true); setImportResult(null); setImportProgress(null)
+    const LIMIT = 150   // 청크 크기(타임아웃 회피). 클라이언트가 offset을 증가시키며 반복 호출
+    const agg = { imported: 0, updated: 0, skipped: 0, errors: 0 }
+    let offset = 0, total = 0, guard = 0
     try {
-      const fd = new FormData(); fd.append('file', importFile)
-      const res = await fetch('/api/customers/import', { method: 'POST', body: fd })
-      const d = await res.json()
-      if (!res.ok) { setImportResult('⚠️ ' + (d.error || res.status)); return }
-      setImportResult(`✅ ${d.imported}건 등록${d.updated ? ` / ${d.updated} 갱신` : ''} / ${d.skipped} 스킵${d.errors ? ` / ${d.errors} 오류` : ''}`)
+      do {
+        const fd = new FormData(); fd.append('file', importFile)
+        const res = await fetch(`/api/customers/import?offset=${offset}&limit=${LIMIT}`, { method: 'POST', body: fd })
+        const d = await res.json()
+        if (!res.ok) { setImportResult(`⚠️ ${offset}행부터 실패: ${d.error || res.status} (여기까지: ${agg.imported}등록/${agg.updated}갱신)`); return }
+        agg.imported += d.imported; agg.updated += d.updated; agg.skipped += d.skipped; agg.errors += d.errors
+        total = d.total; offset = d.nextOffset
+        setImportProgress(`${Math.min(offset, total).toLocaleString()} / ${total.toLocaleString()} 처리 중…`)
+        if (d.done) break
+      } while (offset < total && ++guard < 1000)
+      setImportResult(`✅ ${agg.imported}건 등록${agg.updated ? ` / ${agg.updated} 갱신` : ''} / ${agg.skipped} 스킵${agg.errors ? ` / ${agg.errors} 오류` : ''}`)
       setImportFile(null)
       loadCustomers()
     } catch (e) {
       setImportResult('⚠️ ' + String(e))
     } finally {
       setImporting(false)
+      setImportProgress(null)
     }
   }
 
@@ -350,7 +361,8 @@ export default function CustomersPage() {
               className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
               {importing ? t.common.loading : t.customers.excelImport}
             </button>
-            {importResult && <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{importResult}</span>}
+            {importing && importProgress && <span className="text-sm font-medium text-blue-600 dark:text-blue-300 tabular-nums">{importProgress}</span>}
+            {!importing && importResult && <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{importResult}</span>}
           </div>
         </div>
       )}

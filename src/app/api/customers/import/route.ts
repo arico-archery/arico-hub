@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import * as XLSX from 'xlsx'
 
+export const maxDuration = 60   // Pro면 60초까지(Hobby는 10초 상한). 대량은 클라이언트가 청크로 분할 호출.
+
 type Row = Record<string, string>
 
 // 헤더에서 메이크샵 주석 제거: "お名前  必須入力" → "お名前" (2칸 이상 공백 뒤는 주석)
@@ -74,6 +76,13 @@ export async function POST(req: Request) {
   const rows = /\.xlsx?$/.test(file.name.toLowerCase()) ? parseExcel(buf) : parseCSV(decodeCsv(buf))
   if (rows.length === 0) return NextResponse.json({ error: 'no data' }, { status: 400 })
 
+  // 대량 파일은 클라이언트가 offset/limit로 나눠 호출 → 각 요청은 slice만 처리(타임아웃 회피)
+  const url = new URL(req.url)
+  const total = rows.length
+  const limit = Math.min(1000, Math.max(1, Number(url.searchParams.get('limit')) || total))
+  const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0)
+  const slice = rows.slice(offset, offset + limit)
+
   // 기존 거래처: 会員ID(externalMemberId) / 이메일 / 전화로 매칭 → 있으면 갱신, 없으면 생성
   const existing = await prisma.customer.findMany({ select: { id: true, email: true, phone: true, externalMemberId: true } })
   const byExt = new Map(existing.filter(c => c.externalMemberId).map(c => [c.externalMemberId, c.id]))
@@ -86,7 +95,7 @@ export async function POST(req: Request) {
   let imported = 0, updated = 0, skipped = 0
   const errors: string[] = []
 
-  for (const row of rows) {
+  for (const row of slice) {
     try {
       const name = pick(row, ['이름', 'name', '名前', '氏名', '고객명', '顧客名', 'お名前', '会員名'])
       if (!name) { skipped++; continue }
@@ -143,5 +152,6 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ imported, updated, skipped, errors: errors.length, total: rows.length, errorDetails: errors.slice(0, 5) })
+  const nextOffset = offset + slice.length
+  return NextResponse.json({ imported, updated, skipped, errors: errors.length, total, nextOffset, done: nextOffset >= total, errorDetails: errors.slice(0, 5) })
 }
