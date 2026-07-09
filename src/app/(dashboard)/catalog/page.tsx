@@ -114,12 +114,16 @@ function MatchModal({
     setSaving(false)
   }
 
+  const latestQ = useRef('')
   const search = useCallback(async (query: string) => {
-    if (!query.trim()) { setResults([]); return }
+    if (!query.trim()) { latestQ.current = ''; setResults([]); setLoading(false); return }
+    latestQ.current = query
     setLoading(true)
     // 통합(그룹) 검색 — JVD는 변형이 한 그룹으로 묶여서 나옴
     const res = await fetch(`/api/products/groups?q=${encodeURIComponent(query)}&page=1`)
     const data = await res.json()
+    // 경쟁 상태 방지: 더 최신 검색어가 있으면 이 응답은 버린다(느린 광범위 검색이 덮어쓰는 문제)
+    if (latestQ.current !== query) return
     setResults(data.groups ?? [])
     setLoading(false)
   }, [])
