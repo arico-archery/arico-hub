@@ -11,8 +11,8 @@ import {
 import { useT } from '@/lib/i18n'
 
 const SUPPLIER_NAMES: Record<string, Record<string, string>> = {
-  ko: { JVD: 'JVD', MK: 'MK Korea', FIVICS: 'FIVICS', SIBUYA: 'Shibuya', KOREA: 'Korea Archery', ANGEL: 'Angel', WJ: 'WJ Sports', ETC: '기타' },
-  ja: { JVD: 'JVD', MK: 'MK Korea', FIVICS: 'FIVICS', SIBUYA: 'Shibuya', KOREA: 'Korea Archery', ANGEL: 'Angel', WJ: 'WJ Sports', ETC: 'その他' },
+  ko: { ARICO: 'ARICO', JVD: 'JVD', MK: 'MK Korea', FIVICS: 'FIVICS', SIBUYA: 'Shibuya', KOREA: 'Korea Archery', ANGEL: 'Angel', WJ: 'WJ Sports', KOWA: 'KOWA', ETC: '기타' },
+  ja: { ARICO: 'ARICO', JVD: 'JVD', MK: 'MK Korea', FIVICS: 'FIVICS', SIBUYA: 'Shibuya', KOREA: 'Korea Archery', ANGEL: 'Angel', WJ: 'WJ Sports', KOWA: 'KOWA', ETC: 'その他' },
 }
 
 export type DashboardData = {

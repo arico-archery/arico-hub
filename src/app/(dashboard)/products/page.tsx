@@ -32,7 +32,7 @@ type GroupVariant = {
 
 const SUPPLIERS = ['', ...SUPPLIER_LIST]
 const SUPPLIER_NAMES: Record<string, string> = {
-  JVD: 'JVD', MK: 'MK Korea', FIVICS: 'FIVICS', SIBUYA: 'Shibuya', KOREA: 'Korea Archery', ANGEL: 'Angel', WJ: 'WJ Sports', ETC: '기타'
+  ARICO: 'ARICO', JVD: 'JVD', MK: 'MK Korea', FIVICS: 'FIVICS', SIBUYA: 'Shibuya', KOREA: 'Korea Archery', ANGEL: 'Angel', WJ: 'WJ Sports', KOWA: 'KOWA', ETC: '기타'
 }
 const PAGE_SIZE = 50
 const MAX_CATEGORY_BUTTONS = 8

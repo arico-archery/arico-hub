@@ -97,6 +97,7 @@ export function calcCostJpy(
 }
 
 export const SUPPLIER_COLORS: Record<string, string> = {
+  ARICO: '#e11d48',  // ARICO 자체제작
   JVD: '#6366f1',
   MK: '#8b5cf6',
   FIVICS: '#3b82f6',
@@ -104,8 +105,9 @@ export const SUPPLIER_COLORS: Record<string, string> = {
   KOREA: '#10b981',
   ANGEL: '#f59e0b',
   WJ: '#f97316',
+  KOWA: '#14b8a6',  // KOWA 광학
   ETC: '#64748b',  // 기타 브랜드 (수동 입력)
 }
 
-export const SUPPLIER_LIST = ['JVD', 'MK', 'FIVICS', 'SIBUYA', 'KOREA', 'ANGEL', 'WJ', 'ETC'] as const
+export const SUPPLIER_LIST = ['ARICO', 'JVD', 'MK', 'FIVICS', 'SIBUYA', 'KOREA', 'ANGEL', 'WJ', 'KOWA', 'ETC'] as const
 export type SupplierCode = typeof SUPPLIER_LIST[number]
