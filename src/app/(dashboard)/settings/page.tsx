@@ -8,7 +8,7 @@ import { useT } from '@/lib/i18n'
 // 발행처·계좌를 여러 프로필로 저장(JSON 배열). 문서 발행 시 선택.
 type CompanyProfile = {
   label: string
-  company_name: string; company_regno: string; company_contact: string
+  company_name: string; company_regno: string; company_contact: string; company_ceo: string
   company_address: string; company_tel: string; company_email: string; company_web: string
 }
 type BankProfile = {
@@ -16,7 +16,7 @@ type BankProfile = {
   bank_name: string; bank_branch: string; bank_account_type: string
   bank_account_no: string; bank_account_holder: string; bank_note: string
 }
-const EMPTY_COMPANY: CompanyProfile = { label: '', company_name: '', company_regno: '', company_contact: '', company_address: '', company_tel: '', company_email: '', company_web: '' }
+const EMPTY_COMPANY: CompanyProfile = { label: '', company_name: '', company_regno: '', company_contact: '', company_ceo: '', company_address: '', company_tel: '', company_email: '', company_web: '' }
 const EMPTY_BANK: BankProfile = { label: '', bank_name: '', bank_branch: '', bank_account_type: '普通', bank_account_no: '', bank_account_holder: '', bank_note: '' }
 
 // ── 공급사별 CSV 템플릿 정의 ─────────────────────────────────
@@ -166,8 +166,9 @@ export default function SettingsPage() {
       let cps: CompanyProfile[] = []
       try { cps = JSON.parse(data.company_profiles || '[]') } catch { /* ignore */ }
       if (!Array.isArray(cps) || !cps.length) cps = [{ label: '기본',
-        company_name: data.company_name ?? '', company_regno: data.company_regno ?? '', company_contact: data.company_contact ?? '',
+        company_name: data.company_name ?? '', company_regno: data.company_regno ?? '', company_contact: data.company_contact ?? '', company_ceo: data.company_ceo ?? '',
         company_address: data.company_address ?? '', company_tel: data.company_tel ?? '', company_email: data.company_email ?? '', company_web: data.company_web ?? '' }]
+      cps = cps.map(c => ({ ...EMPTY_COMPANY, ...c }))   // 기존 프로필에 company_ceo 등 누락 필드 보강
       setCompanyProfiles(cps)
       // 계좌 프로필
       let bps: BankProfile[] = []
@@ -329,6 +330,7 @@ export default function SettingsPage() {
                 {([
                   { key: 'company_name', label: t.settings.companyName, placeholder: 'ARICO' },
                   { key: 'company_regno', label: t.settings.companyRegno, placeholder: 'T1234567890123' },
+                  { key: 'company_ceo', label: '代表者', placeholder: '尹 惠善' },
                   { key: 'company_contact', label: t.settings.companyContact, placeholder: '山田 太郎' },
                   { key: 'company_tel', label: 'TEL', placeholder: '+81-3-0000-0000' },
                   { key: 'company_email', label: 'Email', placeholder: 'sbs@arico.co.jp' },

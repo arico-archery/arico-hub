@@ -1,9 +1,8 @@
 import { prisma } from '@/lib/prisma'
 import { notFound } from 'next/navigation'
 import { formatJpy } from '@/lib/utils'
-import { DOC_TEXT, DOC_LANGS, DocLang, DocType, fmtDocDate } from '@/lib/documents'
+import { DOC_TEXT, DOC_LANGS, DocLang, DocType, fmtDocDate, fmtDocDateShort, fmtDocDatePadded, inclusiveTax } from '@/lib/documents'
 import DocToolbar from './DocToolbar'
-import { AricoMark } from '@/components/Logo'
 
 async function getSettings(): Promise<Record<string, string>> {
   try {
@@ -14,8 +13,7 @@ async function getSettings(): Promise<Record<string, string>> {
   }
 }
 
-type Row = { name: string; sub: string; qty: number; unitPrice: number; amount: number }
-type TotalRow = { label: string; value: number; bold?: boolean; minus?: boolean }
+type Row = { date: string; name: string; opt: string; txId: string; code: string; taxRate: number; unit: string; qty: number; unitPrice: number; amount: number }
 type DateRow = { label: string; value: string }
 
 export default async function DocumentPage({
@@ -30,6 +28,8 @@ export default async function DocumentPage({
   if (!['invoice', 'quote', 'po'].includes(docType)) notFound()
   const lang: DocLang = DOC_LANGS.includes(sp.lang as DocLang) ? (sp.lang as DocLang) : 'ja'
   const T = DOC_TEXT[lang]
+  const yen = lang === 'ja' ? '円' : ''
+  const totalInclLabel = lang === 'ja' ? '合計金額（税込）' : lang === 'ko' ? '합계금액(세込)' : 'Total (incl.)'
   const settings = await getSettings()
 
   // 발행처·계좌 프로필 (여러 개 중 ?issuer=N / ?bank=M 로 선택). 없으면 레거시 단일키 fallback.
@@ -45,11 +45,10 @@ export default async function DocumentPage({
   const seller = {
     name: cp.company_name || settings.company_name || 'ARICO',
     regNo: cp.company_regno || settings.company_regno || '',
+    ceo: cp.company_ceo || settings.company_ceo || '',
     contact: cp.company_contact || settings.company_contact || '',
     address: cp.company_address || settings.company_address || '',
     tel: cp.company_tel || settings.company_tel || '',
-    email: cp.company_email || settings.company_email || 'sbs@arico.co.jp',
-    web: cp.company_web || settings.company_web || 'arico-archery.com',
   }
 
   // ── 데이터 정규화 ────────────────────────────────────
@@ -59,10 +58,12 @@ export default async function DocumentPage({
   let recipientHonorific = T.honorific
   let dateRows: DateRow[] = []
   let rows: Row[] = []
-  let totals: TotalRow[] = []
+  let subject = ''
+  let grandTotalIncl = 0
+  let discountValue = 0
+  let paidAmount = 0
   let notes = ''
   let showBank = false
-  let paymentBadge: { label: string; cls: string } | null = null
   let backHref = '/orders'
 
   if (docType === 'po') {
@@ -80,16 +81,19 @@ export default async function DocumentPage({
       ...(po.expectedDate ? [{ label: T.expectedDate, value: fmtDocDate(po.expectedDate, lang) }] : []),
     ]
     rows = po.items.map(it => ({
+      date: fmtDocDateShort(po.orderDate),
       name: it.product.name,
-      sub: [it.product.productCode, [it.product.optionSize, it.product.optionColor].filter(Boolean).join(' / '), it.memo].filter(Boolean).join(' · '),
+      opt: [it.product.optionSize, it.product.optionColor].filter(Boolean).join(' / ') || it.memo || '',
+      txId: po.poNo,
+      code: it.product.productCode,
+      taxRate: 10,
+      unit: it.product.unit || T.unitDefault,
       qty: it.quantity,
       unitPrice: it.unitCostJpy,
       amount: it.unitCostJpy * it.quantity,
     }))
-    totals = [
-      { label: T.subtotal, value: po.totalCostJpy },
-      { label: T.total, value: po.totalCostJpy, bold: true },
-    ]
+    grandTotalIncl = po.totalCostJpy
+    subject = `${fmtDocDatePadded(po.orderDate, lang)}${T.subjectSuffix}`
     notes = po.memo
   } else {
     const order = await prisma.order.findUnique({
@@ -109,12 +113,17 @@ export default async function DocumentPage({
         c.billingAddress || c.address,
         isOrg && c.contactPerson ? `${T.contactLabel}: ${c.contactPerson} ${T.honorificPerson}` : '',
         c.taxRegNo ? `${T.regNo}: ${c.taxRegNo}` : '',
-        c.email, c.phone,
+        c.phone ? `TEL: ${c.phone}` : '',
       ].filter(Boolean)
     }
     rows = order.items.map(it => ({
+      date: fmtDocDateShort(order.orderDate),
       name: it.product.name,
-      sub: [it.product.brand, it.product.productCode, it.optionMemo].filter(Boolean).join(' · '),
+      opt: it.optionMemo || '',
+      txId: String(order.id),
+      code: it.product.productCode,
+      taxRate: 10,
+      unit: it.product.unit || T.unitDefault,
       qty: it.quantity,
       unitPrice: it.salePriceJpy,
       amount: it.salePriceJpy * it.quantity,
@@ -122,193 +131,197 @@ export default async function DocumentPage({
 
     // 소계(할인 전) / 할인 / 합계(순액). 레거시 주문은 subtotalJpy=0 → 합계를 소계로 사용
     const subtotal = order.subtotalJpy > 0 ? order.subtotalJpy : order.totalAmountJpy
-    const discountValue = Math.max(0, subtotal - order.totalAmountJpy)
-    const discountLabel = T.discount + (order.discountRate > 0 ? ` (${order.discountRate}%)` : '')
+    discountValue = Math.max(0, subtotal - order.totalAmountJpy)
+    grandTotalIncl = order.totalAmountJpy
+    subject = `${fmtDocDatePadded(order.orderDate, lang)}${T.subjectSuffix}`
 
     if (docType === 'invoice') {
       dateRows = [
         { label: T.issueDate, value: fmtDocDate(order.orderDate, lang) },
         { label: T.dueDate, value: fmtDocDate(order.dueDate, lang) },
       ]
-      totals = [{ label: T.subtotal, value: subtotal }]
-      if (discountValue > 0) totals.push({ label: discountLabel, value: discountValue, minus: true })
-      if (order.paidAmountJpy > 0) totals.push({ label: T.paidAmount, value: order.paidAmountJpy, minus: true })
-      totals.push({ label: T.balanceDue, value: order.totalAmountJpy - order.paidAmountJpy, bold: true })
+      paidAmount = order.paidAmountJpy
       showBank = true
-      paymentBadge = order.paymentStatus === 'paid'
-        ? { label: T.statusPaid, cls: 'text-green-600' }
-        : order.paymentStatus === 'partial'
-        ? { label: T.statusPartial, cls: 'text-yellow-600' }
-        : { label: T.statusUnpaid, cls: 'text-red-600' }
     } else {
-      // 견적서: 유효기한 = dueDate 또는 발행일 +30일
       const valid = order.dueDate ?? new Date(new Date(order.orderDate).getTime() + 30 * 86400000)
       dateRows = [
         { label: T.issueDate, value: fmtDocDate(order.orderDate, lang) },
         { label: T.validUntil, value: fmtDocDate(valid, lang) },
       ]
-      totals = [{ label: T.subtotal, value: subtotal }]
-      if (discountValue > 0) totals.push({ label: discountLabel, value: discountValue, minus: true })
-      totals.push({ label: T.total, value: order.totalAmountJpy, bold: true })
     }
     notes = order.memo
   }
 
+  // ── 세율별 내부 소비세(税込 기준) — 할인 반영 배분 ──
+  const grossByRate = new Map<number, number>()
+  for (const r of rows) grossByRate.set(r.taxRate, (grossByRate.get(r.taxRate) || 0) + r.amount)
+  const grossTotal = [...grossByRate.values()].reduce((a, b) => a + b, 0) || 1
+  const effTotal = grandTotalIncl || grossTotal
+  const taxGroups = [...grossByRate.entries()].sort((a, b) => b[0] - a[0]).map(([rate, gross]) => {
+    const incl = Math.round(gross * effTotal / grossTotal)
+    return { rate, amount: incl, tax: inclusiveTax(incl, rate) }
+  })
+  const inTaxTotal = taxGroups.reduce((s, g) => s + g.tax, 0)
+
   const totalQty = rows.reduce((s, r) => s + r.qty, 0)
+  const dueRow = dateRows[1] || null
   const bp = bankProfiles[bankIdx] || {}
-  const bank = {
-    name: bp.bank_name || settings.bank_name, branch: bp.bank_branch || settings.bank_branch, type: bp.bank_account_type || settings.bank_account_type,
-    no: bp.bank_account_no || settings.bank_account_no, holder: bp.bank_account_holder || settings.bank_account_holder, note: bp.bank_note || settings.bank_note,
-  }
+  const bankLine = [
+    bp.bank_name || settings.bank_name, bp.bank_branch || settings.bank_branch,
+    bp.bank_account_type || settings.bank_account_type, bp.bank_account_no || settings.bank_account_no,
+    bp.bank_account_holder || settings.bank_account_holder,
+  ].filter(Boolean).join('  ')
+  const bankNote = bp.bank_note || settings.bank_note || ''
+
+  const cell = 'border border-gray-400 px-2 py-1.5'
+  const th = `${cell} bg-gray-100 font-semibold`
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-slate-900 p-8 print:bg-white print:p-0">
+    <div className="min-h-screen bg-gray-100 dark:bg-slate-900 p-6 print:bg-white print:p-0">
       <DocToolbar type={docType} id={id} lang={lang} backHref={backHref}
         issuers={companyProfiles.map((p, i) => p.label || `프로필 ${i + 1}`)} issuerIdx={issuerIdx}
         banks={docType === 'invoice' ? bankProfiles.map((p, i) => p.label || `계좌 ${i + 1}`) : []} bankIdx={bankIdx} />
 
-      <div className="max-w-3xl mx-auto bg-white shadow-lg rounded-xl overflow-hidden print:shadow-none print:rounded-none" id="document">
-        {/* Header */}
-        <div className="bg-slate-900 text-white px-8 py-6 flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <AricoMark size={28} color="#ffffff" />
-              <span className="font-bold text-lg tracking-wide">{seller.name}</span>
+      <div className="max-w-[820px] mx-auto bg-white text-gray-900 shadow-lg rounded-md print:shadow-none print:rounded-none p-8 print:p-6 text-[13px] leading-relaxed" id="document">
+        {/* 제목 */}
+        <h1 className="text-center text-2xl font-bold tracking-[0.4em] mb-6">{T.title[docType]}</h1>
+
+        {/* 상단: 수신(좌) + 문서정보·발행처(우) */}
+        <div className="flex justify-between gap-8 mb-4">
+          <div className="flex-1 min-w-0 pt-1">
+            <p className="text-lg font-bold border-b-2 border-gray-800 pb-1 inline-block">{recipientName} {recipientHonorific}</p>
+            <div className="mt-2 space-y-0.5 text-gray-700 text-[12px]">
+              {recipientLines.map((l, i) => <p key={i}>{l}</p>)}
             </div>
-            <p className="text-slate-400 text-xs">{seller.web}</p>
-            <p className="text-slate-400 text-xs mt-0.5">{seller.email}</p>
           </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold tracking-tight">{T.title[docType]}</p>
-            <p className="text-slate-300 text-sm mt-1">{T.docNo[docType]}: {docNoVal}</p>
+          <div className="w-[290px] shrink-0 text-[12px]">
+            <div className="space-y-0.5 text-right">
+              <p><span className="text-gray-500">No: </span>{docNoVal}</p>
+              {dateRows[0] && <p><span className="text-gray-500">{dateRows[0].label}: </span>{dateRows[0].value}</p>}
+            </div>
+            <div className="mt-2 border border-gray-300 rounded p-2.5 space-y-0.5">
+              <p className="font-bold text-[13px]">{seller.name}</p>
+              {seller.regNo && <p className="text-gray-600">{T.regNo}: {seller.regNo}</p>}
+              {seller.address && <p className="text-gray-600">{seller.address}</p>}
+              {seller.tel && <p className="text-gray-600">TEL: {seller.tel}</p>}
+              {seller.ceo && <p className="text-gray-600">{T.representative}: {seller.ceo}</p>}
+              {seller.contact && <p className="text-gray-600">{T.contactLabel}: {seller.contact}</p>}
+            </div>
           </div>
         </div>
 
-        {/* Recipient + From + dates */}
-        <div className="px-8 py-5 grid grid-cols-2 gap-6 border-b border-gray-100">
-          <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">{T.to}</p>
-            <p className="text-lg font-bold text-gray-900">{recipientName} {recipientHonorific}</p>
-            {recipientLines.map((l, i) => (
-              <p key={i} className="text-gray-500 text-xs mt-0.5">{l}</p>
+        {/* intro */}
+        <p className="mb-3">{T.intro[docType]}</p>
+
+        {/* 요약 박스: 件名 / 支払期限 / 合計金額(税込) */}
+        <table className="w-[64%] mb-5 border-collapse">
+          <tbody>
+            <tr>
+              <th className={`${th} text-left w-28`}>{T.subject}</th>
+              <td className={cell}>{subject}</td>
+            </tr>
+            {dueRow && (
+              <tr>
+                <th className={`${th} text-left`}>{dueRow.label}</th>
+                <td className={cell}>{dueRow.value}</td>
+              </tr>
+            )}
+            <tr>
+              <th className={`${th} text-left`}>{totalInclLabel}</th>
+              <td className={`${cell} text-right font-bold text-base`}>{formatJpy(grandTotalIncl)} {yen}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* 품목 테이블 */}
+        <table className="w-full border-collapse text-[12px]">
+          <thead>
+            <tr>
+              <th className={`${th} w-24`}>{T.txDate}</th>
+              <th className={`${th} text-left`}>{T.itemName}</th>
+              <th className={`${th} w-14`}>{T.taxRate}</th>
+              <th className={`${th} w-14`}>{T.qty}</th>
+              <th className={`${th} w-12`}>{T.unit}</th>
+              <th className={`${th} w-24 text-right`}>{T.unitPriceIncl}</th>
+              <th className={`${th} w-24 text-right`}>{T.amountIncl}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i}>
+                <td className={`${cell} align-top text-center whitespace-nowrap`}>{r.date}</td>
+                <td className={`${cell} align-top`}>
+                  <p className="font-medium">{r.name}</p>
+                  {r.opt && <p className="text-[11px] text-amber-700">{r.opt}</p>}
+                  <p className="text-[10px] text-gray-400">{T.txId} {r.txId} · {T.productCode} {r.code}</p>
+                </td>
+                <td className={`${cell} align-top text-center`}>{r.taxRate}%</td>
+                <td className={`${cell} align-top text-center`}>{r.qty}</td>
+                <td className={`${cell} align-top text-center`}>{r.unit}</td>
+                <td className={`${cell} align-top text-right tabular-nums`}>{formatJpy(r.unitPrice)}</td>
+                <td className={`${cell} align-top text-right tabular-nums`}>{formatJpy(r.amount)}</td>
+              </tr>
             ))}
-          </div>
-          <div className="text-sm">
-            {dateRows.map((d, i) => (
-              <div key={i} className="flex justify-between">
-                <span className="text-gray-500">{d.label}</span>
-                <span className="font-medium text-gray-800">{d.value}</span>
-              </div>
+          </tbody>
+        </table>
+
+        {/* 합계/세금 */}
+        <div className="flex justify-between items-start mt-2 mb-5">
+          <p className="text-[11px] text-gray-500 pt-1">{T.reducedNote}　　{T.totalQty}: {totalQty}</p>
+          <div className="w-[320px] text-[12px]">
+            <div className="flex justify-between border-y-2 border-gray-800 py-1.5">
+              <span className="font-semibold">{T.total}</span>
+              <span className="font-bold text-base tabular-nums">{formatJpy(grandTotalIncl)} {yen}</span>
+            </div>
+            {taxGroups.map((g, i) => (
+              <p key={i} className="text-gray-600 text-[11px] mt-1.5 text-right">
+                （{g.rate}%{T.taxTargetLabel} {formatJpy(g.amount)} {yen} {T.includedTaxLabel} {formatJpy(g.tax)}{yen}）
+              </p>
             ))}
-            {paymentBadge && (
-              <div className="flex justify-between mt-1">
-                <span className="text-gray-500">{T.paymentStatus}</span>
-                <span className={`font-semibold ${paymentBadge.cls}`}>{paymentBadge.label}</span>
+            <div className="flex justify-between py-1 mt-0.5 text-gray-700">
+              <span>{T.inTax}</span>
+              <span className="tabular-nums">（{formatJpy(inTaxTotal)}）</span>
+            </div>
+            {discountValue > 0 && (
+              <div className="flex justify-between py-0.5 text-green-700">
+                <span>{T.discount}</span>
+                <span className="tabular-nums">- {formatJpy(discountValue)}</span>
               </div>
             )}
-            {/* 발행처 */}
-            <div className="mt-3 pt-3 border-t border-gray-100">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">{T.from}</p>
-              <p className="font-bold text-gray-900 text-sm">{seller.name}</p>
-              {seller.contact && <p className="text-gray-500 text-xs">{T.contactLabel}: {seller.contact}</p>}
-              {seller.regNo && <p className="text-gray-500 text-xs">{T.regNo}: {seller.regNo}</p>}
-              {seller.address && <p className="text-gray-500 text-xs">{seller.address}</p>}
-              {seller.tel && <p className="text-gray-500 text-xs">TEL: {seller.tel}</p>}
-            </div>
-          </div>
-        </div>
-
-        {/* Intro line */}
-        <div className="px-8 pt-4">
-          <p className="text-sm text-gray-600">{T.intro[docType]}</p>
-        </div>
-
-        {/* Items table */}
-        <div className="px-8 py-3">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b-2 border-gray-200">
-                <th className="text-left py-2 font-semibold text-gray-600 w-8">{T.no}</th>
-                <th className="text-left py-2 font-semibold text-gray-600">{T.itemName}</th>
-                <th className="text-center py-2 font-semibold text-gray-600 w-16">{T.qty}</th>
-                <th className="text-right py-2 font-semibold text-gray-600 w-28">{T.unitPrice}</th>
-                <th className="text-right py-2 font-semibold text-gray-600 w-28">{T.amount}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, idx) => (
-                <tr key={idx} className="border-b border-gray-50">
-                  <td className="py-3 text-gray-400">{idx + 1}</td>
-                  <td className="py-3">
-                    <p className="font-medium text-gray-900">{r.name}</p>
-                    {r.sub && <p className="text-xs text-gray-400">{r.sub}</p>}
-                  </td>
-                  <td className="py-3 text-center text-gray-700">{r.qty}</td>
-                  <td className="py-3 text-right text-gray-700 tabular-nums">{formatJpy(r.unitPrice)}</td>
-                  <td className="py-3 text-right font-medium text-gray-900 tabular-nums">{formatJpy(r.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Totals */}
-        <div className="px-8 pb-5">
-          <div className="ml-auto w-64 space-y-2 text-sm">
-            <div className="flex justify-between text-gray-400 text-xs">
-              <span>{T.totalQty}</span>
-              <span className="tabular-nums">{totalQty}</span>
-            </div>
-            {totals.map((row, i) => (
-              <div
-                key={i}
-                className={`flex justify-between ${
-                  row.bold
-                    ? 'font-bold text-base pt-2 border-t-2 border-gray-900 text-gray-900'
-                    : row.minus ? 'text-green-600' : 'text-gray-500'
-                }`}
-              >
-                <span>{row.label}</span>
-                <span className="tabular-nums">{row.minus ? '- ' : ''}{formatJpy(row.value)}</span>
+            {paidAmount > 0 && (
+              <div className="flex justify-between py-0.5 text-gray-600">
+                <span>{T.paidAmount}</span>
+                <span className="tabular-nums">- {formatJpy(paidAmount)}</span>
               </div>
-            ))}
+            )}
+            {paidAmount > 0 && (
+              <div className="flex justify-between py-1 border-t border-gray-300 font-bold">
+                <span>{T.balanceDue}</span>
+                <span className="tabular-nums">{formatJpy(grandTotalIncl - paidAmount)} {yen}</span>
+              </div>
+            )}
           </div>
-          <p className="text-xs text-gray-400 mt-3">{T.taxNote}</p>
         </div>
 
-        {/* Notes */}
+        {/* 振込先 (청구서만) */}
+        {showBank && bankLine && (
+          <div className="border border-gray-300 rounded p-3 mb-3 text-[12px]">
+            <p className="font-semibold mb-1">
+              {T.bankTitle}
+              <span className="font-normal text-gray-500 ml-3">{T.transferFeeNote}</span>
+            </p>
+            <p className="text-gray-800">{bankLine}</p>
+            {bankNote && <p className="text-gray-500 text-[11px] mt-0.5">{bankNote}</p>}
+          </div>
+        )}
+
+        {/* 備考 */}
         {notes && (
-          <div className="px-8 pb-5 border-t border-gray-100">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1 mt-4">{T.notes}</p>
-            <p className="text-sm text-gray-600 whitespace-pre-wrap">{notes}</p>
+          <div className="text-[12px] mt-3">
+            <p className="font-semibold mb-0.5">{T.notes}</p>
+            <p className="whitespace-pre-wrap text-gray-700">{notes}</p>
           </div>
         )}
-
-        {/* Bank (invoice only) */}
-        {showBank && bank.name && (
-          <div className="px-8 pb-6 border-t border-gray-100">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3 mt-4">{T.bankTitle}</p>
-            <div className="bg-gray-50 rounded-lg p-4 text-sm space-y-1">
-              <div className="flex flex-wrap gap-x-6 gap-y-1">
-                {bank.name && <span><span className="text-gray-500 text-xs">{T.bankName}</span> <span className="font-medium text-gray-800 ml-1">{bank.name}</span></span>}
-                {bank.branch && <span><span className="text-gray-500 text-xs">{T.bankBranch}</span> <span className="font-medium text-gray-800 ml-1">{bank.branch}</span></span>}
-                {bank.type && <span><span className="text-gray-500 text-xs">{T.bankAccountType}</span> <span className="font-medium text-gray-800 ml-1">{bank.type}</span></span>}
-              </div>
-              <div className="flex flex-wrap gap-x-6 gap-y-1">
-                {bank.no && <span><span className="text-gray-500 text-xs">{T.bankAccountNo}</span> <span className="font-medium text-gray-800 ml-1 tabular-nums">{bank.no}</span></span>}
-                {bank.holder && <span><span className="text-gray-500 text-xs">{T.bankAccountHolder}</span> <span className="font-medium text-gray-800 ml-1">{bank.holder}</span></span>}
-              </div>
-              {bank.note && <p className="text-xs text-gray-400 pt-1">{bank.note}</p>}
-            </div>
-          </div>
-        )}
-
-        {/* Seal area */}
-        <div className="px-8 pb-8 flex justify-end">
-          <div className="text-center">
-            <div className="w-20 h-20 border border-dashed border-gray-300 rounded-md" />
-          </div>
-        </div>
       </div>
     </div>
   )

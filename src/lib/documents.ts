@@ -15,6 +15,28 @@ export function fmtDocDate(d: Date | string | null | undefined, lang: DocLang): 
   return new Date(d).toLocaleDateString(LOCALE[lang], { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
+// 표 안 취引日 등 짧은 날짜 (YYYY-MM-DD)
+export function fmtDocDateShort(d: Date | string | null | undefined): string {
+  if (!d) return '—'
+  const dt = new Date(d)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`
+}
+
+// 件名 자동생성용 압축 날짜 (2026年03月04日 / 2026-03-04)
+export function fmtDocDatePadded(d: Date | string | null | undefined, lang: DocLang): string {
+  if (!d) return ''
+  const dt = new Date(d)
+  const p = (n: number) => String(n).padStart(2, '0')
+  const y = dt.getFullYear(), m = p(dt.getMonth() + 1), day = p(dt.getDate())
+  return lang === 'ja' ? `${y}年${m}月${day}日` : `${y}-${m}-${day}`
+}
+
+// 税込 금액에서 내부 소비세 = floor(amount × rate / (100 + rate))
+export function inclusiveTax(amountInclusive: number, ratePct: number): number {
+  return Math.floor((amountInclusive * ratePct) / (100 + ratePct))
+}
+
 export type DocText = {
   title: Record<DocType, string>
   docNo: Record<DocType, string>
@@ -53,6 +75,23 @@ export type DocText = {
   notes: string
   regNo: string
   taxNote: string            // 소비세 안내 (税込 등)
+  // ── 일본 전통 請求書 양식 추가 라벨 ──
+  subject: string            // 件名
+  subjectSuffix: string      // 取引分 (件名 자동생성 접미)
+  txDate: string             // 取引日
+  txId: string               // 取引ID
+  productCode: string        // 商品コード
+  taxRate: string            // 税率
+  unit: string               // 単位
+  unitPriceIncl: string      // 税込単価
+  amountIncl: string         // 税込金額
+  inTax: string              // 内消費税
+  taxTargetLabel: string     // (10%)対象 税込金額
+  includedTaxLabel: string   // 内税
+  reducedNote: string        // ※ は軽減税率対象商品
+  representative: string     // 代表者
+  transferFeeNote: string    // ※お振込手数料はご負担願います。
+  unitDefault: string        // 単位 기본값(個/개/ea)
 }
 
 export const DOC_TEXT: Record<DocLang, DocText> = {
@@ -72,6 +111,10 @@ export const DOC_TEXT: Record<DocLang, DocText> = {
     bankTitle: 'お振込先', bankName: '銀行名', bankBranch: '支店名', bankAccountType: '種別',
     bankAccountNo: '口座番号', bankAccountHolder: '口座名義',
     notes: '備考', regNo: '登録番号', taxNote: '※金額は消費税込みです。',
+    subject: '件名', subjectSuffix: '取引分', txDate: '取引日', txId: '取引ID', productCode: '商品コード',
+    taxRate: '税率', unit: '単位', unitPriceIncl: '税込単価', amountIncl: '税込金額', inTax: '内消費税',
+    taxTargetLabel: '対象 税込金額', includedTaxLabel: '内税', reducedNote: '※ は軽減税率対象商品',
+    representative: '代表者', transferFeeNote: '※お振込手数料はご負担願います。', unitDefault: '個',
   },
   ko: {
     title:  { invoice: '청구서', quote: '견적서', po: '발주서' },
@@ -89,6 +132,10 @@ export const DOC_TEXT: Record<DocLang, DocText> = {
     bankTitle: '입금 계좌', bankName: '은행명', bankBranch: '지점', bankAccountType: '예금 종류',
     bankAccountNo: '계좌번호', bankAccountHolder: '예금주',
     notes: '비고', regNo: '사업자번호', taxNote: '※ 금액은 소비세(부가세) 포함 금액입니다.',
+    subject: '건명', subjectSuffix: '거래분', txDate: '거래일', txId: '거래ID', productCode: '상품코드',
+    taxRate: '세율', unit: '단위', unitPriceIncl: '단가(세込)', amountIncl: '금액(세込)', inTax: '내 소비세',
+    taxTargetLabel: '대상 세込금액', includedTaxLabel: '내세', reducedNote: '※ 는 경감세율 대상 상품',
+    representative: '대표자', transferFeeNote: '※ 이체 수수료는 부담 부탁드립니다.', unitDefault: '개',
   },
   en: {
     title:  { invoice: 'INVOICE', quote: 'QUOTATION', po: 'PURCHASE ORDER' },
@@ -106,5 +153,9 @@ export const DOC_TEXT: Record<DocLang, DocText> = {
     bankTitle: 'Bank Details', bankName: 'Bank', bankBranch: 'Branch', bankAccountType: 'Account Type',
     bankAccountNo: 'Account No.', bankAccountHolder: 'Account Holder',
     notes: 'Notes', regNo: 'Business Reg. No.', taxNote: '* All amounts are tax inclusive (JPY).',
+    subject: 'Subject', subjectSuffix: ' transactions', txDate: 'Date', txId: 'Tx ID', productCode: 'Code',
+    taxRate: 'Tax', unit: 'Unit', unitPriceIncl: 'Unit (incl.)', amountIncl: 'Amount (incl.)', inTax: 'Incl. Tax',
+    taxTargetLabel: 'taxable (incl.)', includedTaxLabel: 'incl. tax', reducedNote: '* reduced-rate item',
+    representative: 'Representative', transferFeeNote: '* Bank transfer fees are to be borne by the payer.', unitDefault: 'ea',
   },
 }
