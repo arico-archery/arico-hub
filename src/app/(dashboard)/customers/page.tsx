@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, Fragment } from 'react'
 import { useCachedState } from '@/lib/useApiCache'
 import Link from 'next/link'
 import { Users, Plus, Phone, Mail, MapPin, Pencil, Check, X, Trash2, Search, ShoppingCart, Upload, FileDown, FileSpreadsheet, Camera, Download, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -14,7 +14,7 @@ type Customer = {
   email: string; phone: string; address: string; memo: string
   customerType: string; taxRegNo: string; legalName: string
   postalCode: string; billingAddress: string; contactPerson: string
-  discountRate: number; discountAmount: number
+  discountRate: number; discountAmount: number; externalMemberId: string
   _count: { orders: number }
   orders: { totalAmountJpy: number; paidAmountJpy: number }[]
 }
@@ -57,6 +57,17 @@ function InputField({ label, value, onChange, placeholder, className = '' }: {
         value={value}
         onChange={e => onChange(e.target.value)}
       />
+    </div>
+  )
+}
+
+// 상세 펼침 뷰의 라벨/값 한 칸
+function DetailRow({ label, value, full = false }: { label: string; value?: string | number | null; full?: boolean }) {
+  const v = value === undefined || value === null || value === '' ? '—' : String(value)
+  return (
+    <div className={full ? 'sm:col-span-2 lg:col-span-3' : ''}>
+      <span className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide">{label}</span>
+      <p className="text-sm text-gray-800 dark:text-gray-100 break-words">{v}</p>
     </div>
   )
 }
@@ -128,6 +139,7 @@ export default function CustomersPage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editForm, setEditForm] = useState<FormState>(EMPTY_FORM)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
+  const [expandedId, setExpandedId] = useState<number | null>(null)   // 클릭 시 상세 펼침
   const [errorMsg, setErrorMsg] = useState('')
   // 엑셀 임포트
   const [importOpen, setImportOpen] = useState(false)
@@ -458,10 +470,13 @@ export default function CustomersPage() {
                     </tr>
                   )
 
+                  const isExpanded = expandedId === c.id
                   return (
-                    <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                  <Fragment key={c.id}>
+                    <tr onClick={() => setExpandedId(isExpanded ? null : c.id)} className={`cursor-pointer transition-colors ${isExpanded ? 'bg-blue-50/60 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30'}`}>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
+                          <ChevronRight className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                           <span className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium px-1.5 py-0.5 rounded shrink-0">{c.code}</span>
                           <div>
                             {c.nameKana && <p className="sm:hidden text-[11px] text-gray-400 dark:text-gray-500 leading-tight">{c.nameKana}</p>}
@@ -499,7 +514,7 @@ export default function CustomersPage() {
                         {c.address && <div className="flex items-center gap-1.5 text-gray-500 dark:text-gray-400 text-xs"><MapPin className="w-3 h-3 shrink-0" /><span className="truncate max-w-40">{c.address}</span></div>}
                       </td>
                       <td className="hidden sm:table-cell px-4 py-3 text-right">
-                        <Link href={`/orders?q=${encodeURIComponent(c.name)}`} className="font-medium text-blue-600 hover:underline text-xs flex items-center gap-1 justify-end">
+                        <Link onClick={e => e.stopPropagation()} href={`/orders?q=${encodeURIComponent(c.name)}`} className="font-medium text-blue-600 hover:underline text-xs flex items-center gap-1 justify-end">
                           <ShoppingCart className="w-3 h-3" />{c._count.orders}{t.common.cases}
                         </Link>
                       </td>
@@ -511,22 +526,59 @@ export default function CustomersPage() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center gap-1 justify-end">
-                          <button onClick={() => startEdit(c)} className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors" title="편집">
+                          <button onClick={e => { e.stopPropagation(); startEdit(c) }} className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors" title="편집">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           {isDeleting ? (
                             <div className="flex items-center gap-1">
-                              <button onClick={() => handleDelete(c.id)} className="px-2 py-0.5 bg-red-600 text-white text-xs rounded hover:bg-red-700">{t.common.delete}</button>
-                              <button onClick={() => setDeleteConfirm(null)} className="px-2 py-0.5 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 text-xs rounded hover:bg-gray-300 dark:hover:bg-gray-500">{t.common.cancel}</button>
+                              <button onClick={e => { e.stopPropagation(); handleDelete(c.id) }} className="px-2 py-0.5 bg-red-600 text-white text-xs rounded hover:bg-red-700">{t.common.delete}</button>
+                              <button onClick={e => { e.stopPropagation(); setDeleteConfirm(null) }} className="px-2 py-0.5 bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 text-xs rounded hover:bg-gray-300 dark:hover:bg-gray-500">{t.common.cancel}</button>
                             </div>
                           ) : (
-                            <button onClick={() => setDeleteConfirm(c.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title={t.common.delete}>
+                            <button onClick={e => { e.stopPropagation(); setDeleteConfirm(c.id) }} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title={t.common.delete}>
                               <Trash2 className="w-4 h-4" />
                             </button>
                           )}
                         </div>
                       </td>
                     </tr>
+                    {isExpanded && (
+                      <tr className="bg-blue-50/40 dark:bg-blue-900/10">
+                        <td colSpan={9} className="px-4 pb-4 pt-0">
+                          <div className="rounded-lg border border-blue-100 dark:border-blue-900/40 bg-white dark:bg-gray-800 p-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
+                              <DetailRow label={t.customers.labelNameKana} value={c.nameKana} />
+                              <DetailRow label={t.customers.labelType} value={t.customers[(CUSTOMER_TYPES.find(x => x.v === (c.customerType || 'individual')) || CUSTOMER_TYPES[0]).key]} />
+                              <DetailRow label={t.customers.labelCompany} value={c.company} />
+                              <DetailRow label={t.customers.labelPhone} value={c.phone} />
+                              <DetailRow label={t.customers.labelEmail} value={c.email} />
+                              <DetailRow label={t.customers.labelPostalCode} value={c.postalCode} />
+                              <DetailRow label={t.customers.labelAddress} value={c.address} full />
+                              {(c.customerType && c.customerType !== 'individual') && <>
+                                <DetailRow label={t.customers.labelTaxRegNo} value={c.taxRegNo} />
+                                <DetailRow label={t.customers.labelLegalName} value={c.legalName} />
+                                <DetailRow label={t.customers.labelContactPerson} value={c.contactPerson} />
+                                <DetailRow label={t.customers.labelBillingAddress} value={c.billingAddress} full />
+                              </>}
+                              {(c.discountRate > 0 || c.discountAmount > 0) && (
+                                <DetailRow label={t.customers.discountTitle} value={[c.discountRate > 0 ? `${c.discountRate}%` : '', c.discountAmount > 0 ? formatJpy(c.discountAmount) : ''].filter(Boolean).join(' + ')} />
+                              )}
+                              {c.externalMemberId && <DetailRow label="MakeShop ID" value={c.externalMemberId} />}
+                              <DetailRow label={t.customers.labelMemo} value={c.memo} full />
+                            </div>
+                            <div className="flex flex-wrap items-center gap-4 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+                              <span>{t.customers.colOrders}: <b className="text-gray-700 dark:text-gray-200">{c._count.orders}{t.common.cases}</b></span>
+                              <span>{t.customers.colSales}: <b className="text-gray-700 dark:text-gray-200">{formatJpy(totalSales)}</b></span>
+                              {unpaid > 0 && <span>{t.customers.colUnpaid}: <b className="text-red-600">{formatJpy(unpaid)}</b></span>}
+                              <button onClick={e => { e.stopPropagation(); startEdit(c) }} className="ml-auto flex items-center gap-1 text-blue-600 hover:underline font-medium">
+                                <Pencil className="w-3 h-3" />{t.common.edit}
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                   )
                 })
               })()}
