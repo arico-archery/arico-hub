@@ -129,7 +129,7 @@ export default function ProductsPage() {
       const res = editId
         ? await fetch(`/api/products/${editId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
         : await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      if (!res.ok) throw new Error(`${res.status}`)
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.message || d.error || `${res.status}`) }
       setFormOpen(false)
       fetchProducts(page)
     } catch (e) {

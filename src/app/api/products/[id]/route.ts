@@ -18,6 +18,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const body = await req.json()
 
   const data: Record<string, unknown> = {}
+  if (body.supplierCode !== undefined) data.supplierCode = String(body.supplierCode).trim()   // 소속 공급사 변경(예: ETC→ARICO)
   if (body.name !== undefined)        data.name        = String(body.name).trim()
   if (body.brand !== undefined)       data.brand       = String(body.brand).trim()
   if (body.category !== undefined)    data.category    = String(body.category).trim()
@@ -31,12 +32,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (body.barcode !== undefined)     data.barcode     = String(body.barcode).trim()
   if (body.availability !== undefined)data.availability= String(body.availability)
 
-  const product = await prisma.product.update({
-    where: { id: Number(id) },
-    data,
-    include: { supplier: true },
-  })
-  return NextResponse.json(product)
+  try {
+    const product = await prisma.product.update({
+      where: { id: Number(id) },
+      data,
+      include: { supplier: true },
+    })
+    return NextResponse.json(product)
+  } catch (e) {
+    const code = (e as { code?: string }).code
+    // 같은 공급사에 같은 상품코드가 이미 있으면 유니크 충돌
+    if (code === 'P2002') return NextResponse.json({ error: 'duplicate', message: '해당 공급사에 같은 상품코드가 이미 있습니다.' }, { status: 409 })
+    // 존재하지 않는 공급사 코드
+    if (code === 'P2003') return NextResponse.json({ error: 'bad_supplier', message: '공급사 코드가 올바르지 않습니다.' }, { status: 400 })
+    throw e
+  }
 }
 
 // DELETE /api/products/[id] — 단일 상품 삭제 (주문/발주에 사용된 상품은 차단)
