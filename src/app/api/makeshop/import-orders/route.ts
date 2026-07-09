@@ -207,7 +207,7 @@ export async function POST(req: Request) {
       const orderDate = new Date(r.orderDate)
       const dateStr = fmtOrderDate(orderDate).slice(0, 8)
       const shipDate = r.shipDate ? new Date(r.shipDate) : null
-      const memo = `[MakeShop ${r.displayOrderNumber}] 決済総額 ¥${r.sumPrice.toLocaleString()}${r.shipping ? ` (送料 ¥${r.shipping.toLocaleString()})` : ''}`
+      const memo = ''   // MakeShop 자동 메모(決済総額/送料) 미기록 — 주문 메모 비움
 
       await createWithSeqRetry(
         async (attempt) => {
