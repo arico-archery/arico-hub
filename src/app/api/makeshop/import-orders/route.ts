@@ -29,7 +29,13 @@ function mapDelivery(o: { deliveryInfos: { deliveryStatus: string; slipNumber: s
   return { orderStatus: 'pending', trackingNo: '', shipDate: null }
 }
 
-type PreviewItem = { productCode: string; productName: string; amount: number; price: number; matched: boolean; supplierCode: string | null; catalogName: string | null }
+type PreviewItem = { productCode: string; productName: string; variationCustomCode: string; option: string; amount: number; price: number; matched: boolean; supplierCode: string | null; catalogName: string | null }
+
+// MakeShop basket에서 옵션(색/사이즈 등) 추출. 우선 variationCustomCode, 없으면 빈값.
+// (실제 옵션이 어느 필드에 오는지 미리보기의 variationCustomCode/productName로 확인 후 보강)
+function basketOption(b: { variationCustomCode?: string }): string {
+  return (b.variationCustomCode || '').trim()
+}
 type PreviewRow = {
   externalOrderNo: string; displayOrderNumber: string; orderDate: string; memberId: string; customerName: string
   sumPrice: number; shipping: number; itemsSubtotal: number; payment: 'paid' | 'unpaid'
@@ -66,7 +72,9 @@ async function buildPreview(days: number) {
       const cat = catMap.get(b.productCode)
       const prod = cat?.supplierProductId != null ? prodMap.get(cat.supplierProductId) : undefined
       return {
-        productCode: b.productCode, productName: b.productName, amount: Number(b.amount) || 0, price: Number(b.price) || 0,
+        productCode: b.productCode, productName: b.productName,
+        variationCustomCode: b.variationCustomCode || '', option: basketOption(b),
+        amount: Number(b.amount) || 0, price: Number(b.price) || 0,
         matched: !!prod, supplierCode: prod?.supplierCode ?? null, catalogName: cat?.name ?? null,
       }
     })
@@ -91,9 +99,15 @@ export async function GET(req: Request) {
     const { start, end, rows } = await buildPreview(days)
     // 미매칭 품목이 있어도 가져온다(ETC 상품 생성). 가져올 수 있음 = 중복 아닌 전부.
     const importable = rows.filter(r => !r.dup).length
+    // 옵션 진단: variationCustomCode가 오는 품목 수 + 샘플(어느 필드에 옵션이 오는지 확인용)
+    const allItems = rows.flatMap(r => r.items)
+    const withVarCode = allItems.filter(i => i.variationCustomCode).length
+    const optionSamples = allItems.filter(i => i.variationCustomCode || i.productName).slice(0, 8)
+      .map(i => ({ productCode: i.productCode, variationCustomCode: i.variationCustomCode, productName: i.productName }))
     return NextResponse.json({
       ok: true, range: { start, end },
-      summary: { total: rows.length, dup: rows.filter(r => r.dup).length, importable, hasUnmatched: rows.filter(r => !r.dup && !r.allMatched).length },
+      summary: { total: rows.length, dup: rows.filter(r => r.dup).length, importable, hasUnmatched: rows.filter(r => !r.dup && !r.allMatched).length, items: allItems.length, withVariationCode: withVarCode },
+      optionSamples,
       rows,
     })
   } catch (e) {
@@ -185,7 +199,7 @@ export async function POST(req: Request) {
         const prod = await resolveProduct(it.productCode, it.productName, it.price)
         if (!it.matched && !etcSeen.has(it.productCode)) { etcSeen.add(it.productCode); etcCreated++ }
         const costJpy = Math.round(calcCostJpy(prod, rates))
-        itemsData.push({ productId: prod.id, quantity: it.amount, salePriceJpy: Math.round(it.price), costPriceJpy: costJpy, optionMemo: '', procureStatus })
+        itemsData.push({ productId: prod.id, quantity: it.amount, salePriceJpy: Math.round(it.price), costPriceJpy: costJpy, optionMemo: it.option, procureStatus })
       }
       const subtotal = itemsData.reduce((s, it) => s + it.salePriceJpy * it.quantity, 0)
       const totalCost = itemsData.reduce((s, it) => s + it.costPriceJpy * it.quantity, 0)
@@ -218,10 +232,34 @@ export async function POST(req: Request) {
       )
       created++
     }
+
+    // 옵션 백필: 이미 받은 주문(중복)의 품목 optionMemo를 최신 옵션으로 채움.
+    // 주문 생성 시 품목은 r.items 순서대로 만들어졌으므로 id 오름차순 = 같은 순서 → 인덱스로 매칭.
+    let optionFilled = 0
+    const dupRows = rows.filter(r => r.dup && r.items.some(it => it.option))
+    if (dupRows.length) {
+      const existOrders = await prisma.order.findMany({
+        where: { externalOrderNo: { in: dupRows.map(r => r.externalOrderNo) } },
+        select: { externalOrderNo: true, items: { select: { id: true, optionMemo: true }, orderBy: { id: 'asc' } } },
+      })
+      const byExt = new Map(existOrders.map(o => [o.externalOrderNo, o.items]))
+      for (const r of dupRows) {
+        const items = byExt.get(r.externalOrderNo)
+        if (!items) continue
+        for (let i = 0; i < r.items.length && i < items.length; i++) {
+          const opt = r.items[i].option
+          if (opt && items[i].optionMemo !== opt) {
+            await prisma.orderItem.update({ where: { id: items[i].id }, data: { optionMemo: opt } })
+            optionFilled++
+          }
+        }
+      }
+    }
+
     skipped = rows.filter(r => r.dup).length
     const partial = rows.filter(r => !r.dup && !r.allMatched).length
-    await writeStatus({ state: 'done', days, startedAt, finishedAt: new Date().toISOString(), created, dup: skipped, partial, custCreated, custUpdated })
-    return NextResponse.json({ ok: true, created, skipped, dup: skipped, etcCreated, custCreated, custUpdated, partial })
+    await writeStatus({ state: 'done', days, startedAt, finishedAt: new Date().toISOString(), created, dup: skipped, partial, custCreated, custUpdated, optionFilled })
+    return NextResponse.json({ ok: true, created, skipped, dup: skipped, etcCreated, custCreated, custUpdated, partial, optionFilled })
   } catch (e) {
     const err = e instanceof MakeshopError ? { error: e.message, detail: e.detail } : { error: String(e) }
     await writeStatus({ state: 'error', days, startedAt, finishedAt: new Date().toISOString(), created: 0, dup: 0, partial: 0, error: String(err.error) }).catch(() => {})
