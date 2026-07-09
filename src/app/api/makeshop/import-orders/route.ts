@@ -207,7 +207,7 @@ export async function POST(req: Request) {
       const orderDate = new Date(r.orderDate)
       const dateStr = fmtOrderDate(orderDate).slice(0, 8)
       const shipDate = r.shipDate ? new Date(r.shipDate) : null
-      const memo = `[MakeShop ${r.displayOrderNumber}] 결제총액 ¥${r.sumPrice.toLocaleString()}${r.shipping ? ` (배송비 ¥${r.shipping.toLocaleString()})` : ''}`
+      const memo = `[MakeShop ${r.displayOrderNumber}] 決済総額 ¥${r.sumPrice.toLocaleString()}${r.shipping ? ` (送料 ¥${r.shipping.toLocaleString()})` : ''}`
 
       await createWithSeqRetry(
         async (attempt) => {
