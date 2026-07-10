@@ -59,8 +59,13 @@ async function buildPreview(days: number) {
   const products = await prisma.product.findMany({ where: { id: { in: supIds } }, include: { supplier: true } })
   const prodMap = new Map(products.map(p => [p.id, p]))
   const rates = await prisma.exchangeRate.findMany()
-  // 회원 memberId → 상세(이름·이메일·전화·주소)
-  const members = await getAllMembersDetailed()
+  // 회원 상세: 이미 거래처로 있는 회원은 재조회 불필요.
+  // ⚠️ MakeShop 회원 전수조회(getAllMembersDetailed, 수천명)가 대량 수신 타임아웃의 주범 → 새 회원이 있을 때만 조회.
+  const orderMemberIds = [...new Set(orders.map(o => o.memberId).filter(Boolean))]
+  const knownCusts = await prisma.customer.findMany({ where: { externalMemberId: { in: orderMemberIds } }, select: { externalMemberId: true, name: true } })
+  const custNameByMember = new Map(knownCusts.map(c => [c.externalMemberId, c.name]))
+  const needMembers = orderMemberIds.some(id => !custNameByMember.has(id))
+  const members = needMembers ? await getAllMembersDetailed() : []
   const memberMap = new Map(members.map(m => [m.memberId, m]))
   // 이미 수신한 주문
   const imported = new Set((await prisma.order.findMany({ where: { externalOrderNo: { not: '' } }, select: { externalOrderNo: true } })).map(o => o.externalOrderNo))
@@ -82,7 +87,7 @@ async function buildPreview(days: number) {
     const del = mapDelivery(o)
     return {
       externalOrderNo: o.systemOrderNumber, displayOrderNumber: o.displayOrderNumber,
-      orderDate: o.orderDate, memberId: o.memberId, customerName: memberMap.get(o.memberId)?.name || o.memberId,
+      orderDate: o.orderDate, memberId: o.memberId, customerName: memberMap.get(o.memberId)?.name || custNameByMember.get(o.memberId) || o.memberId,
       sumPrice: Number(o.sumPrice) || 0, shipping, itemsSubtotal, payment: mapPayment(o.paymentStatusCode),
       orderStatus: del.orderStatus, trackingNo: del.trackingNo, shipDate: del.shipDate ? del.shipDate.toISOString() : null,
       dup: imported.has(o.systemOrderNumber), allMatched: items.length > 0 && items.every(i => i.matched), items,
