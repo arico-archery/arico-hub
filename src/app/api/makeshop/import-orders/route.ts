@@ -130,10 +130,9 @@ async function writeStatus(s: Record<string, unknown>) {
   await prisma.setting.upsert({ where: { key: STATUS_KEY }, create: { key: STATUS_KEY, value }, update: { value } })
 }
 
-// POST — 실제 생성. importable(미중복 & 전품목 매칭)만 생성.
-export async function POST(req: Request) {
-  if (!makeshopConfigured()) return NextResponse.json({ ok: false, error: 'not_configured' }, { status: 503 })
-  const days = Math.min(365, Math.max(1, Number(new URL(req.url).searchParams.get('days')) || 90))
+// 실제 수신 로직 (POST·cron 공용). 결과 객체 반환.
+export async function runImport(days: number): Promise<Record<string, unknown>> {
+  if (!makeshopConfigured()) return { ok: false, error: 'not_configured' }
   const startedAt = new Date().toISOString()
   try {
     await writeStatus({ state: 'running', days, startedAt, finishedAt: null, created: 0, dup: 0, partial: 0 })
@@ -272,10 +271,18 @@ export async function POST(req: Request) {
     skipped = rows.filter(r => r.dup).length
     const partial = rows.filter(r => !r.dup && !r.allMatched).length
     await writeStatus({ state: 'done', days, startedAt, finishedAt: new Date().toISOString(), created, dup: skipped, partial, custCreated, custUpdated, optionFilled })
-    return NextResponse.json({ ok: true, created, skipped, dup: skipped, etcCreated, custCreated, custUpdated, partial, optionFilled })
+    return { ok: true, created, skipped, dup: skipped, etcCreated, custCreated, custUpdated, partial, optionFilled }
   } catch (e) {
     const err = e instanceof MakeshopError ? { error: e.message, detail: e.detail } : { error: String(e) }
     await writeStatus({ state: 'error', days, startedAt, finishedAt: new Date().toISOString(), created: 0, dup: 0, partial: 0, error: String(err.error) }).catch(() => {})
-    return NextResponse.json({ ok: false, ...err }, { status: 502 })
+    return { ok: false, ...err }
   }
+}
+
+// POST — 수동 수신(로그인 필요).
+export async function POST(req: Request) {
+  const days = Math.min(365, Math.max(1, Number(new URL(req.url).searchParams.get('days')) || 90))
+  const result = await runImport(days)
+  const status = result.ok ? 200 : result.error === 'not_configured' ? 503 : 502
+  return NextResponse.json(result, { status })
 }

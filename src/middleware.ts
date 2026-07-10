@@ -25,6 +25,6 @@ export async function middleware(req: NextRequest) {
 export const config = {
   // 로그인/회원가입·인증 API·정적자산 제외한 모든 경로 보호
   matcher: [
-    '/((?!login|signup|api/auth|api/health|_next/static|_next/image|favicon.ico|manual/|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico)$).*)',
+    '/((?!login|signup|api/auth|api/cron|api/health|_next/static|_next/image|favicon.ico|manual/|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico)$).*)',
   ],
 }
