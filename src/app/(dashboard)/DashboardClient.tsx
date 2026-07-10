@@ -238,32 +238,40 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
             {t.dashboard.salesTrend}
           </h2>
           <div className="flex items-center gap-3 text-xs">
+            <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#2f7d55' }} />{t.dashboard.profit}</span>
             <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400"><span className="w-2.5 h-2.5 rounded-sm bg-gray-300 dark:bg-gray-600 inline-block" />{t.common.cost}</span>
-            <span className="flex items-center gap-1 text-gray-500 dark:text-gray-400"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#2f7d55' }} />{t.dashboard.monthlyProfit}</span>
             <Link href="/analytics" className="text-blue-600 hover:underline font-medium">{t.common.detail}</Link>
           </div>
         </div>
         {trend.length === 0 || trend.every(m => m.sales === 0) ? (
           <p className="text-center text-sm text-gray-400 py-10">{t.common.noData}</p>
         ) : (
-          <div className="flex items-end justify-between gap-2 h-44 pt-2">
+          <div className="flex items-end justify-between gap-2 h-48 pt-6">
             {trend.map(m => {
               const profit = m.sales - m.cost
+              const margin = m.sales > 0 ? (profit / m.sales) * 100 : 0
               const hSales = (m.sales / maxTrend) * 100
               const hCost = (m.cost / maxTrend) * 100
               const hProfit = Math.max(0, hSales - hCost)
+              const empty = m.sales === 0
+              const compact = (v: number) => v >= 10000 ? `¥${Math.round(v / 10000).toLocaleString()}${t.dashboard.manUnit}` : formatJpy(v)
               return (
-                <div key={`${m.year}-${m.month}`} className="flex-1 flex flex-col items-center justify-end h-full group/bar">
-                  <div className="relative w-full flex justify-center">
-                    <div className="absolute -top-5 opacity-0 group-hover/bar:opacity-100 transition-opacity text-[10px] font-semibold text-gray-700 dark:text-gray-200 whitespace-nowrap">
-                      {formatJpy(m.sales)}
-                    </div>
+                <div key={`${m.year}-${m.month}`} className="flex-1 flex flex-col items-center justify-end h-full"
+                  title={empty ? '' : `${m.month}${t.analytics.monthUnit} · ${t.dashboard.salesShort} ${formatJpy(m.sales)} · ${t.common.cost} ${formatJpy(m.cost)} · ${t.dashboard.profit} ${formatJpy(profit)} (${margin.toFixed(1)}%)`}>
+                  {/* 매출 값(상시) */}
+                  {!empty && <p className="text-[10px] font-bold text-gray-800 dark:text-gray-100 mb-1 whitespace-nowrap tabular-nums">{compact(m.sales)}</p>}
+                  <div className="w-full max-w-[44px] flex flex-col justify-end" style={{ height: '100%' }}>
+                    {empty ? (
+                      <div className="w-full border-t border-dashed border-gray-200 dark:border-gray-600" />
+                    ) : (
+                      <>
+                        <div className="w-full rounded-t" style={{ height: `${hProfit}%`, backgroundColor: '#2f7d55', minHeight: profit > 0 ? '3px' : '0' }} />
+                        <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-b" style={{ height: `${hCost}%` }} />
+                      </>
+                    )}
                   </div>
-                  <div className="w-full max-w-[40px] flex flex-col justify-end" style={{ height: '100%' }}>
-                    <div className="w-full rounded-t" style={{ height: `${hProfit}%`, backgroundColor: '#2f7d55' }} title={`${t.dashboard.monthlyProfit} ${formatJpy(profit)}`} />
-                    <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-b" style={{ height: `${hCost}%` }} title={`${t.common.cost} ${formatJpy(m.cost)}`} />
-                  </div>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1.5 font-medium">{m.month}{t.analytics.monthUnit}</p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1.5 font-medium leading-none">{m.month}{t.analytics.monthUnit}</p>
+                  {!empty && <p className="text-[10px] text-green-700 dark:text-green-400 font-medium leading-none mt-0.5">{margin.toFixed(0)}%</p>}
                 </div>
               )
             })}
