@@ -5,13 +5,23 @@ import { useApiCache } from '@/lib/useApiCache'
 import Link from 'next/link'
 import {
   ClipboardList, Truck, CheckCircle2, Clock, AlertCircle,
-  ChevronDown, ChevronUp, Filter, RefreshCw, SlidersHorizontal
+  ChevronDown, ChevronUp, Filter, RefreshCw, SlidersHorizontal, FileSpreadsheet
 } from 'lucide-react'
 import { formatJpy, SUPPLIER_COLORS, SUPPLIER_LIST } from '@/lib/utils'
 import SupplierBadge from '@/components/SupplierBadge'
 import DateInput from '@/components/DateInput'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { useT } from '@/lib/i18n'
+import * as XLSX from 'xlsx'
+
+// 기간 프리셋 → 시작일(ISO). 'all'이면 빈 문자열(전체).
+function boPeriodFrom(p: string): string {
+  const d = new Date()
+  if (p === 'month') return new Date(d.getFullYear(), d.getMonth(), 1).toISOString()
+  if (p === 'year')  return new Date(d.getFullYear(), 0, 1).toISOString()
+  if (p === '3m') { const x = new Date(d); x.setMonth(x.getMonth() - 3); return x.toISOString() }
+  return ''
+}
 
 // ── 타입 ──────────────────────────────────────────────
 type BackorderItem = {
@@ -32,6 +42,7 @@ type BackorderItem = {
   product: {
     id: number
     name: string
+    brand: string
     productCode: string
     supplierCode: string
     optionSize: string
@@ -72,10 +83,16 @@ export default function BackordersPage() {
   const t = useT()
   const [supplierFilter, setSupplierFilter] = useState('')
   const [statusFilter, setStatusFilter]     = useState('needed,ordered')
-  const backordersUrl = `/api/backorders?status=${encodeURIComponent(statusFilter)}${supplierFilter ? `&supplier=${encodeURIComponent(supplierFilter)}` : ''}`
+  const [brandFilter, setBrandFilter]       = useState('')                 // 브랜드 필터(클라)
+  const [period, setPeriod]                 = useState<'all' | 'month' | '3m' | 'year'>('all')  // 기간(주문일, 서버)
+  const periodFromIso = boPeriodFrom(period)
+  const backordersUrl = `/api/backorders?status=${encodeURIComponent(statusFilter)}${supplierFilter ? `&supplier=${encodeURIComponent(supplierFilter)}` : ''}${periodFromIso ? `&from=${encodeURIComponent(periodFromIso)}` : ''}`
   // 클라 캐시: 재방문/뒤로가기 시 즉시 표시 + 백그라운드 재검증
   const { data: itemsData, isLoading: loading, refresh, mutate } = useApiCache<BackorderItem[]>(backordersUrl)
   const items = itemsData ?? []
+  // 브랜드 필터(클라이언트) — 드롭다운 옵션은 전체 로드분에서 추출(선택해도 목록 유지)
+  const brandOptions = [...new Set(items.map(i => i.product.brand).filter(Boolean))].sort()
+  const view = brandFilter ? items.filter(i => (i.product.brand || '') === brandFilter) : items
   const [selected, setSelected]     = useState<Set<number>>(new Set())
   const [collapsed, setCollapsed]   = useState<Set<string>>(new Set())
   const [expectedDate, setExpectedDate] = useState('')
@@ -93,7 +110,7 @@ export default function BackordersPage() {
   }, [refresh])
 
   // 전체 선택 / 해제
-  const needItems   = items.filter(i => i.procureStatus === 'needed')
+  const needItems   = view.filter(i => i.procureStatus === 'needed')
   const allSelected = needItems.length > 0 && needItems.every(i => selected.has(i.id))
   const toggleAll   = () => {
     if (allSelected) {
@@ -225,10 +242,40 @@ export default function BackordersPage() {
     setConfirmGroup({ ids, sc })
   }
 
-  const grouped = groupBySupplier(items)
+  // 엑셀 내보내기 — 현재 필터(공급사·상태·기간·브랜드)가 적용된 목록. 브랜드→주문일 순 정렬(엑셀서 그룹핑 쉬움).
+  const exportExcel = () => {
+    const label: Record<string, string> = { needed: t.backorders.needed, ordered: t.backorders.ordered, received: t.backorders.received }
+    const sorted = [...view].sort((a, b) =>
+      (a.product.brand || '').localeCompare(b.product.brand || '') ||
+      a.order.orderDate.localeCompare(b.order.orderDate))
+    const rows = sorted.map(i => ({
+      [t.backorders.colOrderDate]: i.order.orderDate?.slice(0, 10) ?? '',
+      [t.backorders.colOrderNo]: i.order.orderNo,
+      [t.backorders.colCustomer]: i.order.customer.name,
+      [t.backorders.colCompany]: i.order.customer.company || '',
+      [t.backorders.colSupplier]: i.product.supplierCode,
+      [t.backorders.colBrand]: i.product.brand || '',
+      [t.backorders.colProduct]: i.product.name,
+      [t.backorders.colProductCode]: i.product.productCode,
+      [t.backorders.colOption]: i.optionMemo || [i.product.optionSize, i.product.optionColor].filter(Boolean).join(' / '),
+      [t.backorders.colQty]: i.quantity,
+      [t.backorders.colCost]: i.costPriceJpy,
+      [t.backorders.colCostTotal]: i.costPriceJpy * i.quantity,
+      [t.backorders.colStatus]: label[i.procureStatus] || i.procureStatus,
+      [t.backorders.colPoNo]: i.purchaseOrder?.poNo || '',
+      [t.backorders.colExpected]: i.purchaseOrder?.expectedDate?.slice(0, 10) || '',
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    ws['!cols'] = Object.keys(rows[0] || {}).map(k => ({ wch: k.length < 6 ? 10 : 18 }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'backorders')
+    XLSX.writeFile(wb, `backorders_${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
+
+  const grouped = groupBySupplier(view)
 
   // 선택 품목의 공급사 종류
-  const selectedItems    = items.filter(i => selected.has(i.id))
+  const selectedItems    = view.filter(i => selected.has(i.id))
   const selectedSuppliers = [...new Set(selectedItems.map(i => i.product.supplierCode))]
   const selectedCost     = selectedItems.reduce((s, i) => s + i.costPriceJpy * i.quantity, 0)
 
@@ -239,8 +286,8 @@ export default function BackordersPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t.backorders.title}</h1>
           <p className="text-gray-600 dark:text-gray-400 font-medium text-sm mt-1">
-            {t.backorders.needed} {items.filter(i => i.procureStatus === 'needed').length}{t.common.cases} ·
-            {t.backorders.ordered} {items.filter(i => i.procureStatus === 'ordered').length}{t.common.cases}
+            {t.backorders.needed} {view.filter(i => i.procureStatus === 'needed').length}{t.common.cases} ·
+            {t.backorders.ordered} {view.filter(i => i.procureStatus === 'ordered').length}{t.common.cases}
           </p>
         </div>
         <button onClick={fetchItems} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
@@ -283,6 +330,36 @@ export default function BackordersPage() {
                 </button>
               ))}
             </div>
+            <div className="w-px h-5 bg-gray-200 dark:bg-gray-600" />
+            {/* 브랜드 */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">{t.backorders.colBrand}</span>
+              <select value={brandFilter} onChange={e => setBrandFilter(e.target.value)}
+                className="border border-gray-200 dark:border-gray-600 rounded px-2 py-1 text-xs text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 max-w-[10rem]">
+                <option value="">{t.backorders.all}</option>
+                {brandOptions.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </div>
+            <div className="w-px h-5 bg-gray-200 dark:bg-gray-600" />
+            {/* 기간 */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">{t.orders.periodLabel}</span>
+              {([
+                { v: 'all', l: t.orders.periodAll },
+                { v: 'month', l: t.orders.periodMonth },
+                { v: '3m', l: t.orders.period3m },
+                { v: 'year', l: t.orders.periodYear },
+              ] as const).map(({ v, l }) => (
+                <button key={v} onClick={() => setPeriod(v)}
+                  className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${period === v ? 'bg-slate-700 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            <button onClick={exportExcel} disabled={view.length === 0}
+              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors">
+              <FileSpreadsheet className="w-3.5 h-3.5" /> {t.backorders.exportExcel}
+            </button>
           </div>
 
           {/* 성공 알림 */}
