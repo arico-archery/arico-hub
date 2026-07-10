@@ -13,6 +13,8 @@ export default function SignupPage() {
   const [password2, setPassword2] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [sent, setSent] = useState(false)         // 인증 메일 발송 완료 화면
+  const [devLink, setDevLink] = useState('')      // 이메일 미설정(부트스트랩) 시 인증 링크
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -30,11 +32,11 @@ export default function SignupPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password }),
       })
+      const d = await res.json().catch(() => ({}))
       if (res.ok) {
-        router.replace('/')
-        router.refresh()
+        setDevLink(d.devLink || '')
+        setSent(true)
       } else {
-        const d = await res.json().catch(() => ({}))
         setError(
           d.error === 'domain' ? '@arico.group 이메일만 가입할 수 있습니다.'
             : d.error === 'exists' ? '이미 가입된 이메일입니다. 로그인해 주세요.'
@@ -58,7 +60,22 @@ export default function SignupPage() {
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">ARICO Distribution Hub</p>
         </div>
 
-        <form onSubmit={submit} className="space-y-3">
+        {sent && (
+          <div className="text-center space-y-3">
+            <div className="w-12 h-12 mx-auto rounded-full bg-green-50 dark:bg-green-900/30 flex items-center justify-center text-2xl">✉️</div>
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">인증 메일을 보냈습니다</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400"><span className="font-medium">{email}</span> 로 보낸 메일의 링크를 클릭하면 인증이 완료되고 자동 로그인됩니다. (24시간 이내 유효)</p>
+            {devLink && (
+              <div className="text-left bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-lg p-3">
+                <p className="text-[11px] text-amber-700 dark:text-amber-300 mb-1">※ 이메일 발송이 아직 설정되지 않아 메일이 가지 않습니다. 아래 링크로 인증하세요:</p>
+                <a href={devLink} className="text-xs text-blue-600 break-all hover:underline">{devLink}</a>
+              </div>
+            )}
+            <Link href="/login" className="inline-block text-blue-600 hover:underline text-sm font-medium">로그인으로 이동</Link>
+          </div>
+        )}
+
+        {!sent && <form onSubmit={submit} className="space-y-3">
           <input
             type="text" value={name} onChange={e => setName(e.target.value)}
             placeholder="이름"
@@ -86,7 +103,7 @@ export default function SignupPage() {
           >
             {loading ? '가입 중…' : '회원가입'}
           </button>
-        </form>
+        </form>}
 
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-4 text-center">
           이미 계정이 있으신가요?{' '}

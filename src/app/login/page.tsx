@@ -30,7 +30,10 @@ function LoginInner() {
       } else if (res.status === 401) {
         setError('이메일 또는 비밀번호가 올바르지 않습니다.')
       } else if (res.status === 403) {
-        setError('비활성화된 계정입니다. 관리자에게 문의하세요.')
+        const d = await res.json().catch(() => ({}))
+        setError(d.error === 'unverified'
+          ? '이메일 인증이 완료되지 않았습니다. 가입 시 받은 인증 메일의 링크를 클릭해 주세요.'
+          : '비활성화된 계정입니다. 관리자에게 문의하세요.')
       } else {
         setError('로그인 중 오류가 발생했습니다.')
       }

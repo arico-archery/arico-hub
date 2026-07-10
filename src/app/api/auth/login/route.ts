@@ -21,6 +21,9 @@ export async function POST(req: Request) {
   if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
     return NextResponse.json({ error: 'invalid' }, { status: 401 })
   }
+  if (user.status === 'pending') {
+    return NextResponse.json({ error: 'unverified' }, { status: 403 }) // 이메일 인증 미완료
+  }
   if (user.status === 'disabled') {
     return NextResponse.json({ error: 'disabled' }, { status: 403 })
   }

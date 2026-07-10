@@ -155,7 +155,9 @@ model User {
   name         String    @default("")
   passwordHash String    @default("")        // scrypt: salt:hash
   role         String    @default("admin")   // super_admin | admin
-  status       String    @default("active")  // active | disabled
+  status       String    @default("active")  // pending(이메일 미인증) | active | disabled
+  verifyToken    String    @default("")       // 이메일 인증 토큰(sha256 해시)
+  verifyTokenExp DateTime?                     // 인증 토큰 만료
   lastLogin    DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
