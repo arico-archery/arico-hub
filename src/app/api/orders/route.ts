@@ -15,6 +15,11 @@ export async function GET(req: Request) {
   const q          = searchParams.get('q') ?? ''
   const completed  = searchParams.get('completed') ?? ''   // '1'=완료만, '0'=진행중만
   const readyToShip = searchParams.get('readyToShip') ?? '' // '1'=전 품목 입고완료 & 미발송(배송대기)
+  const from       = searchParams.get('from') ?? ''         // 주문일 시작(ISO) — 완료 탭 기간 스코프
+  const to         = searchParams.get('to') ?? ''
+  const orderDateFilter: { gte?: Date; lte?: Date } = {}
+  if (from && !isNaN(Date.parse(from))) orderDateFilter.gte = new Date(from)
+  if (to && !isNaN(Date.parse(to))) orderDateFilter.lte = new Date(to)
 
   // paymentStatus는 쉼표 구분 다중 값 지원 (예: "unpaid,partial")
   const paymentStatusFilter = paymentStatus.includes(',')
@@ -28,6 +33,7 @@ export async function GET(req: Request) {
     // 완료 필터: '1'=completedAt 있음, '0'=completedAt 없음
     ...(completed === '1' ? { completedAt: { not: null } } : {}),
     ...(completed === '0' ? { completedAt: null } : {}),
+    ...(Object.keys(orderDateFilter).length ? { orderDate: orderDateFilter } : {}),
     // 배송대기: 모든 주문품목이 입고완료(received)인데 아직 미발송
     ...(readyToShip === '1' ? {
       shippingDate: null,

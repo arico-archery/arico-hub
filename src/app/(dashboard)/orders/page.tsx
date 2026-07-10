@@ -16,6 +16,16 @@ import { useT, useI18n } from '@/lib/i18n'
 
 const PAGE_SIZE = 30
 
+// 완료 탭 기간 프리셋 → 시작일(ISO). 'all'이면 빈 문자열(전체).
+function donePeriodFrom(p: string): string {
+  const d = new Date()
+  if (p === 'month') return new Date(d.getFullYear(), d.getMonth(), 1).toISOString()
+  if (p === 'year')  return new Date(d.getFullYear(), 0, 1).toISOString()
+  if (p === '3m') { const x = new Date(d); x.setMonth(x.getMonth() - 3); return x.toISOString() }
+  if (p === '6m') { const x = new Date(d); x.setMonth(x.getMonth() - 6); return x.toISOString() }
+  return ''
+}
+
 type Order = {
   id: number; orderNo: string; orderDate: string; status: string; paymentStatus: string
   totalAmountJpy: number; totalCostJpy: number; paidAmountJpy: number
@@ -112,6 +122,7 @@ export default function OrdersPage() {
   const [statusFilter, setStatusFilter]   = useState('')
   const [payFilter, setPayFilter]         = useState('')
   const [searchQ, setSearchQ]             = useState('')
+  const [donePeriod, setDonePeriod]       = useState<'month' | '3m' | '6m' | 'year' | 'all'>('3m')   // 완료 탭 기본 최근 3개월
   const [page, setPage]       = useState(1)
   const [expanded, setExpanded] = useState<number | null>(null)
   const [shipInfo, setShipInfo] = useState<Record<number, { date: string; trackingNo: string }>>({})
@@ -135,10 +146,12 @@ export default function OrdersPage() {
     if (searchQ)      params.set('q', searchQ)
     params.set('completed', tab === 'done' ? '1' : '0')
     if (tab === 'ready') params.set('readyToShip', '1')
+    // 완료 탭: 기간 스코프(기본 최근 3개월). 'all'이면 미적용.
+    if (tab === 'done' && donePeriod !== 'all') { const from = donePeriodFrom(donePeriod); if (from) params.set('from', from) }
     params.set('limit', String(PAGE_SIZE))
     params.set('page',  String(page))
     return `/api/orders?${params}`
-  }, [statusFilter, payFilter, searchQ, tab, page])
+  }, [statusFilter, payFilter, searchQ, tab, page, donePeriod])
   const { data: ordersData, isLoading: loading, refresh } = useApiCache<{ orders: Order[]; total: number }>(ordersUrl)
   const orders = ordersData?.orders ?? []
   const total = ordersData?.total ?? 0
@@ -206,7 +219,7 @@ export default function OrdersPage() {
   }, [startPolling])
 
   // 필터/탭 변경 시 1페이지로 (목록 로드는 useApiCache가 ordersUrl 변경으로 처리)
-  useEffect(() => { setPage(1) }, [statusFilter, payFilter, searchQ, tab])
+  useEffect(() => { setPage(1) }, [statusFilter, payFilter, searchQ, tab, donePeriod])
 
   const updateStatus = async (id: number, field: string, value: string) => {
     const body: Record<string, string | number> = { [field]: value }
@@ -300,7 +313,7 @@ export default function OrdersPage() {
             {msStatus?.state === 'running' ? (lang === 'ja' ? '取込中…' : '수신 중…') : t.orders.msReceive}
           </button>
           <a
-            href={`/api/orders?format=csv&completed=${tab === 'done' ? '1' : '0'}${statusFilter ? `&status=${statusFilter}` : ''}${payFilter ? `&paymentStatus=${payFilter}` : ''}${searchQ ? `&q=${encodeURIComponent(searchQ)}` : ''}`}
+            href={`/api/orders?format=csv&completed=${tab === 'done' ? '1' : '0'}${statusFilter ? `&status=${statusFilter}` : ''}${payFilter ? `&paymentStatus=${payFilter}` : ''}${searchQ ? `&q=${encodeURIComponent(searchQ)}` : ''}${tab === 'done' && donePeriod !== 'all' && donePeriodFrom(donePeriod) ? `&from=${encodeURIComponent(donePeriodFrom(donePeriod))}` : ''}`}
             className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
           >
             <Download className="w-3.5 h-3.5" /> CSV
@@ -366,6 +379,26 @@ export default function OrdersPage() {
           </span>
         </button>
       </div>
+
+      {/* 완료 탭: 기간 스코프 (기본 최근 3개월 — 목록 무한증가 방지) */}
+      {tab === 'done' && (
+        <div className="flex items-center gap-1.5 mb-4 flex-wrap">
+          <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">{t.orders.periodLabel}</span>
+          {([
+            { v: 'month', label: t.orders.periodMonth },
+            { v: '3m', label: t.orders.period3m },
+            { v: '6m', label: t.orders.period6m },
+            { v: 'year', label: t.orders.periodYear },
+            { v: 'all', label: t.orders.periodAll },
+          ] as const).map(({ v, label }) => (
+            <button key={v} onClick={() => setDonePeriod(v)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${donePeriod === v ? 'bg-green-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
+              {label}
+            </button>
+          ))}
+          {donePeriod !== 'all' && <span className="text-[11px] text-gray-400 ml-1">{t.orders.periodHint}</span>}
+        </div>
+      )}
 
       {/* 검색 & 필터 */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-4 mb-4 flex gap-3 items-center flex-wrap">
