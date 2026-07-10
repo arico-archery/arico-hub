@@ -48,9 +48,11 @@ export type DashboardData = {
 type MonthPoint = { label: string; month: number; year: number; sales: number; cost: number; count: number }
 
 // ── 스파크라인 (KPI 카드 미니 추세) ─────────────────────────
-function Sparkline({ values, color }: { values: number[]; color: string }) {
+function Sparkline({ values, color, labels, fmt, caption }: {
+  values: number[]; color: string; labels?: string[]; fmt?: (v: number) => string; caption?: string
+}) {
   if (!values.length || values.every(v => v === 0)) {
-    return <div className="h-8" />
+    return <div className="h-10" />
   }
   const w = 100, h = 32
   const max = Math.max(...values), min = Math.min(...values)
@@ -58,15 +60,29 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
   const pts = values.map((v, i) => {
     const x = (i / (values.length - 1 || 1)) * w
     const y = h - ((v - min) / range) * (h - 4) - 2
-    return [x, y]
+    return [x, y] as [number, number]
   })
   const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ')
   const area = `${line} L${w} ${h} L0 ${h} Z`
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="w-full h-8 mt-2">
-      <path d={area} fill={color} opacity={0.12} />
-      <path d={line} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-    </svg>
+    <div className="mt-2">
+      <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="w-full h-8">
+        <path d={area} fill={color} opacity={0.12} />
+        <path d={line} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        {/* 각 점에 마우스 올리면 월·값 툴팁 (투명 원으로 넓은 hover 영역) */}
+        {pts.map((p, i) => (
+          <circle key={i} cx={p[0]} cy={p[1]} r={8} fill="transparent">
+            <title>{`${labels?.[i] ? labels[i] + ': ' : ''}${fmt ? fmt(values[i]) : values[i]}`}</title>
+          </circle>
+        ))}
+      </svg>
+      {/* 축 캡션: 시작월 · 최근6개월 · 이번달 */}
+      <div className="flex items-center justify-between mt-1 text-[10px] text-gray-400 dark:text-gray-500 leading-none">
+        <span>{labels?.[0] ?? ''}</span>
+        {caption && <span className="font-medium">{caption}</span>}
+        <span>{labels?.[labels.length - 1] ?? ''}</span>
+      </div>
+    </div>
   )
 }
 
@@ -114,18 +130,20 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
   const momText = (v: number | null, unit = '%') =>
     v === null ? null : { up: v >= 0, label: `${v >= 0 ? '▲' : '▼'} ${Math.abs(v).toFixed(1)}${unit}` }
 
-  // 스파크라인 시계열
+  // 스파크라인 시계열 (항상 최근 6개월) + 월 라벨/포맷
   const salesSeries  = trend.map(m => m.sales)
   const profitSeries = trend.map(m => m.sales - m.cost)
   const marginSeries = trend.map(m => (m.sales > 0 ? ((m.sales - m.cost) / m.sales) * 100 : 0))
+  const trendLabels  = trend.map(m => `${m.month}${t.analytics.monthUnit}`)
+  const fmtPct = (v: number) => `${v.toFixed(1)}%`
 
   const periodLabel = range === 'all' ? t.dashboard.periodAll : range === '6m' ? t.dashboard.period6m : t.dashboard.periodMonth
 
   const kpis = [
-    { label: `${periodLabel} ${t.dashboard.salesShort}`, value: formatJpy(monthlySales), icon: DollarSign, mom: momText(salesMoM), sub: `${monthlyOrderCount}${t.common.cases}`, spark: salesSeries, color: '#2f7d55', href: '/analytics' },
-    { label: `${periodLabel} ${t.dashboard.profitShort}`, value: formatJpy(monthlyProfit), icon: TrendingUp, mom: momText(profitMoM), sub: `${t.dashboard.marginRate} ${monthlyMargin.toFixed(1)}%`, spark: profitSeries, color: '#2f7d55', href: '/analytics' },
-    { label: t.dashboard.marginRate, value: `${monthlyMargin.toFixed(1)}%`, icon: Percent, mom: momText(marginMoMPts, '%p'), sub: periodLabel, spark: marginSeries, color: '#2f7d55', href: '/analytics' },
-    { label: t.dashboard.unpaidTotal, value: formatJpy(totalUnpaid), icon: AlertCircle, mom: null, sub: overdueCount > 0 ? `${t.dashboard.overdue} ${overdueCount}${t.common.cases}` : `${unpaidOrders.length}${t.dashboard.unpaidCount}`, spark: null, color: '#ef4444', href: '/payments' },
+    { label: `${periodLabel} ${t.dashboard.salesShort}`, value: formatJpy(monthlySales), icon: DollarSign, mom: momText(salesMoM), sub: `${monthlyOrderCount}${t.common.cases}`, spark: salesSeries, sparkLabels: trendLabels, sparkFmt: formatJpy, color: '#2f7d55', href: '/analytics' },
+    { label: `${periodLabel} ${t.dashboard.profitShort}`, value: formatJpy(monthlyProfit), icon: TrendingUp, mom: momText(profitMoM), sub: `${t.dashboard.marginRate} ${monthlyMargin.toFixed(1)}%`, spark: profitSeries, sparkLabels: trendLabels, sparkFmt: formatJpy, color: '#2f7d55', href: '/analytics' },
+    { label: t.dashboard.marginRate, value: `${monthlyMargin.toFixed(1)}%`, icon: Percent, mom: momText(marginMoMPts, '%p'), sub: periodLabel, spark: marginSeries, sparkLabels: trendLabels, sparkFmt: fmtPct, color: '#2f7d55', href: '/analytics' },
+    { label: t.dashboard.unpaidTotal, value: formatJpy(totalUnpaid), icon: AlertCircle, mom: null, sub: overdueCount > 0 ? `${t.dashboard.overdue} ${overdueCount}${t.common.cases}` : `${unpaidOrders.length}${t.dashboard.unpaidCount}`, spark: null, sparkLabels: [] as string[], sparkFmt: formatJpy, color: '#ef4444', href: '/payments' },
   ]
 
   // 운영 현황 / 할 일 타일
@@ -165,7 +183,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
 
       {/* A. 핵심 KPI 4 + 스파크라인 */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map(({ label, value, icon: Icon, mom, sub, spark, color, href }) => (
+        {kpis.map(({ label, value, icon: Icon, mom, sub, spark, sparkLabels, sparkFmt, color, href }) => (
           <Link key={label} href={href} className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-100 dark:border-gray-700/60 hover:border-gray-200 dark:hover:border-gray-600 transition-colors group block">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider truncate">{label}</p>
@@ -180,7 +198,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
               )}
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 font-medium">{sub}</p>
-            {spark ? <Sparkline values={spark} color={color} /> : <div className="h-8 mt-2" />}
+            {spark ? <Sparkline values={spark} color={color} labels={sparkLabels} fmt={sparkFmt} caption={t.dashboard.period6m} /> : <div className="h-10 mt-2" />}
           </Link>
         ))}
       </div>
