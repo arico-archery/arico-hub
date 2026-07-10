@@ -3,9 +3,10 @@ import { prisma } from '@/lib/prisma'
 import { maxCustomerSeq } from '@/lib/seq'
 import { calcCostJpy } from '@/lib/utils'
 import {
-  getAllOrdersDetailed, getAllMembersDetailed, fmtOrderDate,
+  getAllOrdersDetailed, fmtOrderDate,
   memberPostal, memberAddress,
   makeshopConfigured, MakeshopError,
+  type MakeshopMemberDetail,
 } from '@/lib/makeshop'
 
 export const maxDuration = 60   // Pro면 60초까지 (대량 수신 대비)
@@ -61,14 +62,12 @@ async function buildPreview(days: number) {
   const products = await prisma.product.findMany({ where: { id: { in: supIds } }, include: { supplier: true } })
   const prodMap = new Map(products.map(p => [p.id, p]))
   const rates = await prisma.exchangeRate.findMany()
-  // 회원 상세: 이미 거래처로 있는 회원은 재조회 불필요.
-  // ⚠️ MakeShop 회원 전수조회(getAllMembersDetailed, 수천명)가 대량 수신 타임아웃의 주범 → 새 회원이 있을 때만 조회.
+  // ⚠️ MakeShop 회원 전수조회(getAllMembersDetailed, 수천명)는 대량 수신 타임아웃의 주범 → 하지 않는다.
+  // 기존 거래처는 이름 사용, 새 회원은 memberId로 생성 후 [MakeShop 회원] 동기화로 이름·연락처 보강.
   const orderMemberIds = [...new Set(orders.map(o => o.memberId).filter(Boolean))]
   const knownCusts = await prisma.customer.findMany({ where: { externalMemberId: { in: orderMemberIds } }, select: { externalMemberId: true, name: true } })
   const custNameByMember = new Map(knownCusts.map(c => [c.externalMemberId, c.name]))
-  const needMembers = orderMemberIds.some(id => !custNameByMember.has(id))
-  const members = needMembers ? await getAllMembersDetailed() : []
-  const memberMap = new Map(members.map(m => [m.memberId, m]))
+  const memberMap = new Map<string, MakeshopMemberDetail>()   // 항상 비움(전수조회 안 함)
   // 이미 수신한 주문
   const imported = new Set((await prisma.order.findMany({ where: { externalOrderNo: { not: '' } }, select: { externalOrderNo: true } })).map(o => o.externalOrderNo))
 
