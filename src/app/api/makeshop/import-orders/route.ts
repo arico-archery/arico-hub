@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { createWithSeqRetry, maxCustomerSeq } from '@/lib/seq'
+import { maxCustomerSeq } from '@/lib/seq'
 import { calcCostJpy } from '@/lib/utils'
 import {
   getAllOrdersDetailed, getAllMembersDetailed, fmtOrderDate,
   memberPostal, memberAddress,
   makeshopConfigured, MakeshopError,
 } from '@/lib/makeshop'
+
+export const maxDuration = 60   // Pro면 60초까지 (대량 수신 대비)
 
 // 입금상태 매핑(임시): 0002=입금완료, 그 외=미입금. 실제 코드 뜻 확인되면 보정.
 function mapPayment(code: string): 'paid' | 'unpaid' {
@@ -168,6 +170,11 @@ export async function POST(req: Request) {
     let created = 0, skipped = 0, etcCreated = 0, custCreated = 0, custUpdated = 0
     const etcSeen = new Set<string>()
     const custSynced = new Set<string>()   // 이번 실행에서 갱신한 회원(중복 update 방지)
+    // 주문번호 시퀀스: 한 번만 조회(주문마다 findFirst 왕복 제거 = 타임아웃 완화)
+    const lastOrd = await prisma.order.findFirst({ orderBy: { id: 'desc' }, select: { orderNo: true } })
+    let orderSeq = lastOrd ? (parseInt(lastOrd.orderNo.split('-').pop() || '0', 10) || 0) : 0
+    type OrderData = NonNullable<Parameters<typeof prisma.order.create>[0]>['data']
+    const orderCreates: OrderData[] = []
     for (const r of targets) {
       // 거래처 확보 (전부 연동, 회원 연락처·주소까지)
       const m = memberMap.get(r.memberId)
@@ -211,30 +218,32 @@ export async function POST(req: Request) {
       const orderDate = new Date(r.orderDate)
       const dateStr = fmtOrderDate(orderDate).slice(0, 8)
       const shipDate = r.shipDate ? new Date(r.shipDate) : null
-      const memo = ''   // MakeShop 자동 메모(決済総額/送料) 미기록 — 주문 메모 비움
 
-      await createWithSeqRetry(
-        async (attempt) => {
-          const last = await prisma.order.findFirst({ orderBy: { id: 'desc' }, select: { orderNo: true } })
-          const lastSeq = last ? (parseInt(last.orderNo.split('-').pop() || '0', 10) || 0) : 0
-          return `ORD-${dateStr}-${String(lastSeq + 1 + attempt).padStart(4, '0')}`
-        },
-        (orderNo) => prisma.order.create({
-          data: {
-            orderNo, customerId: customerId!, externalOrderNo: r.externalOrderNo, orderDate,
-            paymentStatus: paid ? 'paid' : 'unpaid', paidAmountJpy: paid ? subtotal : 0,
-            paymentDate: paid ? orderDate : null,
-            // 배송상태 반영: 배송완료 시 발송일·송장·완료일 세팅
-            status: r.orderStatus,
-            ...(r.trackingNo ? { trackingNo: r.trackingNo } : {}),
-            ...(shipDate ? { shippingDate: shipDate } : {}),
-            ...(r.orderStatus === 'delivered' && shipDate ? { deliveryDate: shipDate, completedAt: shipDate } : {}),
-            subtotalJpy: subtotal, totalAmountJpy: subtotal, totalCostJpy: totalCost, memo,
-            items: { create: itemsData },
-          },
-        }),
-      )
-      created++
+      orderSeq += 1
+      orderCreates.push({
+        orderNo: `ORD-${dateStr}-${String(orderSeq).padStart(4, '0')}`,
+        customerId: customerId!, externalOrderNo: r.externalOrderNo, orderDate,
+        paymentStatus: paid ? 'paid' : 'unpaid', paidAmountJpy: paid ? subtotal : 0,
+        paymentDate: paid ? orderDate : null,
+        // 배송상태 반영: 배송완료 시 발송일·송장·완료일 세팅
+        status: r.orderStatus,
+        ...(r.trackingNo ? { trackingNo: r.trackingNo } : {}),
+        ...(shipDate ? { shippingDate: shipDate } : {}),
+        ...(r.orderStatus === 'delivered' && shipDate ? { deliveryDate: shipDate, completedAt: shipDate } : {}),
+        subtotalJpy: subtotal, totalAmountJpy: subtotal, totalCostJpy: totalCost, memo: '',
+        items: { create: itemsData },
+      })
+    }
+
+    // 주문 생성 — 번호 미리 유니크 배정 후 8개씩 병렬(대량 시 순차 왕복 타임아웃 방지)
+    const CONC = 8
+    for (let i = 0; i < orderCreates.length; i += CONC) {
+      const res = await Promise.allSettled(orderCreates.slice(i, i + CONC).map(data => prisma.order.create({ data })))
+      for (const x of res) {
+        if (x.status === 'fulfilled') created++
+        else console.error('order create failed:', (x.reason as { message?: string })?.message)
+      }
+      if (i % 80 === 0) await writeStatus({ state: 'running', days, startedAt, finishedAt: null, created, dup: 0, partial: 0 }).catch(() => {})
     }
 
     // 옵션 백필: 이미 받은 주문(중복)의 품목 optionMemo를 최신 옵션으로 채움.
