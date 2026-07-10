@@ -37,12 +37,28 @@ type AnalyticsData = {
 
 const RANGE_KEYS = ['6m', '12m', 'ytd', 'all'] as const
 type Range = typeof RANGE_KEYS[number]
+const HEAD = 5   // 목록 기본 표시 개수 (나머지는 '더 보기')
+
+// 목록 하단 '더 보기 / 접기' 토글
+function MoreToggle({ total, expanded, onToggle, moreLabel, lessLabel }: {
+  total: number; expanded: boolean; onToggle: () => void; moreLabel: string; lessLabel: string
+}) {
+  if (total <= HEAD) return null
+  return (
+    <button onClick={onToggle}
+      className="mt-3 w-full text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 py-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+      {expanded ? lessLabel : `${moreLabel} (+${total - HEAD})`}
+    </button>
+  )
+}
 
 export default function AnalyticsPage() {
   const t = useT()
   const [range, setRange] = useState<Range>('6m')
   const [data, setData] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})   // 섹션별 '더 보기' 상태
+  const toggle = (k: string) => setExpanded(e => ({ ...e, [k]: !e[k] }))
 
   useEffect(() => {
     setLoading(true)
@@ -66,6 +82,14 @@ export default function AnalyticsPage() {
   const { monthlyData, allTime, topItems, supplierStats, brandStats, receivables, totalReceivable, totalOverdue, topCustomers } = data
   const maxSales = Math.max(...monthlyData.map(m => m.sales), 1)
   const maxBrandSales = Math.max(...brandStats.map(b => b.sales), 1)
+
+  // '더 보기' 슬라이스 (기본 HEAD개)
+  const supEntries = Object.entries(supplierStats).sort((a, b) => b[1].sales - a[1].sales)
+  const supShown   = expanded.sup   ? supEntries   : supEntries.slice(0, HEAD)
+  const brandShown = expanded.brand ? brandStats   : brandStats.slice(0, HEAD)
+  const recvShown  = expanded.recv  ? receivables  : receivables.slice(0, HEAD)
+  const custShown  = expanded.cust  ? topCustomers : topCustomers.slice(0, HEAD)
+  const prodShown  = expanded.prod  ? topItems     : topItems.slice(0, HEAD)
 
   const totalProfit = allTime.sales - allTime.cost
   const { margin: totalMargin } = calcProfitRate(allTime.sales, allTime.cost)
@@ -192,9 +216,7 @@ export default function AnalyticsPage() {
             <p className="text-gray-400 text-sm text-center py-8">{t.common.noData}</p>
           ) : (
             <div className="space-y-3">
-              {Object.entries(supplierStats)
-                .sort((a, b) => b[1].sales - a[1].sales)
-                .map(([code, stat]) => {
+              {supShown.map(([code, stat]) => {
                   const { margin } = calcProfitRate(stat.sales, stat.cost)
                   return (
                     <div key={code} className="flex items-center gap-3">
@@ -209,6 +231,7 @@ export default function AnalyticsPage() {
                     </div>
                   )
                 })}
+              <MoreToggle total={supEntries.length} expanded={!!expanded.sup} onToggle={() => toggle('sup')} moreLabel={t.analytics.showMore} lessLabel={t.analytics.collapse} />
             </div>
           )}
         </div>
@@ -226,7 +249,7 @@ export default function AnalyticsPage() {
             <p className="text-gray-400 text-sm text-center py-8">{t.common.noData}</p>
           ) : (
             <div className="space-y-2.5">
-              {brandStats.map(b => {
+              {brandShown.map(b => {
                 const { margin } = calcProfitRate(b.sales, b.cost)
                 const pct = (b.sales / maxBrandSales) * 100
                 return (
@@ -246,6 +269,7 @@ export default function AnalyticsPage() {
                   </div>
                 )
               })}
+              <MoreToggle total={brandStats.length} expanded={!!expanded.brand} onToggle={() => toggle('brand')} moreLabel={t.analytics.showMore} lessLabel={t.analytics.collapse} />
             </div>
           )}
         </div>
@@ -266,7 +290,7 @@ export default function AnalyticsPage() {
             <p className="text-gray-400 text-sm text-center py-8">{t.analytics.noReceivables}</p>
           ) : (
             <div className="space-y-2">
-              {receivables.map(r => (
+              {recvShown.map(r => (
                 <div key={r.customerId} className="flex items-center gap-3 p-2.5 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-sm">
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900 dark:text-gray-100 truncate">{r.name}</p>
@@ -279,6 +303,7 @@ export default function AnalyticsPage() {
                   </div>
                 </div>
               ))}
+              <MoreToggle total={receivables.length} expanded={!!expanded.recv} onToggle={() => toggle('recv')} moreLabel={t.analytics.showMore} lessLabel={t.analytics.collapse} />
             </div>
           )}
         </div>
@@ -292,7 +317,7 @@ export default function AnalyticsPage() {
             {t.analytics.topCustomers}
           </h2>
           <div className="space-y-2">
-            {topCustomers.map((item, idx) => {
+            {custShown.map((item, idx) => {
               if (!item.customer) return null
               const unpaid = item.sales - item.paid
               return (
@@ -310,6 +335,7 @@ export default function AnalyticsPage() {
                 </div>
               )
             })}
+            <MoreToggle total={topCustomers.length} expanded={!!expanded.cust} onToggle={() => toggle('cust')} moreLabel={t.analytics.showMore} lessLabel={t.analytics.collapse} />
           </div>
         </div>
       )}
@@ -332,7 +358,7 @@ export default function AnalyticsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-              {topItems.map((item, idx) => {
+              {prodShown.map((item, idx) => {
                 if (!item.product) return null
                 const { margin } = calcProfitRate(item.sales, item.cost)
                 return (
@@ -349,6 +375,7 @@ export default function AnalyticsPage() {
             </tbody>
           </table>
         )}
+        <MoreToggle total={topItems.length} expanded={!!expanded.prod} onToggle={() => toggle('prod')} moreLabel={t.analytics.showMore} lessLabel={t.analytics.collapse} />
       </div>
     </div>
   )

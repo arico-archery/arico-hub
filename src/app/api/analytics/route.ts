@@ -65,7 +65,7 @@ async function buildAnalytics(rangeParam: string) {
     _sum: { salePriceJpy: true, costPriceJpy: true },
     _count: true,
     orderBy: { _sum: { salePriceJpy: 'desc' } },
-    take: 10,
+    take: 50,
   })
 
   const productIds = topItems.map(i => i.productId)
@@ -97,20 +97,20 @@ async function buildAnalytics(rangeParam: string) {
     brandAgg[b].cost += item.costPriceJpy ?? 0
     brandAgg[b].qty += item.quantity ?? 0
   }
-  // 브랜드별 매출 TOP 10
+  // 브랜드별 매출
   const brandStats = Object.entries(brandAgg)
     .map(([brand, v]) => ({ brand, ...v }))
     .sort((a, b) => b.sales - a.sales)
-    .slice(0, 10)
+    .slice(0, 50)
 
-  // 거래처별 TOP 8
+  // 거래처별
   const topCustomers = await prisma.order.groupBy({
     by: ['customerId'],
     where,
     _sum: { totalAmountJpy: true, totalCostJpy: true, paidAmountJpy: true },
     _count: true,
     orderBy: { _sum: { totalAmountJpy: 'desc' } },
-    take: 8,
+    take: 50,
   })
   const customerIds = topCustomers.map(c => c.customerId)
   const customers = await prisma.customer.findMany({ where: { id: { in: customerIds } } })
@@ -151,7 +151,7 @@ async function buildAnalytics(rangeParam: string) {
     })
     .filter(r => r.balance > 0)
     .sort((a, b) => b.balance - a.balance)
-    .slice(0, 10)
+    .slice(0, 50)
   const totalReceivable = receivables.reduce((s, r) => s + r.balance, 0)
   const totalOverdue = receivables.reduce((s, r) => s + r.overdue, 0)
 
