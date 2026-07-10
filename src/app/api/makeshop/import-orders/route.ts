@@ -47,11 +47,11 @@ type PreviewRow = {
 }
 
 // 주문 수신 + 매칭. days 만큼 과거 주문을 가져와 productCode로 매칭한다.
-async function buildPreview(days: number) {
+async function buildPreview(days: number, win?: { start: string; end: string }) {
   const now = new Date()
-  const start = fmtOrderDate(new Date(now.getTime() - days * 86400000))
-  // 종료일 +1일 버퍼: 서버(UTC)-MakeShop(JST 9h) 시차로 당일 최신 주문이 범위 끝에서 누락되는 것 방지
-  const end = fmtOrderDate(new Date(now.getTime() + 86400000))
+  // win(명시 구간)이 있으면 그걸 쓰고, 없으면 최근 days일. 종료일 +1일 버퍼(UTC-JST 시차 당일 누락 방지).
+  const start = win?.start ?? fmtOrderDate(new Date(now.getTime() - days * 86400000))
+  const end = win?.end ?? fmtOrderDate(new Date(now.getTime() + 86400000))
   const orders = await getAllOrdersDetailed(start, end)
 
   // 카탈로그: productCode → {supplierProductId, name}
@@ -130,12 +130,12 @@ async function writeStatus(s: Record<string, unknown>) {
 }
 
 // 실제 수신 로직 (POST·cron 공용). 결과 객체 반환.
-export async function runImport(days: number): Promise<Record<string, unknown>> {
+export async function runImport(days: number, win?: { start: string; end: string }): Promise<Record<string, unknown>> {
   if (!makeshopConfigured()) return { ok: false, error: 'not_configured' }
   const startedAt = new Date().toISOString()
   try {
     await writeStatus({ state: 'running', days, startedAt, finishedAt: null, created: 0, dup: 0, partial: 0 })
-    const { rows, catMap, prodMap, rates, memberMap } = await buildPreview(days)
+    const { rows, catMap, prodMap, rates, memberMap } = await buildPreview(days, win)
     const targets = rows.filter(r => !r.dup)   // 중복 아닌 전부 (미매칭 품목 포함)
 
     // 거래처 코드 러닝 카운터
