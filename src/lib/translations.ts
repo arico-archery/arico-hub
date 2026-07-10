@@ -27,6 +27,7 @@ const T = {
       groupAccount: '도움·계정',
     },
     common: {
+      exportConfirm: '{n}건을 엑셀로 내보낼까요?',
       save: '저장',
       saving: '저장 중...',
       saved: '저장됨',
@@ -804,6 +805,7 @@ const T = {
       groupAccount: 'ヘルプ・アカウント',
     },
     common: {
+      exportConfirm: '{n}件をExcelに出力しますか？',
       save: '保存',
       saving: '保存中...',
       saved: '保存済み',

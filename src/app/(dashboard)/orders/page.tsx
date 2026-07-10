@@ -163,6 +163,8 @@ export default function OrdersPage() {
   type MsStatus = { state: 'idle' | 'running' | 'done' | 'error'; startedAt?: string; finishedAt?: string; created?: number; dup?: number; partial?: number; error?: string }
   const [msStatus, setMsStatus] = useState<MsStatus | null>(null)
   const [msConfirm, setMsConfirm] = useState(false)
+  const [exportConfirm, setExportConfirm] = useState(false)   // CSV 내보내기 확인창
+  const csvExportUrl = () => `/api/orders?format=csv&completed=${tab === 'done' ? '1' : '0'}${statusFilter ? `&status=${statusFilter}` : ''}${payFilter ? `&paymentStatus=${payFilter}` : ''}${searchQ ? `&q=${encodeURIComponent(searchQ)}` : ''}${tab === 'done' && donePeriod !== 'all' && donePeriodFrom(donePeriod) ? `&from=${encodeURIComponent(donePeriodFrom(donePeriod))}` : ''}`
   const [msDismissed, setMsDismissed] = useState(false)
   const msPollingRef = React.useRef(false)
   const expectingRef = React.useRef(false)   // 이 화면에서 수신을 시작함 → 서버 기록을 기다림
@@ -312,12 +314,12 @@ export default function OrdersPage() {
             <RefreshCw className={`w-3.5 h-3.5 ${msStatus?.state === 'running' ? 'animate-spin' : ''}`} />
             {msStatus?.state === 'running' ? (lang === 'ja' ? '取込中…' : '수신 중…') : t.orders.msReceive}
           </button>
-          <a
-            href={`/api/orders?format=csv&completed=${tab === 'done' ? '1' : '0'}${statusFilter ? `&status=${statusFilter}` : ''}${payFilter ? `&paymentStatus=${payFilter}` : ''}${searchQ ? `&q=${encodeURIComponent(searchQ)}` : ''}${tab === 'done' && donePeriod !== 'all' && donePeriodFrom(donePeriod) ? `&from=${encodeURIComponent(donePeriodFrom(donePeriod))}` : ''}`}
+          <button
+            onClick={() => setExportConfirm(true)}
             className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
           >
             <Download className="w-3.5 h-3.5" /> CSV
-          </a>
+          </button>
           <a href="/orders/new" className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
             <Plus className="w-4 h-4" /> {t.orders.newOrder}
           </a>
@@ -878,6 +880,16 @@ export default function OrdersPage() {
         cancelText={t.common.cancel}
         onConfirm={() => { setMsConfirm(false); importMakeshop() }}
         onCancel={() => setMsConfirm(false)}
+      />
+
+      <ConfirmDialog
+        open={exportConfirm}
+        title="CSV"
+        message={t.common.exportConfirm.replace('{n}', String(total))}
+        confirmText="CSV"
+        cancelText={t.common.cancel}
+        onConfirm={() => { setExportConfirm(false); window.location.href = csvExportUrl() }}
+        onCancel={() => setExportConfirm(false)}
       />
     </div>
   )

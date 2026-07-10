@@ -6,6 +6,7 @@ import { Search, Package, RefreshCw, Save, CheckCircle, ChevronLeft, ChevronRigh
 import SupplierBadge from '@/components/SupplierBadge'
 import BarcodeScanner from '@/components/BarcodeScanner'
 import ProfitBar from '@/components/ProfitBar'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { formatJpy, formatNumber, calcProfitRate, calcCostJpy, SUPPLIER_COLORS, SUPPLIER_LIST } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
 
@@ -182,6 +183,8 @@ export default function ProductsPage() {
   const { data: prodData, isLoading: loading, refresh: refreshFlat } = useApiCache<{ products: Product[]; total: number }>(flatUrl)
   const products = prodData?.products ?? []
   const total = prodData?.total ?? 0
+  const [exportConfirm, setExportConfirm] = useState(false)   // CSV 내보내기 확인창
+  const csvExportUrl = () => `/api/products?format=csv&supplier=${encodeURIComponent(supplierFilter)}&q=${encodeURIComponent(q)}&category=${encodeURIComponent(categoryFilter)}${noPriceOnly ? '&noPrice=1' : ''}`
   // 상품 로드 시 저장된 판매가 시드 + dirty 초기화
   useEffect(() => {
     if (!prodData) return
@@ -493,14 +496,14 @@ export default function ProductsPage() {
             <Layers className="w-3.5 h-3.5" />
             {t.products.groupedView}
           </button>
-          <a
-            href={`/api/products?format=csv&supplier=${encodeURIComponent(supplierFilter)}&q=${encodeURIComponent(q)}&category=${encodeURIComponent(categoryFilter)}${noPriceOnly ? '&noPrice=1' : ''}`}
+          <button
+            onClick={() => setExportConfirm(true)}
             className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
             title="현재 필터 조건으로 CSV 내보내기"
           >
             <Download className="w-3.5 h-3.5" />
             CSV
-          </a>
+          </button>
         </div>
       </div>
 
@@ -1118,6 +1121,16 @@ export default function ProductsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={exportConfirm}
+        title="CSV"
+        message={t.common.exportConfirm.replace('{n}', formatNumber(total))}
+        confirmText="CSV"
+        cancelText={t.common.cancel}
+        onConfirm={() => { setExportConfirm(false); window.location.href = csvExportUrl() }}
+        onCancel={() => setExportConfirm(false)}
+      />
     </div>
   )
 }

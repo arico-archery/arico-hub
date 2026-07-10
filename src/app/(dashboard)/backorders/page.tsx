@@ -83,16 +83,14 @@ export default function BackordersPage() {
   const t = useT()
   const [supplierFilter, setSupplierFilter] = useState('')
   const [statusFilter, setStatusFilter]     = useState('needed,ordered')
-  const [brandFilter, setBrandFilter]       = useState('')                 // 브랜드 필터(클라)
   const [period, setPeriod]                 = useState<'all' | 'month' | '3m' | 'year'>('all')  // 기간(주문일, 서버)
+  const [exportConfirm, setExportConfirm]   = useState(false)             // 엑셀 내보내기 확인창
   const periodFromIso = boPeriodFrom(period)
   const backordersUrl = `/api/backorders?status=${encodeURIComponent(statusFilter)}${supplierFilter ? `&supplier=${encodeURIComponent(supplierFilter)}` : ''}${periodFromIso ? `&from=${encodeURIComponent(periodFromIso)}` : ''}`
   // 클라 캐시: 재방문/뒤로가기 시 즉시 표시 + 백그라운드 재검증
   const { data: itemsData, isLoading: loading, refresh, mutate } = useApiCache<BackorderItem[]>(backordersUrl)
   const items = itemsData ?? []
-  // 브랜드 필터(클라이언트) — 드롭다운 옵션은 전체 로드분에서 추출(선택해도 목록 유지)
-  const brandOptions = [...new Set(items.map(i => i.product.brand).filter(Boolean))].sort()
-  const view = brandFilter ? items.filter(i => (i.product.brand || '') === brandFilter) : items
+  const view = items   // 공급사 필터는 상단 버튼(SUPPLIER_LIST)으로 처리 — 별도 브랜드 드롭다운 없음
   const [selected, setSelected]     = useState<Set<number>>(new Set())
   const [collapsed, setCollapsed]   = useState<Set<string>>(new Set())
   const [expectedDate, setExpectedDate] = useState('')
@@ -246,6 +244,7 @@ export default function BackordersPage() {
   const exportExcel = () => {
     const label: Record<string, string> = { needed: t.backorders.needed, ordered: t.backorders.ordered, received: t.backorders.received }
     const sorted = [...view].sort((a, b) =>
+      a.product.supplierCode.localeCompare(b.product.supplierCode) ||
       (a.product.brand || '').localeCompare(b.product.brand || '') ||
       a.order.orderDate.localeCompare(b.order.orderDate))
     const rows = sorted.map(i => ({
@@ -331,16 +330,6 @@ export default function BackordersPage() {
               ))}
             </div>
             <div className="w-px h-5 bg-gray-200 dark:bg-gray-600" />
-            {/* 브랜드 */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">{t.backorders.colBrand}</span>
-              <select value={brandFilter} onChange={e => setBrandFilter(e.target.value)}
-                className="border border-gray-200 dark:border-gray-600 rounded px-2 py-1 text-xs text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 max-w-[10rem]">
-                <option value="">{t.backorders.all}</option>
-                {brandOptions.map(b => <option key={b} value={b}>{b}</option>)}
-              </select>
-            </div>
-            <div className="w-px h-5 bg-gray-200 dark:bg-gray-600" />
             {/* 기간 */}
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">{t.orders.periodLabel}</span>
@@ -356,7 +345,7 @@ export default function BackordersPage() {
                 </button>
               ))}
             </div>
-            <button onClick={exportExcel} disabled={view.length === 0}
+            <button onClick={() => setExportConfirm(true)} disabled={view.length === 0}
               className="ml-auto flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors">
               <FileSpreadsheet className="w-3.5 h-3.5" /> {t.backorders.exportExcel}
             </button>
@@ -719,6 +708,16 @@ export default function BackordersPage() {
         cancelText={t.common.cancel}
         onConfirm={() => { const g = confirmGroup; setConfirmGroup(null); if (g) submitPO(g.ids) }}
         onCancel={() => setConfirmGroup(null)}
+      />
+
+      <ConfirmDialog
+        open={exportConfirm}
+        title={t.backorders.exportExcel}
+        message={t.common.exportConfirm.replace('{n}', String(view.length))}
+        confirmText={t.backorders.exportExcel}
+        cancelText={t.common.cancel}
+        onConfirm={() => { setExportConfirm(false); exportExcel() }}
+        onCancel={() => setExportConfirm(false)}
       />
     </div>
   )
