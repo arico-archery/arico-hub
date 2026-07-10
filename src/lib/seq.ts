@@ -13,6 +13,13 @@ export async function nextPoNo(dateStr: string, attempt: number): Promise<string
   return `PO-${dateStr}-${String(lastSeq + 1 + attempt).padStart(4, '0')}`
 }
 
+// 거래처 코드(C###) 현존 최대 일련번호(숫자 기준).
+// ⚠️ orderBy code desc(문자열)는 C999 > C1000 이라 1000건 넘으면 틀림 → 전부 로드해 숫자 max.
+export async function maxCustomerSeq(): Promise<number> {
+  const rows = await prisma.customer.findMany({ where: { code: { startsWith: 'C' } }, select: { code: true } })
+  return rows.reduce((m, r) => { const n = parseInt(r.code.slice(1), 10); return Number.isFinite(n) && n > m ? n : m }, 0)
+}
+
 export async function createWithSeqRetry<T>(
   genNumber: (attempt: number) => Promise<string>,
   create: (no: string) => Promise<T>,

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { createWithSeqRetry } from '@/lib/seq'
+import { createWithSeqRetry, maxCustomerSeq } from '@/lib/seq'
 import { calcCostJpy } from '@/lib/utils'
 import {
   getAllOrdersDetailed, getAllMembersDetailed, fmtOrderDate,
@@ -134,8 +134,7 @@ export async function POST(req: Request) {
     const targets = rows.filter(r => !r.dup)   // 중복 아닌 전부 (미매칭 품목 포함)
 
     // 거래처 코드 러닝 카운터
-    const lastCust = await prisma.customer.findFirst({ where: { code: { startsWith: 'C' } }, orderBy: { code: 'desc' }, select: { code: true } })
-    let custSeq = lastCust ? (parseInt(lastCust.code.slice(1), 10) || 0) : 0
+    let custSeq = await maxCustomerSeq()
     // externalMemberId → customerId 캐시
     const custByMember = new Map((await prisma.customer.findMany({ where: { externalMemberId: { not: '' } }, select: { id: true, externalMemberId: true } })).map(c => [c.externalMemberId, c.id]))
 

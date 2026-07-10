@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAllMembersDetailed, memberPostal, memberAddress, makeshopConfigured, MakeshopError } from '@/lib/makeshop'
+import { maxCustomerSeq } from '@/lib/seq'
 
 // POST /api/makeshop/sync-members
 // MakeShop 회원 전체를 가져와 거래처(Customer)에 반영(externalMemberId 기준 생성/갱신).
@@ -14,8 +15,7 @@ export async function POST() {
     const existing = new Map(
       (await prisma.customer.findMany({ where: { externalMemberId: { not: '' } }, select: { id: true, externalMemberId: true } })).map(c => [c.externalMemberId, c.id]),
     )
-    const lastCust = await prisma.customer.findFirst({ where: { code: { startsWith: 'C' } }, orderBy: { code: 'desc' }, select: { code: true } })
-    let seq = lastCust ? (parseInt(lastCust.code.slice(1), 10) || 0) : 0
+    let seq = await maxCustomerSeq()
 
     let created = 0, updated = 0
     for (const m of members) {

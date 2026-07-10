@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { maxCustomerSeq } from '@/lib/seq'
 import * as XLSX from 'xlsx'
 
 export const maxDuration = 60   // Pro면 60초까지(Hobby는 10초 상한). 대량은 클라이언트가 청크로 분할 호출.
@@ -100,8 +101,7 @@ export async function POST(req: Request) {
   const byEmail = new Map(existing.filter(c => c.email).map(c => [c.email, c.id]))
   const byPhone = new Map(existing.filter(c => c.phone).map(c => [c.phone, c.id]))
 
-  const last = await prisma.customer.findFirst({ where: { code: { startsWith: 'C' } }, orderBy: { code: 'desc' }, select: { code: true } })
-  let seq = last ? (parseInt(last.code.slice(1), 10) || 0) : 0
+  let seq = await maxCustomerSeq()
 
   let skipped = 0
   const errors: string[] = []
