@@ -24,7 +24,7 @@ export async function GET(req: Request) {
   try {
     const orders = await getAllOrdersDetailed(start, end)
     // 코드별 그룹핑
-    const groups: Record<string, { count: number; samples: { order: string; date: string; sum: number; member: string }[] }> = {}
+    const groups: Record<string, { count: number; samples: { order: string; sys: string; date: string; sum: number; member: string }[] }> = {}
     for (const o of orders) {
       const code = o.paymentStatusCode || '(빈값)'
       const g = groups[code] || (groups[code] = { count: 0, samples: [] })
@@ -32,6 +32,7 @@ export async function GET(req: Request) {
       if (g.samples.length < per) {
         g.samples.push({
           order: o.displayOrderNumber || o.systemOrderNumber,
+          sys: o.systemOrderNumber,
           date: o.orderDate,
           sum: Number(o.sumPrice) || 0,
           member: o.memberId,
