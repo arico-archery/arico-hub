@@ -223,6 +223,9 @@ export default function OrdersPage() {
   // 필터/탭 변경 시 1페이지로 (목록 로드는 useApiCache가 ordersUrl 변경으로 처리)
   useEffect(() => { setPage(1) }, [statusFilter, payFilter, searchQ, tab, donePeriod])
 
+  // 탭 전환 시 필터 초기화 — 숨겨진 필터가 남아 헷갈리는 것 방지
+  const switchTab = (nt: 'active' | 'ready' | 'done') => { setTab(nt); setStatusFilter(''); setPayFilter(''); setPage(1) }
+
   const updateStatus = async (id: number, field: string, value: string) => {
     const body: Record<string, string | number> = { [field]: value }
     if (field === 'paymentStatus' && value === 'paid') {
@@ -352,7 +355,7 @@ export default function OrdersPage() {
       {/* 진행중 / 완료 탭 */}
       <div className="flex gap-1 mb-4">
         <button
-          onClick={() => { setTab('active'); setPage(1) }}
+          onClick={() => switchTab('active')}
           className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors ${tab === 'active' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600'}`}
         >
           {t.orders.tabActive}
@@ -361,7 +364,7 @@ export default function OrdersPage() {
           </span>
         </button>
         <button
-          onClick={() => { setTab('ready'); setPage(1) }}
+          onClick={() => switchTab('ready')}
           className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors ${tab === 'ready' ? 'bg-amber-500 text-white shadow-sm' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600'}`}
         >
           <Truck className="w-3.5 h-3.5 inline mr-1.5" />
@@ -371,7 +374,7 @@ export default function OrdersPage() {
           </span>
         </button>
         <button
-          onClick={() => { setTab('done'); setPage(1) }}
+          onClick={() => switchTab('done')}
           className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors ${tab === 'done' ? 'bg-green-600 text-white shadow-sm' : 'bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600'}`}
         >
           <CheckCheck className="w-3.5 h-3.5 inline mr-1.5" />
@@ -426,6 +429,10 @@ export default function OrdersPage() {
                 </button>
               ))}
             </div>
+          </>
+        )}
+        {(tab === 'active' || tab === 'done') && (
+          <>
             <div className="w-px h-5 bg-gray-200 dark:bg-gray-600" />
             <div className="flex gap-2 items-center">
               <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">{t.payments.colPaid}:</span>
