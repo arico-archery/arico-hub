@@ -149,7 +149,9 @@ export default function CustomersPage() {
   const [importProgress, setImportProgress] = useState<string | null>(null)
   // MakeShop 회원 불러오기
   const [msSyncing, setMsSyncing] = useState(false)
-  const [msResult, setMsResult] = useState<string | null>(null)
+  // 결과를 '데이터'로 저장 → 렌더에서 현재 언어로 조립(언어 전환에도 반영)
+  type MsRes = { ok: true; fetched: number; created: number; updated: number; skipped: number; mode: 'all' | 'new'; running?: boolean } | { ok: false; msg: string } | null
+  const [msResult, setMsResult] = useState<MsRes>(null)
   const [msConfirm, setMsConfirm] = useState(false)
   const [msMode, setMsMode] = useState<'all' | 'new'>('all')   // 전체 갱신 / 신규만
   const syncMembers = async (mode: 'all' | 'new') => {
@@ -162,15 +164,15 @@ export default function CustomersPage() {
         const text = await res.text()
         let d: { ok?: boolean; error?: string; hint?: string; detail?: unknown; count?: number; created?: number; updated?: number; skipped?: number; hasMore?: boolean } | null = null
         try { d = JSON.parse(text) } catch { d = null }
-        if (!d) { setMsResult('⚠️ ' + (text.includes('TIMEOUT') || text.includes('An error') ? `${page}페이지에서 시간 초과 (여기까지 신규 ${agg.created})` : text.slice(0, 120))); return }
-        if (!res.ok || !d.ok) { setMsResult('⚠️ ' + (d.error === 'not_configured' ? (d.hint || 'API 미설정') : `${d.error}${d.detail ? ' — ' + JSON.stringify(d.detail).slice(0, 200) : ''}`)); return }
+        if (!d) { setMsResult({ ok: false, msg: text.includes('TIMEOUT') || text.includes('An error') ? `${t.customers.msTimeout} (${t.customers.msNew} ${agg.created})` : text.slice(0, 120) }); return }
+        if (!res.ok || !d.ok) { setMsResult({ ok: false, msg: d.error === 'not_configured' ? (d.hint || 'API 미설정') : `${d.error}${d.detail ? ' — ' + JSON.stringify(d.detail).slice(0, 200) : ''}` }); return }
         agg.fetched += d.count ?? 0; agg.created += d.created ?? 0; agg.updated += d.updated ?? 0; agg.skipped += d.skipped ?? 0
-        setMsResult(`⏳ ${agg.fetched}${t.customers.msFetchedMembers} · ${t.customers.msNew} ${agg.created} …`)
+        setMsResult({ ok: true, ...agg, mode, running: true })
         if (!d.hasMore) break
         page++
       } while (++guard < 30)
-      setMsResult(`✅ ${agg.fetched}${t.customers.msFetchedMembers} · ${t.customers.msNew} ${agg.created}${mode === 'all' ? ` · ${t.customers.msUpdated} ${agg.updated}` : ` · ${t.customers.msSkipped} ${agg.skipped}`}`); loadCustomers()
-    } catch (e) { setMsResult('⚠️ ' + String(e)) } finally { setMsSyncing(false) }
+      setMsResult({ ok: true, ...agg, mode }); loadCustomers()
+    } catch (e) { setMsResult({ ok: false, msg: String(e) }); } finally { setMsSyncing(false) }
   }
 
   const downloadCustomerTemplate = () => {
@@ -422,7 +424,11 @@ export default function CustomersPage() {
       )}
       {msResult && (
         <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/50 text-indigo-800 dark:text-indigo-200 text-sm px-4 py-3 rounded-lg mb-4 flex items-center justify-between">
-          <span className="break-all">{t.customers.msMembersLabel}: {msResult}</span>
+          <span className="break-all">{t.customers.msMembersLabel}: {
+            msResult.ok
+              ? `${msResult.running ? '⏳' : '✅'} ${msResult.fetched}${t.customers.msFetchedMembers} · ${t.customers.msNew} ${msResult.created}${msResult.mode === 'all' ? ` · ${t.customers.msUpdated} ${msResult.updated}` : ` · ${t.customers.msSkipped} ${msResult.skipped}`}${msResult.running ? ' …' : ''}`
+              : `⚠️ ${msResult.msg}`
+          }</span>
           <button onClick={() => setMsResult(null)}><X className="w-4 h-4 shrink-0" /></button>
         </div>
       )}
