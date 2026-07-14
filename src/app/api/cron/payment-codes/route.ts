@@ -19,8 +19,10 @@ export async function GET(req: Request) {
   const days = Math.min(365, Math.max(1, Number(url.searchParams.get('days')) || 365))
   const per = Math.min(10, Math.max(1, Number(url.searchParams.get('per')) || 5))
   const now = new Date()
-  const start = fmtOrderDate(new Date(now.getTime() - days * 86400000))
-  const end = fmtOrderDate(now)
+  // 명시 구간(from/to = YYYYMMDD)이 있으면 그 구간만 (DB에 수신된 범위와 맞추기 위함)
+  const from = url.searchParams.get('from'); const to = url.searchParams.get('to')
+  const start = (from && /^\d{8}$/.test(from)) ? `${from}000000` : fmtOrderDate(new Date(now.getTime() - days * 86400000))
+  const end = (to && /^\d{8}$/.test(to)) ? `${to}235959` : fmtOrderDate(now)
   try {
     const orders = await getAllOrdersDetailed(start, end)
     // 코드별 그룹핑
