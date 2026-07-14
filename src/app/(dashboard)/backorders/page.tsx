@@ -19,7 +19,7 @@ function boPeriodFrom(p: string): string {
   const d = new Date()
   if (p === 'month') return new Date(d.getFullYear(), d.getMonth(), 1).toISOString()
   if (p === 'year')  return new Date(d.getFullYear(), 0, 1).toISOString()
-  if (p === '3m') { const x = new Date(d); x.setMonth(x.getMonth() - 3); return x.toISOString() }
+  if (p === '3m') return new Date(d.getFullYear(), d.getMonth() - 3, d.getDate()).toISOString()
   return ''
 }
 
