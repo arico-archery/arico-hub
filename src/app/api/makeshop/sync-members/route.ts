@@ -20,11 +20,14 @@ export async function POST(req: Request) {
     )
     let seq = await maxCustomerSeq()
 
-    let created = 0, updated = 0, skipped = 0
+    // 생성/갱신 분리 후 일괄·병렬 처리(순차 update가 타임아웃 주범이라 배치화)
+    let skipped = 0
+    const creates: Record<string, string>[] = []
+    const updates: { id: number; data: Record<string, string> }[] = []
     for (const m of members) {
       if (!m.memberId) continue
       const id = existing.get(m.memberId)
-      if (id && mode === 'new') { skipped++; continue }   // 신규만: 기존은 건드리지 않음(빠름)
+      if (id && mode === 'new') { skipped++; continue }   // 신규만: 기존은 건드리지 않음
       const data: Record<string, string> = {}
       if (m.name) data.name = m.name
       if (m.nameKana) data.nameKana = m.nameKana
@@ -33,16 +36,20 @@ export async function POST(req: Request) {
       const addr = memberAddress(m); if (addr) data.address = addr
       const pc = memberPostal(m); if (pc) data.postalCode = pc
       if (id) {
-        if (Object.keys(data).length) await prisma.customer.update({ where: { id }, data })
-        updated++
+        if (Object.keys(data).length) updates.push({ id, data })
       } else {
         seq += 1
-        const c = await prisma.customer.create({ data: { code: `C${String(seq).padStart(3, '0')}`, name: data.name || m.memberId, nameKana: data.nameKana || '', externalMemberId: m.memberId, email: data.email || '', phone: data.phone || '', address: data.address || '', postalCode: data.postalCode || '' } })
-        existing.set(m.memberId, c.id)
-        created++
+        creates.push({ code: `C${String(seq).padStart(3, '0')}`, name: data.name || m.memberId, nameKana: data.nameKana || '', externalMemberId: m.memberId, email: data.email || '', phone: data.phone || '', address: data.address || '', postalCode: data.postalCode || '' })
       }
     }
-    return NextResponse.json({ ok: true, fetched: members.length, created, updated, skipped })
+    if (creates.length) await prisma.customer.createMany({ data: creates as unknown as NonNullable<Parameters<typeof prisma.customer.createMany>[0]>['data'] })
+    let updated = 0
+    const CONC = 10
+    for (let i = 0; i < updates.length; i += CONC) {
+      const r = await Promise.allSettled(updates.slice(i, i + CONC).map(u => prisma.customer.update({ where: { id: u.id }, data: u.data })))
+      updated += r.filter(x => x.status === 'fulfilled').length
+    }
+    return NextResponse.json({ ok: true, fetched: members.length, created: creates.length, updated, skipped })
   } catch (e) {
     const err = e instanceof MakeshopError ? { error: e.message, detail: e.detail } : { error: String(e) }
     return NextResponse.json({ ok: false, ...err }, { status: 502 })

@@ -156,9 +156,17 @@ export default function CustomersPage() {
     setMsSyncing(true); setMsResult(null)
     try {
       const res = await fetch(`/api/makeshop/sync-members?mode=${mode}`, { method: 'POST' })
-      const d = await res.json()
-      if (!res.ok || !d.ok) setMsResult('⚠️ ' + (d.error === 'not_configured' ? (d.hint || 'API 미설정') : `${d.error}${d.detail ? ' — ' + JSON.stringify(d.detail).slice(0, 200) : ''}`))
-      else { setMsResult(`✅ ${d.fetched}${t.customers.msFetchedMembers} · ${t.customers.msNew} ${d.created}${mode === 'all' ? ` · ${t.customers.msUpdated} ${d.updated}` : ` · ${t.customers.msSkipped} ${d.skipped}`}`); loadCustomers() }
+      const text = await res.text()
+      let d: { ok?: boolean; error?: string; hint?: string; detail?: unknown; fetched?: number; created?: number; updated?: number; skipped?: number } | null = null
+      try { d = JSON.parse(text) } catch { d = null }
+      if (!d) {
+        // 비-JSON 응답(대개 타임아웃) — 친절한 안내
+        setMsResult('⚠️ ' + (text.includes('TIMEOUT') || text.includes('An error') ? '시간 초과됐습니다. [신규만]으로 다시 시도해 주세요(빠름).' : text.slice(0, 120)))
+      } else if (!res.ok || !d.ok) {
+        setMsResult('⚠️ ' + (d.error === 'not_configured' ? (d.hint || 'API 미설정') : `${d.error}${d.detail ? ' — ' + JSON.stringify(d.detail).slice(0, 200) : ''}`))
+      } else {
+        setMsResult(`✅ ${d.fetched}${t.customers.msFetchedMembers} · ${t.customers.msNew} ${d.created}${mode === 'all' ? ` · ${t.customers.msUpdated} ${d.updated}` : ` · ${t.customers.msSkipped} ${d.skipped}`}`); loadCustomers()
+      }
     } catch (e) { setMsResult('⚠️ ' + String(e)) } finally { setMsSyncing(false) }
   }
 
