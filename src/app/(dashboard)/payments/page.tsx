@@ -44,8 +44,8 @@ type PurchasePO = {
 export default function PaymentsPage() {
   const t = useT()
   const [tab, setTab] = useState<'sales' | 'purchase'>('sales')
-  // 클라 캐시: 미입금 주문(원시 응답 캐시) → dueDate 정렬은 파생
-  const { data: ordersRaw, isLoading: loading, refresh: loadOrders } = useApiCache<{ orders: Order[] }>('/api/orders?paymentStatus=unpaid,partial&limit=200')
+  // 클라 캐시: 미입금 주문(원시 응답 캐시) → dueDate 정렬은 파생. 전건 조회 후 화면은 100건씩 더 보기.
+  const { data: ordersRaw, isLoading: loading, refresh: loadOrders } = useApiCache<{ orders: Order[] }>('/api/orders?paymentStatus=unpaid,partial&limit=1000')
   const orders = useMemo(() => {
     const list = [...(ordersRaw?.orders ?? [])]
     list.sort((a, b) => {
@@ -62,7 +62,7 @@ export default function PaymentsPage() {
   // 매입(제조사 지급)
   const [payingPo, setPayingPo] = useState<number | null>(null)
   // 클라 캐시: 매입(발주) 원시 응답 → 지급대상 상태만 파생
-  const { data: posRaw, isLoading: posLoading, refresh: loadPOs } = useApiCache<{ orders: PurchasePO[] }>('/api/purchase-orders?limit=200')
+  const { data: posRaw, isLoading: posLoading, refresh: loadPOs } = useApiCache<{ orders: PurchasePO[] }>('/api/purchase-orders?limit=1000')
   const pos = useMemo(
     () => (posRaw?.orders ?? []).filter((p) => ['confirmed', 'paid', 'partial', 'received'].includes(p.status)),
     [posRaw],
@@ -106,6 +106,18 @@ export default function PaymentsPage() {
   const posPayable = pos.filter(p => p.paymentStatus !== 'paid')
   const posPaid    = pos.filter(p => p.paymentStatus === 'paid')
   const totalPayable = posPayable.reduce((a, p) => a + (p.confirmedTotalJpy || p.totalCostJpy), 0)
+
+  // 표시 건수 제한(100건씩 더 보기) — 목록이 커져도 화면이 무거워지지 않게
+  const SHOW_STEP = 100
+  const [showOverdue, setShowOverdue]   = useState(SHOW_STEP)
+  const [showUpcoming, setShowUpcoming] = useState(SHOW_STEP)
+  const [showPosPaid, setShowPosPaid]   = useState(SHOW_STEP)
+  const moreBtn = (shown: number, total: number, grow: () => void) =>
+    total > shown && (
+      <button onClick={grow} className="mt-2 w-full text-sm text-blue-600 hover:text-blue-800 py-2 rounded-lg border border-blue-100 hover:bg-blue-50 dark:border-blue-900/50 dark:hover:bg-blue-900/20 transition-colors">
+        {t.analytics.showMore} ({total - shown})
+      </button>
+    )
 
   return (
     <div className="p-6">
@@ -161,10 +173,11 @@ export default function PaymentsPage() {
                     {t.payments.paidSection} ({posPaid.length}{t.common.cases})
                   </h2>
                   <div className="space-y-2">
-                    {posPaid.map(po => (
+                    {posPaid.slice(0, showPosPaid).map(po => (
                       <PurchaseCard key={po.id} po={po} paying={false} onPay={() => {}} />
                     ))}
                   </div>
+                  {moreBtn(showPosPaid, posPaid.length, () => setShowPosPaid(n => n + SHOW_STEP))}
                 </div>
               )}
             </>
@@ -181,7 +194,7 @@ export default function PaymentsPage() {
             {t.payments.overdueSection} ({overdue.length}{t.common.cases})
           </h2>
           <div className="space-y-2">
-            {overdue.map(order => (
+            {overdue.slice(0, showOverdue).map(order => (
               <OrderCard
                 key={order.id} order={order} isOverdue
                 daysOverdue={Math.floor((now - new Date(order.dueDate!).getTime()) / DAY_MS)}
@@ -196,6 +209,7 @@ export default function PaymentsPage() {
               />
             ))}
           </div>
+          {moreBtn(showOverdue, overdue.length, () => setShowOverdue(n => n + SHOW_STEP))}
         </div>
       )}
 
@@ -205,7 +219,7 @@ export default function PaymentsPage() {
             {t.payments.upcomingSection} ({upcoming.length}{t.common.cases})
           </h2>
           <div className="space-y-2">
-            {upcoming.map(order => (
+            {upcoming.slice(0, showUpcoming).map(order => (
               <OrderCard
                 key={order.id} order={order} isOverdue={false}
                 expanded={expanded === order.id}
@@ -219,6 +233,7 @@ export default function PaymentsPage() {
               />
             ))}
           </div>
+          {moreBtn(showUpcoming, upcoming.length, () => setShowUpcoming(n => n + SHOW_STEP))}
         </div>
       )}
 
