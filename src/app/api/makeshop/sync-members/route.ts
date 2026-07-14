@@ -3,13 +3,16 @@ import { prisma } from '@/lib/prisma'
 import { getAllMembersDetailed, memberPostal, memberAddress, makeshopConfigured, MakeshopError } from '@/lib/makeshop'
 import { maxCustomerSeq } from '@/lib/seq'
 
-// POST /api/makeshop/sync-members
+export const maxDuration = 60
+
+// POST /api/makeshop/sync-members?mode=all|new
 // MakeShop 회원 전체를 가져와 거래처(Customer)에 반영(externalMemberId 기준 생성/갱신).
-// 이름·이메일·전화·주소·우편번호를 채운다(값 있는 것만). 기존 수동 등록 거래처는 안 건드림.
-export async function POST() {
+// mode=new: 기존 거래처는 갱신하지 않고 **신규 회원만 생성**(대량 갱신 생략 → 빠름).
+export async function POST(req: Request) {
   if (!makeshopConfigured()) {
     return NextResponse.json({ ok: false, error: 'not_configured', hint: 'Vercel 환경변수 설정 후 재배포하세요.' }, { status: 503 })
   }
+  const mode = new URL(req.url).searchParams.get('mode') === 'new' ? 'new' : 'all'
   try {
     const members = await getAllMembersDetailed()
     const existing = new Map(
@@ -17,9 +20,11 @@ export async function POST() {
     )
     let seq = await maxCustomerSeq()
 
-    let created = 0, updated = 0
+    let created = 0, updated = 0, skipped = 0
     for (const m of members) {
       if (!m.memberId) continue
+      const id = existing.get(m.memberId)
+      if (id && mode === 'new') { skipped++; continue }   // 신규만: 기존은 건드리지 않음(빠름)
       const data: Record<string, string> = {}
       if (m.name) data.name = m.name
       if (m.nameKana) data.nameKana = m.nameKana
@@ -27,7 +32,6 @@ export async function POST() {
       if (m.tel) data.phone = m.tel
       const addr = memberAddress(m); if (addr) data.address = addr
       const pc = memberPostal(m); if (pc) data.postalCode = pc
-      const id = existing.get(m.memberId)
       if (id) {
         if (Object.keys(data).length) await prisma.customer.update({ where: { id }, data })
         updated++
@@ -38,7 +42,7 @@ export async function POST() {
         created++
       }
     }
-    return NextResponse.json({ ok: true, fetched: members.length, created, updated })
+    return NextResponse.json({ ok: true, fetched: members.length, created, updated, skipped })
   } catch (e) {
     const err = e instanceof MakeshopError ? { error: e.message, detail: e.detail } : { error: String(e) }
     return NextResponse.json({ ok: false, ...err }, { status: 502 })

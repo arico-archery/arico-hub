@@ -151,13 +151,14 @@ export default function CustomersPage() {
   const [msSyncing, setMsSyncing] = useState(false)
   const [msResult, setMsResult] = useState<string | null>(null)
   const [msConfirm, setMsConfirm] = useState(false)
-  const syncMembers = async () => {
+  const [msMode, setMsMode] = useState<'all' | 'new'>('all')   // 전체 갱신 / 신규만
+  const syncMembers = async (mode: 'all' | 'new') => {
     setMsSyncing(true); setMsResult(null)
     try {
-      const res = await fetch('/api/makeshop/sync-members', { method: 'POST' })
+      const res = await fetch(`/api/makeshop/sync-members?mode=${mode}`, { method: 'POST' })
       const d = await res.json()
       if (!res.ok || !d.ok) setMsResult('⚠️ ' + (d.error === 'not_configured' ? (d.hint || 'API 미설정') : `${d.error}${d.detail ? ' — ' + JSON.stringify(d.detail).slice(0, 200) : ''}`))
-      else { setMsResult(`✅ ${d.fetched}${t.customers.msFetchedMembers} · ${t.customers.msNew} ${d.created} · ${t.customers.msUpdated} ${d.updated}`); loadCustomers() }
+      else { setMsResult(`✅ ${d.fetched}${t.customers.msFetchedMembers} · ${t.customers.msNew} ${d.created}${mode === 'all' ? ` · ${t.customers.msUpdated} ${d.updated}` : ` · ${t.customers.msSkipped} ${d.skipped}`}`); loadCustomers() }
     } catch (e) { setMsResult('⚠️ ' + String(e)) } finally { setMsSyncing(false) }
   }
 
@@ -337,15 +338,25 @@ export default function CustomersPage() {
             <Upload className="w-4 h-4" />
             {t.customers.excelImport}
           </button>
-          <button
-            onClick={() => setMsConfirm(true)}
-            disabled={msSyncing}
-            className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-            title={t.customers.msMembersTooltip}
-          >
-            <Download className={`w-4 h-4 ${msSyncing ? 'animate-spin' : ''}`} />
-            {t.customers.msMembers}
-          </button>
+          <div className="flex items-center rounded-lg overflow-hidden border border-indigo-600">
+            <button
+              onClick={() => { setMsMode('all'); setMsConfirm(true) }}
+              disabled={msSyncing}
+              className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              title={t.customers.msMembersTooltip}
+            >
+              <Download className={`w-4 h-4 ${msSyncing ? 'animate-spin' : ''}`} />
+              {t.customers.msMembers}
+            </button>
+            <button
+              onClick={() => { setMsMode('new'); setMsConfirm(true) }}
+              disabled={msSyncing}
+              className="bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-300 px-2.5 py-2 text-sm font-medium hover:bg-indigo-50 dark:hover:bg-gray-700 disabled:opacity-50 transition-colors border-l border-indigo-600"
+              title={t.customers.msMembersNewTooltip}
+            >
+              {t.customers.msMembersNew}
+            </button>
+          </div>
           <button
             onClick={() => { setShowForm(true); setEditingId(null) }}
             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
@@ -620,10 +631,10 @@ export default function CustomersPage() {
       <ConfirmDialog
         open={msConfirm}
         title={t.customers.msMembersTitle}
-        message={t.customers.msMembersMsg}
+        message={msMode === 'new' ? t.customers.msMembersNewMsg : t.customers.msMembersMsg}
         confirmText={t.customers.msMembersLoad}
         cancelText={t.common.cancel}
-        onConfirm={() => { setMsConfirm(false); syncMembers() }}
+        onConfirm={() => { setMsConfirm(false); syncMembers(msMode) }}
         onCancel={() => setMsConfirm(false)}
       />
     </div>
