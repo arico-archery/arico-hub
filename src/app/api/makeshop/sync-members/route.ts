@@ -44,7 +44,7 @@ export async function syncMembersPage(mode: 'all' | 'new', page: number, limit: 
   return { page, count: members.length, hasMore: members.length === limit, created: creates.length, updated, skipped }
 }
 
-const PAGE_LIMIT = 300   // 페이지당 회원 수(작게 유지해 타임아웃 회피)
+const PAGE_LIMIT = 250   // 페이지당 회원 수(작게 유지해 타임아웃 회피 — update 왕복이 병목)
 
 // POST /api/makeshop/sync-members?mode=all|new&page=N — 한 페이지 처리. 클라이언트가 page 반복.
 export async function POST(req: Request) {
