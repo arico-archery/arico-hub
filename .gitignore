@@ -67,3 +67,6 @@ venv/
 .tools/
 
 .vercel
+
+# 임시 스크립트/토큰 (커밋 금지)
+scratch_*
