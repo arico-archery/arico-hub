@@ -9,7 +9,7 @@ import DateInput from '@/components/DateInput'
 import { useT } from '@/lib/i18n'
 
 type Supplier = { code: string; currency: string; taxRate: number; discount: number }
-type Product  = { id: number; name: string; brand: string; productCode: string; supplierCode: string; costPrice: number; supplier: Supplier; optionSize: string; optionColor: string }
+type Product  = { id: number; name: string; brand: string; productCode: string; supplierCode: string; costPrice: number; supplier: Supplier; optionSize: string; optionColor: string; origin?: string }
 type ExchangeRate = { currency: string; rateToJpy: number }
 type VariantAxis = { label: string; values: string[] }
 type VItem = Product & { options: Record<string, string>; optionLabel: string }
@@ -115,6 +115,7 @@ export default function NewPurchaseOrderPage() {
   }
 
   const suppliers = [...new Set(lines.map(l => l.product.supplierCode))]
+  const origins   = [...new Set(lines.map(l => l.product.origin || '').filter(Boolean))]  // 원산지 종류(FIVICS 中国/韓国)
   const totalCost = lines.reduce((s, l) => s + l.unitCostJpy * l.quantity, 0)
 
   const handleSubmit = async () => {
@@ -234,6 +235,7 @@ export default function NewPurchaseOrderPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <SupplierBadge code={line.product.supplierCode} />
+                          {line.product.origin && <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">{line.product.origin === 'CHINA' ? '中国' : line.product.origin === 'KOREA' ? '韓国' : line.product.origin}</span>}
                           <div className="min-w-0">
                             <p className="font-medium text-gray-900 dark:text-gray-100 leading-tight">{line.product.name}</p>
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -346,6 +348,11 @@ export default function NewPurchaseOrderPage() {
               </div>
             </div>
 
+            {origins.length > 1 && (
+              <p className="mb-2 text-xs text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800/50 rounded-lg px-3 py-2">
+                {t.purchaseOrders.originSplitHint} ({origins.map(o => o === 'CHINA' ? '中国' : o === 'KOREA' ? '韓国' : o).join(' / ')})
+              </p>
+            )}
             <button
               onClick={handleSubmit}
               disabled={lines.length === 0 || suppliers.length !== 1 || submitting}
