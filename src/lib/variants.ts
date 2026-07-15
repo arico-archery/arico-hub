@@ -120,10 +120,19 @@ export function buildSibuyaGroup(rows: RawVariant[]): VariantGroup {
   return assembleGroup(rows, base, r => parseSibuyaOption(r.optionSize, r.optionColor))
 }
 
-// FIVICS: 옵션(방향·색상·사이즈)이 optionSize 한 필드에 통째로 담김
-// (예 "66/22", "RIGHT HANDED - BLUE") → 이름이 같은 SKU들을 단일 축으로 묶는다.
+// FIVICS 변형 이름에서 옵션 접미부(" - <optionSize>")를 떼어 베이스명(대표상품명)을 얻는다.
+// name = "FIVICS <설명> - <옵션>" 구조. 같은 베이스명 = 같은 대표상품(PAINTED/ANODIZED 등 설명별로 분리).
+export function fivicsBaseName(name: string, optionSize: string): string {
+  if (optionSize && name.endsWith(` - ${optionSize}`)) return name.slice(0, -(optionSize.length + 3)).trim()
+  if (optionSize && name.endsWith(optionSize)) return name.slice(0, -optionSize.length).trim()
+  return name
+}
+
+// FIVICS: 옵션(방향·색상·사이즈)이 optionSize 한 필드에 담김(예 "66/22", "RIGHT HANDED - BLUE").
+// 이름 접미부를 뗀 베이스명으로 묶고 단일 축으로 구조화한다.
 export function buildFivicsGroup(rows: RawVariant[]): VariantGroup {
-  return assembleGroup(rows, rows[0].name, r => {
+  const base = fivicsBaseName(rows[0].name, rows[0].optionSize)
+  return assembleGroup(rows, base, r => {
     const o: VariantOption = {}
     if (r.optionSize) o['옵션'] = r.optionSize   // AXIS_ORDER에 등록된 축명 사용(라벨 정상 생성)
     return o
