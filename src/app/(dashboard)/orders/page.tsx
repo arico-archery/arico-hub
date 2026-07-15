@@ -647,7 +647,7 @@ export default function OrdersPage() {
                                   <input
                                     type="number"
                                     className="flex-1 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1 text-xs text-gray-900 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                    placeholder={`잔액 ¥${(order.totalAmountJpy - order.paidAmountJpy).toLocaleString()}`}
+                                    placeholder={`${t.payments.balance} ¥${(order.totalAmountJpy - order.paidAmountJpy).toLocaleString()}`}
                                     value={partialPayInputs[order.id] ?? ''}
                                     onChange={e => setPartialPayInputs(p => ({ ...p, [order.id]: e.target.value }))}
                                   />
