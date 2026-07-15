@@ -69,6 +69,7 @@ function mapFivicsRow(row: CsvRow): CsvRow {
     category:     find(['category', 'cat', '카테고리', 'カテゴリ']),
     brand:        find(['brand', 'brand_name', '브랜드', 'ブランド']),
     unit:         find(['unit', '단위', '単位']),
+    origin:       find(['origin', '원산지', '原産地', 'CODENO.origin']),   // CHINA/KOREA (발주서 분리)
   }
 }
 
@@ -158,6 +159,9 @@ export async function POST(req: Request) {
         imageUrl2:    (row.image_url_2 || row.imageUrl2 || '').trim(),
         imageUrl3:    (row.image_url_3 || row.imageUrl3 || '').trim(),
         scrapedAt,
+        // origin(CHINA/KOREA)은 값이 있을 때만 반영 — 재임포트로 기존 값 지워지지 않게
+        ...(row.origin && ['CHINA', 'KOREA'].includes(row.origin.trim().toUpperCase())
+          ? { origin: row.origin.trim().toUpperCase() } : {}),
       }
 
       await prisma.product.upsert({

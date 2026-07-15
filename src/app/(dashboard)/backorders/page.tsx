@@ -96,7 +96,7 @@ export default function BackordersPage() {
   const [expectedDate, setExpectedDate] = useState('')
   const [memo, setMemo]             = useState('')
   const [creating, setCreating]     = useState(false)
-  const [lastResult, setLastResult] = useState<{ poNo: string; supplierCode: string; itemCount: number }[] | null>(null)
+  const [lastResult, setLastResult] = useState<{ poNo: string; supplierCode: string; origin?: string; itemCount: number }[] | null>(null)
   const [confirmGroup, setConfirmGroup] = useState<{ ids: number[]; sc: string } | null>(null)  // 전체발주 확인 대상
   // 백오더 단계 변형(옵션) 선택: orderItemId → {axes, list, sel}
   const [vData, setVData] = useState<Record<number, { axes: VariantAxis[]; list: VItem[]; sel: Record<string, string> } | 'none'>>({})
@@ -359,6 +359,7 @@ export default function BackordersPage() {
                 {lastResult.map(r => (
                   <div key={r.poNo} className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
                     <SupplierBadge code={r.supplierCode} />
+                    {r.origin && <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-white dark:bg-gray-800 border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300">{r.origin === 'CHINA' ? '中国' : r.origin === 'KOREA' ? '韓国' : r.origin}</span>}
                     <Link href={`/purchase-orders`} className="font-medium hover:underline">{r.poNo}</Link>
                     <span className="text-green-600 dark:text-green-500">— {r.itemCount}{t.common.items}</span>
                   </div>

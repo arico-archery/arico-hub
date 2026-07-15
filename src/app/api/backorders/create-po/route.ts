@@ -38,22 +38,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: '발주 가능한 항목이 없습니다 (이미 발주된 항목은 제외됩니다)' }, { status: 400 })
   }
 
-  // 공급사별 그룹화
-  const bySupplier = new Map<string, typeof items>()
+  // 공급사별 그룹화 — origin(원산지)이 있는 상품(FIVICS: CHINA/KOREA)은 원산지별로 분리한다.
+  // 같은 공급사라도 중국산/한국산은 발주처가 달라 별도 발주서가 필요하기 때문.
+  const byGroup = new Map<string, { supplierCode: string; origin: string; items: typeof items }>()
   for (const item of items) {
     const sc = item.product.supplierCode
-    if (!bySupplier.has(sc)) bySupplier.set(sc, [])
-    bySupplier.get(sc)!.push(item)
+    const origin = item.product.origin || ''
+    const key = origin ? `${sc}|${origin}` : sc
+    if (!byGroup.has(key)) byGroup.set(key, { supplierCode: sc, origin, items: [] })
+    byGroup.get(key)!.items.push(item)
   }
 
-  const createdPOs: { poNo: string; supplierCode: string; itemCount: number }[] = []
+  const createdPOs: { poNo: string; supplierCode: string; origin: string; itemCount: number }[] = []
 
   // 환율 정보
   const rates = await prisma.exchangeRate.findMany()
   const getRate = (currency: string) => rates.find(r => r.currency === currency)?.rateToJpy ?? 1
 
-  // 공급사별 PO 생성
-  for (const [supplierCode, groupItems] of bySupplier) {
+  // 그룹(공급사×원산지)별 PO 생성
+  for (const { supplierCode, origin, groupItems } of [...byGroup.values()].map(g => ({ ...g, groupItems: g.items }))) {
     const supplier = groupItems[0].product.supplier
     const rate     = getRate(supplier.currency)
 
@@ -84,9 +87,10 @@ export async function POST(req: Request) {
     // PO 번호: 동시성·삭제 안전 채번 + 충돌 재시도
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
 
-    // 발주서 메모: 관련 주문 목록 자동 포함
+    // 발주서 메모: 원산지(있으면) + 관련 주문 목록 자동 포함
     const orderNos = [...new Set(groupItems.map(i => i.order.orderNo))].join(', ')
-    const autoMemo = `백오더 발주 (주문: ${orderNos})${memo ? '\n' + memo : ''}`
+    const originTag = origin ? `[${origin}] ` : ''
+    const autoMemo = `${originTag}백오더 발주 (주문: ${orderNos})${memo ? '\n' + memo : ''}`
 
     const po = await createWithSeqRetry(
       (attempt) => nextPoNo(dateStr, attempt),
@@ -116,7 +120,7 @@ export async function POST(req: Request) {
       data:  { procureStatus: 'ordered', purchaseOrderId: po.id },
     })
 
-    createdPOs.push({ poNo: po.poNo, supplierCode, itemCount: groupItems.length })
+    createdPOs.push({ poNo: po.poNo, supplierCode, origin, itemCount: groupItems.length })
   }
 
   return NextResponse.json({ created: createdPOs })

@@ -34,6 +34,7 @@ model Product {
   costPrice       Float     // in supplier's currency
   msrp            Float     @default(0) // in supplier's currency
   unit            String    @default("1")
+  origin          String    @default("")   // 생산 원산지(FIVICS: CHINA/KOREA) — 발주서 분리 기준
   availability    String    @default("in_stock")
   imageUrl1       String    @default("")
   imageUrl2       String    @default("")
