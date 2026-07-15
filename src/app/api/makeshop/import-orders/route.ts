@@ -11,6 +11,9 @@ import {
 
 export const maxDuration = 60   // Pro면 60초까지 (대량 수신 대비)
 
+// 수신 제외 품목 — レンタルリム(림 렌탈 구독)은 유통 대상 아님(2026-07-15 결정, 앞으로도 미처리)
+const EXCLUDE_ITEM = /レンタルリム/
+
 // 입금상태 매핑(임시): 0002=입금완료, 그 외=미입금. 실제 코드 뜻 확인되면 보정.
 function mapPayment(code: string): 'paid' | 'unpaid' {
   return code === '0002' ? 'paid' : 'unpaid'
@@ -72,7 +75,9 @@ async function buildPreview(days: number, win?: { start: string; end: string }) 
   const imported = new Set((await prisma.order.findMany({ where: { externalOrderNo: { not: '' } }, select: { externalOrderNo: true } })).map(o => o.externalOrderNo))
 
   const rows: PreviewRow[] = orders.map(o => {
+    // レンタルリム(림 렌탈 구독)은 유통 대상 아님 — 수신에서 제외(카탈로그·상품·주문 모두)
     const baskets = (o.deliveryInfos || []).flatMap(d => d.basketInfos || [])
+      .filter(b => !EXCLUDE_ITEM.test(b.productName || ''))
     const shipping = (o.deliveryInfos || []).reduce((s, d) => s + (Number(d.shippingCharge) || 0), 0)
     const items: PreviewItem[] = baskets.map(b => {
       const cat = catMap.get(b.productCode)
@@ -103,8 +108,8 @@ export async function GET(req: Request) {
   const days = Math.min(365, Math.max(1, Number(new URL(req.url).searchParams.get('days')) || 90))
   try {
     const { start, end, rows } = await buildPreview(days)
-    // 미매칭 품목이 있어도 가져온다(ETC 상품 생성). 가져올 수 있음 = 중복 아닌 전부.
-    const importable = rows.filter(r => !r.dup).length
+    // 미매칭 품목이 있어도 가져온다(ETC 상품 생성). 가져올 수 있음 = 중복 아니고 품목 남은 것(레タンルリム만인 주문 제외).
+    const importable = rows.filter(r => !r.dup && r.items.length > 0).length
     // 옵션 진단: variationCustomCode가 오는 품목 수 + 샘플(어느 필드에 옵션이 오는지 확인용)
     const allItems = rows.flatMap(r => r.items)
     const withVarCode = allItems.filter(i => i.variationCustomCode).length
@@ -112,7 +117,7 @@ export async function GET(req: Request) {
       .map(i => ({ productCode: i.productCode, variationCustomCode: i.variationCustomCode, productName: i.productName }))
     return NextResponse.json({
       ok: true, range: { start, end },
-      summary: { total: rows.length, dup: rows.filter(r => r.dup).length, importable, hasUnmatched: rows.filter(r => !r.dup && !r.allMatched).length, items: allItems.length, withVariationCode: withVarCode },
+      summary: { total: rows.length, dup: rows.filter(r => r.dup).length, importable, hasUnmatched: rows.filter(r => !r.dup && r.items.length > 0 && !r.allMatched).length, items: allItems.length, withVariationCode: withVarCode },
       optionSamples,
       rows,
     })
@@ -136,7 +141,7 @@ export async function runImport(days: number, win?: { start: string; end: string
   try {
     await writeStatus({ state: 'running', days, startedAt, finishedAt: null, created: 0, dup: 0, partial: 0 })
     const { rows, catMap, prodMap, rates, memberMap } = await buildPreview(days, win)
-    const targets = rows.filter(r => !r.dup)   // 중복 아닌 전부 (미매칭 품목 포함)
+    const targets = rows.filter(r => !r.dup && r.items.length > 0)   // 중복 아닌 전부(미매칭 포함). 품목 0(=レンタルリム만)은 제외
 
     // 거래처 코드 러닝 카운터
     let custSeq = await maxCustomerSeq()
