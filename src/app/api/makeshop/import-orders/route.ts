@@ -14,10 +14,14 @@ export const maxDuration = 60   // Pro면 60초까지 (대량 수신 대비)
 // 수신 제외 품목 — レンタルリム(림 렌탈 구독)은 유통 대상 아님(2026-07-15 결정, 앞으로도 미처리)
 const EXCLUDE_ITEM = /レンタルリム/
 
-// 입금상태 매핑(임시): 0002=입금완료, 그 외=미입금. 실제 코드 뜻 확인되면 보정.
+// 입금상태 매핑(2026-07-15 확정, 지안 확인):
+//  0000=代引き입금완료 · 0001=현금입금완료 · 0002=입금완료 · 0004=仮売上(고객결제완료) · 1002=포인트/¥0(미수금 없음) → 입금완료
+//  0003=취소(배송상태에서 cancelled 처리) · 그 외 → 미입금
+const PAID_CODES = new Set(['0000', '0001', '0002', '0004', '1002'])
 function mapPayment(code: string): 'paid' | 'unpaid' {
-  return code === '0002' ? 'paid' : 'unpaid'
+  return PAID_CODES.has(code) ? 'paid' : 'unpaid'
 }
+export { PAID_CODES }
 
 // YYYYMMDDHHmmss → Date
 function parseMsDate(s: string | null | undefined): Date | null {
