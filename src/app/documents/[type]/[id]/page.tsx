@@ -233,7 +233,34 @@ export default async function DocumentPage({
           </tbody>
         </table>
 
-        {/* 품목 테이블 */}
+        {/* 품목 테이블 — 발주서(po)는 품번(코드) 전용 컬럼, 청구/견적은 税込 양식 */}
+        {docType === 'po' ? (
+          <table className="w-full border-collapse text-[12px]">
+            <thead>
+              <tr>
+                <th className={`${th} w-36 text-left`}>{T.productCode}</th>
+                <th className={`${th} text-left`}>{T.itemName}</th>
+                <th className={`${th} w-14`}>{T.qty}</th>
+                <th className={`${th} w-24 text-right`}>{T.unitPrice}</th>
+                <th className={`${th} w-24 text-right`}>{T.amount}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={i}>
+                  <td className={`${cell} align-top font-mono text-[11px] whitespace-nowrap`}>{r.code}</td>
+                  <td className={`${cell} align-top`}>
+                    <p className="font-medium">{r.name}</p>
+                    {r.opt && <p className="text-[11px] text-amber-700">{r.opt}</p>}
+                  </td>
+                  <td className={`${cell} align-top text-center`}>{r.qty}</td>
+                  <td className={`${cell} align-top text-right tabular-nums`}>{formatJpy(r.unitPrice)}</td>
+                  <td className={`${cell} align-top text-right tabular-nums`}>{formatJpy(r.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
         <table className="w-full border-collapse text-[12px]">
           <thead>
             <tr>
@@ -264,6 +291,7 @@ export default async function DocumentPage({
             ))}
           </tbody>
         </table>
+        )}
 
         {/* 합계/세금 */}
         <div className="flex justify-between items-start mt-2 mb-5">

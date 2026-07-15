@@ -36,9 +36,10 @@ export default function NewPurchaseOrderPage() {
 
   const searchProducts = useCallback(async (q: string, sc: string) => {
     if (!q && !sc) { setSearchResults([]); return }
-    const params = new URLSearchParams({ limit: '15' })
+    const params = new URLSearchParams({ limit: '15', hideVariantParent: '1' })
     if (q)  params.set('q',        q)
     if (sc) params.set('supplier', sc)
+    if (!sc) params.set('balanced', '1')   // '全て'일 때 공급사 균형
     const res  = await fetch(`/api/products?${params}`)
     const data = await res.json()
     setSearchResults(data.products ?? [])

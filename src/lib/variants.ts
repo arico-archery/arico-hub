@@ -120,6 +120,16 @@ export function buildSibuyaGroup(rows: RawVariant[]): VariantGroup {
   return assembleGroup(rows, base, r => parseSibuyaOption(r.optionSize, r.optionColor))
 }
 
+// FIVICS: 옵션(방향·색상·사이즈)이 optionSize 한 필드에 통째로 담김
+// (예 "66/22", "RIGHT HANDED - BLUE") → 이름이 같은 SKU들을 단일 축으로 묶는다.
+export function buildFivicsGroup(rows: RawVariant[]): VariantGroup {
+  return assembleGroup(rows, rows[0].name, r => {
+    const o: VariantOption = {}
+    if (r.optionSize) o['옵션'] = r.optionSize   // AXIS_ORDER에 등록된 축명 사용(라벨 정상 생성)
+    return o
+  })
+}
+
 // 공용: 변형들을 옵션 파싱 → 라벨/충돌처리/축목록으로 구조화
 function assembleGroup(rows: RawVariant[], base: string, getOpt: (r: RawVariant) => VariantOption): VariantGroup {
   const variants: BuiltVariant[] = rows.map(r => {

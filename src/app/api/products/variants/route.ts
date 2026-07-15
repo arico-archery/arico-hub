@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { groupCodeOf, buildVariantGroup, buildSibuyaGroup, sibuyaBaseName, type RawVariant } from '@/lib/variants'
+import { groupCodeOf, buildVariantGroup, buildSibuyaGroup, buildFivicsGroup, sibuyaBaseName, type RawVariant } from '@/lib/variants'
 
 const VARIANT_SELECT = {
   id: true, name: true, brand: true, productCode: true, supplierCode: true,
@@ -48,6 +48,17 @@ export async function GET(req: Request) {
     const rows = candidates.filter(c => sibuyaBaseName(c.name, c.optionSize, c.optionColor) === base)
     if (rows.length < 2) return NextResponse.json({ variants: [] })
     const group = buildSibuyaGroup(rows as RawVariant[])
+    return NextResponse.json({ base: group.base, axes: group.axes, variants: group.variants })
+  }
+
+  // FIVICS: 이름이 같은 변형 SKU들을 단일 옵션 축으로 그룹 (숨긴 base 제외)
+  if (target.supplierCode === 'FIVICS') {
+    const rows = await prisma.product.findMany({
+      where: { supplierCode: 'FIVICS', name: target.name, variantParent: false },
+      select: VARIANT_SELECT,
+    })
+    if (rows.length < 2) return NextResponse.json({ variants: [] })
+    const group = buildFivicsGroup(rows as RawVariant[])
     return NextResponse.json({ base: group.base, axes: group.axes, variants: group.variants })
   }
 

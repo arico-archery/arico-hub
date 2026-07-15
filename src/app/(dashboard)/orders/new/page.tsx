@@ -189,7 +189,7 @@ export default function NewOrderPage() {
   // 공급사 상품 검색
   const searchProducts = useCallback(async (q: string, supplierCode: string) => {
     if (q.length < 1 && !supplierCode) { setSearchResults([]); return }
-    const params = new URLSearchParams({ limit: '30' })
+    const params = new URLSearchParams({ limit: '30', hideVariantParent: '1' })
     if (q) params.set('q', q)
     if (supplierCode) params.set('supplier', supplierCode)
     // 공급사 미지정('全て')일 때만 균형 모드 — 특정 공급사가 상위 독점 방지

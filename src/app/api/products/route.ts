@@ -52,6 +52,7 @@ export async function GET(req: Request) {
 
   const noPrice = searchParams.get('noPrice') === '1'
   const catalogMatch = searchParams.get('catalogMatch') ?? '' // 'in'=카탈로그 등록 / 'out'=미등록
+  const hideVariantParent = searchParams.get('hideVariantParent') === '1' // 변형으로 분리된 기본코드 숨김(주문·발주 검색용)
 
   // ARICO 카탈로그에 매칭된 공급사 상품 id 집합 (필터 + 행별 플래그용). 매칭분은 소수(~수백)라 가벼움.
   const matchedRows = await prisma.aricoCatalog.findMany({
@@ -78,6 +79,7 @@ export async function GET(req: Request) {
     ...(noPrice ? { salePriceJpy: 0 } : {}),
     ...(catalogMatch === 'in' ? { id: { in: matchedIds } } : {}),
     ...(catalogMatch === 'out' ? { id: { notIn: matchedIds } } : {}),
+    ...(hideVariantParent ? { variantParent: false } : {}),
   }
 
   const exportCsv = searchParams.get('format') === 'csv'
