@@ -82,6 +82,36 @@ export async function GET(req: Request) {
 
   const exportCsv = searchParams.get('format') === 'csv'
 
+  // 균형 모드: 검색 시 특정 공급사(상품 많은 JVD 등)가 상위를 독점하지 않도록
+  // 공급사별 라운드로빈으로 섞어서 반환 (주문등록 상품검색 드롭다운용, '全て' 검색 전용)
+  const balanced = searchParams.get('balanced') === '1'
+  if (balanced && !supplier && !exportCsv) {
+    const [candidates, total] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        include: { supplier: true },
+        orderBy: [{ brand: 'asc' }, { name: 'asc' }],
+        take: 300,   // 후보 넉넉히 → 라운드로빈 후 limit개로 자름
+      }),
+      prisma.product.count({ where }),
+    ])
+    // 공급사별 그룹 → 라운드로빈 인터리브
+    const groups = new Map<string, typeof candidates>()
+    for (const p of candidates) {
+      const g = groups.get(p.supplierCode) ?? []
+      g.push(p); groups.set(p.supplierCode, g)
+    }
+    const lists = [...groups.values()]
+    const interleaved: typeof candidates = []
+    for (let i = 0; interleaved.length < candidates.length; i++) {
+      let added = false
+      for (const l of lists) { if (l[i]) { interleaved.push(l[i]); added = true } }
+      if (!added) break
+    }
+    const sliced = interleaved.slice(0, limit).map(p => ({ ...p, inCatalog: matchedSet.has(p.id) }))
+    return NextResponse.json({ products: sliced, total, page, limit })
+  }
+
   const [products, total] = await Promise.all([
     prisma.product.findMany({
       where,
