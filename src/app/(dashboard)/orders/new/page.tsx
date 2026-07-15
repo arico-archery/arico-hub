@@ -109,6 +109,7 @@ export default function NewOrderPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [customerSearch, setCustomerSearch] = useState('')
+  const [stockMode, setStockMode] = useState(false)   // 自社在庫(재고확보) 주문 모드
   const [recentCustomerIds, setRecentCustomerIds] = useState<number[]>([])
   const [discountRate, setDiscountRate] = useState(0)      // 적용 할인율 %
   const [discountAmount, setDiscountAmount] = useState(0)  // 적용 정액 할인 JPY
@@ -138,7 +139,7 @@ export default function NewOrderPage() {
     Promise.all([
       fetch('/api/customers').then(r => r.json()),
       fetch('/api/exchange-rates').then(r => r.json()),
-    ]).then(([c, r]) => { setCustomers(c); setRates(r) })
+    ]).then(([c, r]) => { setCustomers(Array.isArray(c) ? c.filter((x: Customer) => x.code !== 'SELF') : c); setRates(r) })
     try {
       const raw = JSON.parse(localStorage.getItem(RECENT_CUSTOMERS_KEY) || '[]')
       if (Array.isArray(raw)) setRecentCustomerIds(raw.filter((n: unknown) => typeof n === 'number'))
@@ -459,9 +460,10 @@ export default function NewOrderPage() {
 
   // openInvoice=true 면 등록/저장 후 견적서를 새 탭으로 연다 (주문등록 ↔ 견적서열기 구분)
   const handleSubmit = async (openInvoice = false) => {
-    if (!selectedCustomer || lines.length === 0) return
+    if ((!selectedCustomer && !stockMode) || lines.length === 0) return
+    // 자사재고 주문은 판매가가 없어도 됨(재고확보용). 일반 주문만 판매가 필수.
     const hasUnpricedItems = lines.some(l => l.salePriceJpy <= 0)
-    if (hasUnpricedItems) {
+    if (!stockMode && hasUnpricedItems) {
       alert(t.orders.alertPriceRequired)
       return
     }
@@ -478,7 +480,8 @@ export default function NewOrderPage() {
     }
     setSubmitting(true)
     const payload = {
-      customerId: selectedCustomer.id,
+      customerId: selectedCustomer?.id ?? null,
+      internal: stockMode,
       dueDate: dueDate || null,
       memo,
       discountRate,
@@ -532,9 +535,27 @@ export default function NewOrderPage() {
 
           {/* 거래처 선택 — 검색 콤보박스 + 최근/자주 거래처 퀵칩 */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5">
-            <h2 className="font-semibold text-gray-900 dark:text-white mb-3">{t.orders.newCustomerSection}</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold text-gray-900 dark:text-white">{stockMode ? t.orders.stockOrderSection : t.orders.newCustomerSection}</h2>
+              {!editId && (
+                <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-medium text-gray-600 dark:text-gray-300">
+                  <span>{t.orders.stockOrderToggle}</span>
+                  <input type="checkbox" className="sr-only peer" checked={stockMode}
+                    onChange={e => { setStockMode(e.target.checked); if (e.target.checked) { setSelectedCustomer(null); setDiscountRate(0); setDiscountAmount(0) } }} />
+                  <span className="relative w-9 h-5 bg-gray-200 dark:bg-gray-600 rounded-full peer-checked:bg-teal-600 transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:w-4 after:h-4 after:rounded-full after:transition-all peer-checked:after:translate-x-4" />
+                </label>
+              )}
+            </div>
 
-            {selectedCustomer ? (
+            {stockMode ? (
+              <div className="flex items-center gap-3 rounded-lg border border-teal-200 dark:border-teal-800/60 bg-teal-50 dark:bg-teal-900/20 px-3.5 py-2.5">
+                <div className="w-9 h-9 shrink-0 rounded-full bg-white dark:bg-gray-800 flex items-center justify-center text-sm font-semibold text-teal-700 dark:text-teal-300">在</div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-sm text-teal-900 dark:text-teal-200 truncate">ARICO（自社在庫）</p>
+                  <p className="text-xs text-teal-600 dark:text-teal-400">{t.orders.stockOrderDesc}</p>
+                </div>
+              </div>
+            ) : selectedCustomer ? (
               /* 선택 완료 — 한 줄 카드로 축약 */
               <div className="flex items-center gap-3 rounded-lg border border-blue-200 dark:border-blue-800/60 bg-blue-50 dark:bg-blue-900/20 px-3.5 py-2.5">
                 <div className="w-9 h-9 shrink-0 rounded-full bg-white dark:bg-gray-800 flex items-center justify-center text-sm font-semibold text-blue-700 dark:text-blue-300">
@@ -955,7 +976,12 @@ export default function NewOrderPage() {
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5 sticky top-6">
             <h2 className="font-semibold text-gray-900 dark:text-white mb-4">{t.orders.newSummary}</h2>
 
-            {selectedCustomer ? (
+            {stockMode ? (
+              <div className="p-3 bg-teal-50 dark:bg-teal-900/20 rounded-lg mb-4">
+                <p className="font-medium text-teal-900 dark:text-teal-300">ARICO（自社在庫）</p>
+                <p className="text-teal-600 dark:text-teal-400 text-sm">{t.orders.stockOrderDesc}</p>
+              </div>
+            ) : selectedCustomer ? (
               <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg mb-4">
                 <p className="font-medium text-blue-900 dark:text-blue-300">{selectedCustomer.name}</p>
                 {selectedCustomer.company && <p className="text-blue-600 dark:text-blue-400 text-sm">{selectedCustomer.company}</p>}
@@ -1039,20 +1065,22 @@ export default function NewOrderPage() {
 
             <button
               onClick={() => handleSubmit(false)}
-              disabled={!selectedCustomer || lines.length === 0 || submitting}
+              disabled={(!selectedCustomer && !stockMode) || lines.length === 0 || submitting}
               className="w-full bg-blue-600 text-white py-3 rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {submitting ? t.common.processing : editId ? t.orders.newSaveEdit : t.orders.newSubmit}
+              {submitting ? t.common.processing : editId ? t.orders.newSaveEdit : stockMode ? t.orders.stockOrderSubmit : t.orders.newSubmit}
             </button>
-            {/* 견적서 열기 분리: 등록/저장 + 견적서 새 탭 */}
-            <button
-              onClick={() => handleSubmit(true)}
-              disabled={!selectedCustomer || lines.length === 0 || submitting}
-              className="w-full mt-2 flex items-center justify-center gap-1.5 bg-slate-700 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <FileText className="w-4 h-4" />
-              {editId ? t.orders.newSaveAndInvoice : t.orders.newSubmitAndInvoice}
-            </button>
+            {/* 견적서 열기 분리: 등록/저장 + 견적서 새 탭 (자사재고는 견적서 없음) */}
+            {!stockMode && (
+              <button
+                onClick={() => handleSubmit(true)}
+                disabled={!selectedCustomer || lines.length === 0 || submitting}
+                className="w-full mt-2 flex items-center justify-center gap-1.5 bg-slate-700 text-white py-2.5 rounded-xl text-sm font-medium hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <FileText className="w-4 h-4" />
+                {editId ? t.orders.newSaveAndInvoice : t.orders.newSubmitAndInvoice}
+              </button>
+            )}
           </div>
         </div>
       </div>

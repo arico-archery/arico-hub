@@ -120,7 +120,20 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const body = await req.json()
-  const { customerId, items, memo, dueDate } = body
+  const { items, memo, dueDate } = body
+  const internal = body.internal === true
+
+  // 自社在庫(재고확보용) 주문이면 전용 거래처(code=SELF)를 자동 사용/생성
+  let customerId = body.customerId
+  if (internal) {
+    const self = await prisma.customer.upsert({
+      where: { code: 'SELF' },
+      update: {},
+      create: { code: 'SELF', name: 'ARICO（自社在庫）', company: 'ARICO', customerType: 'corporation' },
+      select: { id: true },
+    })
+    customerId = self.id
+  }
 
   // 주문번호: ORD-YYYYMMDD-NNNN. 현존 최대 일련번호 기준 + 충돌 시 재시도(동시성·삭제 안전)
   const today = new Date()
@@ -169,8 +182,11 @@ export async function POST(req: Request) {
       data: {
         orderNo,
         customerId: Number(customerId),
+        internal,
+        // 자사재고 주문은 청구 대상이 아님 → 미수금 방지 위해 입금완료로 표시
+        paymentStatus: internal ? 'paid' : 'unpaid',
         memo: memo ?? '',
-        dueDate: dueDate ? new Date(dueDate) : null,
+        dueDate: internal ? null : (dueDate ? new Date(dueDate) : null),
         subtotalJpy,
         discountRate,
         discountAmount,
@@ -187,7 +203,8 @@ export async function POST(req: Request) {
 
   // 주문에서 사람이 확정한 정보를 공급사 상품 / ARICO 카탈로그에 역반영한다.
   // 주문이 쌓일수록 판매가·매칭이 실제 거래 기준으로 점점 정확해진다.
-  for (const item of items as OrderItemInput[]) {
+  // (자사재고 주문은 판매가가 아니므로 역반영하지 않는다)
+  for (const item of internal ? [] : items as OrderItemInput[]) {
     // 1) 공급사 상품 판매가가 비어있으면(0) 주문 판매가로 채운다
     if (item.salePriceJpy > 0) {
       const prod = await prisma.product.findUnique({

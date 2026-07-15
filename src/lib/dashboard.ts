@@ -23,8 +23,9 @@ async function buildDashboard(range: string) {
     prevStart = prevMonthStart
     prevEnd = monthStart
   }
-  const periodWhere = periodStart ? { orderDate: { gte: periodStart } } : {}
-  const prevWhere = prevStart && prevEnd ? { orderDate: { gte: prevStart, lt: prevEnd } } : null
+  // 자사재고(internal) 주문은 매출·미수금·최근주문 등 판매 지표에서 제외
+  const periodWhere = periodStart ? { orderDate: { gte: periodStart }, internal: false } : { internal: false }
+  const prevWhere = prevStart && prevEnd ? { orderDate: { gte: prevStart, lt: prevEnd }, internal: false } : null
 
   const [
     monthOrders,
@@ -69,15 +70,16 @@ async function buildDashboard(range: string) {
       where: { expectedDate: { lt: now }, status: { notIn: ['received', 'cancelled'] } },
     }),
     prisma.order.findMany({
-      where: { paymentStatus: { in: ['unpaid', 'partial'] } },
+      where: { paymentStatus: { in: ['unpaid', 'partial'] }, internal: false },
       include: { customer: true },
       orderBy: { dueDate: 'asc' },
     }),
     prisma.order.count({
-      where: { status: { in: ['confirmed', 'pending'] }, shippingDate: null },
+      where: { status: { in: ['confirmed', 'pending'] }, shippingDate: null, internal: false },
     }),
     prisma.order.findMany({
       take: 10,
+      where: { internal: false },
       include: {
         customer: true,
         items: { include: { product: { include: { supplier: true } } }, take: 3 },

@@ -31,7 +31,7 @@ type Order = {
   totalAmountJpy: number; totalCostJpy: number; paidAmountJpy: number
   subtotalJpy: number; discountRate: number; discountAmount: number
   dueDate?: string; delayNotifyDate?: string; shippingDate?: string
-  deliveryDate?: string; completedAt?: string; trackingNo: string; memo: string
+  deliveryDate?: string; completedAt?: string; trackingNo: string; memo: string; internal?: boolean
   customer: { id: number; name: string; company: string }
   items: {
     id: number; quantity: number; salePriceJpy: number; costPriceJpy: number
@@ -493,7 +493,10 @@ export default function OrdersPage() {
                     </td>
                     {/* 거래처 */}
                     <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900 dark:text-gray-100">{order.customer.name}</p>
+                      <p className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+                        {order.customer.name}
+                        {order.internal && <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">{t.orders.stockBadge}</span>}
+                      </p>
                       <p className="text-gray-500 dark:text-gray-400 text-xs">{order.customer.company}</p>
                     </td>
                     {/* 날짜 */}

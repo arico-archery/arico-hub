@@ -111,6 +111,7 @@ model Order {
   deliveryDate      DateTime?
   trackingNo        String      @default("")
   externalOrderNo   String      @default("")   // MakeShop systemOrderNumber (수신 중복방지)
+  internal          Boolean     @default(false) // 自社在庫 주문(재고 확보용). 매출·미수금·분석 집계 제외
   subtotalJpy       Float       @default(0)   // 할인 전 소계(품목 합)
   discountRate      Float       @default(0)   // 적용 할인율 % (주문 시점 스냅샷)
   discountAmount    Float       @default(0)   // 적용 정액 할인 JPY (주문 시점 스냅샷)
