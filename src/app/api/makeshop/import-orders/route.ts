@@ -95,11 +95,13 @@ async function buildPreview(days: number, win?: { start: string; end: string }) 
     })
     const itemsSubtotal = items.reduce((s, it) => s + it.price * it.amount, 0)
     const del = mapDelivery(o)
+    // 결제코드 0003 = 취소 → 배송상태와 무관하게 주문상태를 cancelled로 (지안 확정 2026-07-15)
+    const orderStatus = o.paymentStatusCode === '0003' ? 'cancelled' : del.orderStatus
     return {
       externalOrderNo: o.systemOrderNumber, displayOrderNumber: o.displayOrderNumber,
       orderDate: o.orderDate, memberId: o.memberId, customerName: memberMap.get(o.memberId)?.name || custNameByMember.get(o.memberId) || o.memberId,
       sumPrice: Number(o.sumPrice) || 0, shipping, itemsSubtotal, payment: mapPayment(o.paymentStatusCode),
-      orderStatus: del.orderStatus, trackingNo: del.trackingNo, shipDate: del.shipDate ? del.shipDate.toISOString() : null,
+      orderStatus, trackingNo: del.trackingNo, shipDate: del.shipDate ? del.shipDate.toISOString() : null,
       dup: imported.has(o.systemOrderNumber), allMatched: items.length > 0 && items.every(i => i.matched), items,
     }
   })
