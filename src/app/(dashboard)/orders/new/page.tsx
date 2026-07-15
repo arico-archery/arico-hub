@@ -124,7 +124,12 @@ export default function NewOrderPage() {
   // 미매칭 카탈로그에 연결할 공급사 상품을 고르는 중인 대상 (주문 시 매칭 반영)
   const [pendingCatalog, setPendingCatalog] = useState<CatalogItem | null>(null)
 
-  const [dueDate, setDueDate] = useState('')
+  // 기본 입금기일 = 오늘 +2주 (신규 등록 시. 편집 모드는 기존 값으로 덮어씀, 사용자 변경 가능)
+  const [dueDate, setDueDate] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() + 14)
+    const p = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+  })
   const [memo, setMemo] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [editId, setEditId] = useState<number | null>(null)   // 편집 모드 대상 주문 id
