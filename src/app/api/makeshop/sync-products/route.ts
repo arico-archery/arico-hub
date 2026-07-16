@@ -26,10 +26,11 @@ export async function POST() {
       if (!code) { skipped++; continue }
       const name = String(p.productName ?? '').trim()
       const priceJpy = Math.round(Number(p.sellPrice) || 0)
+      const active = p.display === 'Y'   // 자사몰 진열 여부 (N=미진열=판매안함)
       await prisma.aricoCatalog.upsert({
         where: { productCode: code },
-        update: { name, priceJpy },
-        create: { productCode: code, name, priceJpy },
+        update: { name, priceJpy, active },
+        create: { productCode: code, name, priceJpy, active },
       })
       if (existing.has(code)) updated++; else created++
     }

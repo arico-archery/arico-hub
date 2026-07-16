@@ -248,6 +248,7 @@ model AricoCatalog {
   options         String   @default("") @map("options")
   barcode         String   @default("") @map("barcode") // JAN 바코드 — Smaregi 재고 연결 키
   point           Int      @default(0) @map("point")     // ARICO 온라인숍 적립 포인트(1pt=1엔). 자사몰에서 수집.
+  active          Boolean  @default(true)                // 자사몰 진열 여부(MakeShop display=Y). false=미진열(판매안함) → 카탈로그에서 숨김
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at")
 

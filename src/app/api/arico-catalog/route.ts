@@ -9,11 +9,12 @@ export async function GET(req: Request) {
   // 매칭율 요약 통계 (stats=1)
   if (searchParams.get('stats') === '1') {
     try {
+      // 통계도 진열중(active) 상품 기준
       const [total, matched, matchedRows] = await Promise.all([
-        prisma.aricoCatalog.count(),
-        prisma.aricoCatalog.count({ where: { supplierProductId: { not: null } } }),
+        prisma.aricoCatalog.count({ where: { active: true } }),
+        prisma.aricoCatalog.count({ where: { active: true, supplierProductId: { not: null } } }),
         prisma.aricoCatalog.findMany({
-          where: { supplierProductId: { not: null } },
+          where: { active: true, supplierProductId: { not: null } },
           select: { supplierProduct: { select: { supplierCode: true } } },
         }),
       ])
@@ -34,6 +35,7 @@ export async function GET(req: Request) {
   const offset = Number(searchParams.get('offset') ?? '0')
   const matchedOnly = searchParams.get('matchedOnly') === '1'
   const unmatchedOnly = searchParams.get('unmatchedOnly') === '1'
+  const includeInactive = searchParams.get('includeInactive') === '1'  // 미진열(판매안함)도 포함
 
   try {
     const textWhere = q
@@ -44,7 +46,9 @@ export async function GET(req: Request) {
       : unmatchedOnly
       ? { supplierProductId: null }
       : {}
-    const where = { ...textWhere, ...matchWhere }
+    // 미진열(active=false = 판매안함) 상품은 기본 숨김
+    const activeWhere = includeInactive ? {} : { active: true }
+    const where = { ...textWhere, ...matchWhere, ...activeWhere }
 
     const [rows, total] = await Promise.all([
       prisma.aricoCatalog.findMany({

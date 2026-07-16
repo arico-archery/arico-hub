@@ -32,8 +32,9 @@ export async function GET(req: Request) {
         if (!code) { agg.skipped++; return Promise.resolve() }
         const name = String(p.productName ?? '').trim()
         const priceJpy = Math.round(Number(p.sellPrice) || 0)
+        const active = p.display === 'Y'   // 자사몰 진열 여부 (N=미진열=판매안함)
         const isNew = !existing.has(code)
-        return prisma.aricoCatalog.upsert({ where: { productCode: code }, update: { name, priceJpy }, create: { productCode: code, name, priceJpy } })
+        return prisma.aricoCatalog.upsert({ where: { productCode: code }, update: { name, priceJpy, active }, create: { productCode: code, name, priceJpy, active } })
           .then(() => { if (isNew) { agg.created++; existing.add(code) } else agg.updated++ })
           .catch(() => { agg.skipped++ })
       }))
