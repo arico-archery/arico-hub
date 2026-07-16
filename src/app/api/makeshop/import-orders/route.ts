@@ -46,8 +46,13 @@ function mapDelivery(o: { deliveryInfos: { deliveryStatus: string; slipNumber: s
 
 type PreviewItem = { productCode: string; productName: string; variationCustomCode: string; option: string; customLabel: string; amount: number; price: number; matched: boolean; supplierCode: string | null; catalogName: string | null }
 
-// customSelects(옵션그룹 선택값) → "サービング: ブラック / サイズ: 66 / ..." 라벨
-function customSelectLabel(b: { customSelects?: { customSelectName: string; selectedItemName: string }[] }): string {
+// MakeShop 옵션 → 사람이 읽는 라벨.
+//  ① variationName(베리에이션/옵션그룹, 예 "カラー : ブラック 左右 : LH")
+//  ② customSelects(커스텀셀렉트, ARICO STRING의 原糸/サービング 등)
+// 둘 다 없으면 옵션코드→스마레지 해석(호출부에서 처리).
+function basketOptionLabel(b: { variationName?: string; customSelects?: { customSelectName: string; selectedItemName: string }[] }): string {
+  const v = (b.variationName || '').replace(/\s+/g, ' ').trim()
+  if (v) return v
   return (b.customSelects || [])
     .map(c => `${(c.customSelectName || '').trim()}: ${(c.selectedItemName || '').trim()}`)
     .filter(s => s !== ': ')
@@ -102,7 +107,7 @@ async function buildPreview(days: number, win?: { start: string; end: string }) 
       return {
         productCode: b.productCode, productName: b.productName,
         variationCustomCode: b.variationCustomCode || '', option: basketOption(b),
-        customLabel: customSelectLabel(b),
+        customLabel: basketOptionLabel(b),
         amount: Number(b.amount) || 0, price: Number(b.price) || 0,
         matched: !!prod, supplierCode: prod?.supplierCode ?? null, catalogName: cat?.name ?? null,
       }

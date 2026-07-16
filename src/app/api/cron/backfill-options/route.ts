@@ -7,7 +7,10 @@ import { resolveOptionLabels, extractOptionCode } from '@/lib/smaregi-option'
 export const maxDuration = 60
 
 const EXCLUDE = /レンタルリム/
-function customSelectLabel(b: { customSelects?: { customSelectName?: string; selectedItemName?: string }[] }): string {
+// ① variationName(베리에이션/옵션그룹) ② customSelects(커스텀셀렉트) 순
+function basketOptionLabel(b: { variationName?: string; customSelects?: { customSelectName?: string; selectedItemName?: string }[] }): string {
+  const v = (b.variationName || '').replace(/\s+/g, ' ').trim()
+  if (v) return v
   return (b.customSelects || [])
     .map(c => `${(c.customSelectName || '').trim()}: ${(c.selectedItemName || '').trim()}`)
     .filter(s => s !== ': ')
@@ -51,7 +54,7 @@ export async function GET(req: Request) {
       const baskets = (o.deliveryInfos || []).flatMap(d => d.basketInfos || []).filter(b => !EXCLUDE.test(b.productName || ''))
       for (let i = 0; i < dbo.items.length && i < baskets.length; i++) {
         const b = baskets[i]
-        const label = customSelectLabel(b) || smMap.get(extractOptionCode(b.variationCustomCode) || '') || ''
+        const label = basketOptionLabel(b) || smMap.get(extractOptionCode(b.variationCustomCode) || '') || ''
         const shopName = (b.productName || '').trim()   // 고객이 실제 주문한 자사몰 상품명
         if (label || shopName) ups.push({ id: dbo.items[i].id, label, shopName })
       }

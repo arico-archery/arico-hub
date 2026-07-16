@@ -130,7 +130,11 @@ export type MakeshopCustomSelect = { customSelectName: string; selectedItemName:
 export type MakeshopBasket = {
   productCode: string; variationCustomCode: string; janCode: string
   amount: number; price: number; productName: string
-  customSelects?: MakeshopCustomSelect[]   // 옵션그룹 선택값(原糸/サービング/サイズ 등)
+  // MakeShop 옵션은 2가지 방식:
+  //  variationName = 베리에이션/옵션그룹 선택값 문자열 (예 "カラー : ブラック 左右 : LH")
+  //  customSelects = 커스텀셀렉트 선택값 (ARICO STRING의 原糸/サービング 등)
+  variationName?: string
+  customSelects?: MakeshopCustomSelect[]
 }
 export type MakeshopDelivery = {
   deliveryStatus: string; shippingCharge: number
@@ -149,7 +153,7 @@ const ORDER_DETAIL_QUERY = `query searchOrder($input: SearchOrderRequest!){
       systemOrderNumber displayOrderNumber orderDate memberId sumPrice paymentStatusCode
       deliveryInfos {
         deliveryStatus shippingCharge slipNumber deliveryDate estimatedShipmentDate
-        basketInfos { productCode variationCustomCode janCode amount price productName customSelects { customSelectName selectedItemName } }
+        basketInfos { productCode variationCustomCode janCode amount price productName variationName customSelects { customSelectName selectedItemName } }
       }
     }
   }
