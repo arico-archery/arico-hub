@@ -29,6 +29,9 @@ export async function GET(req: Request) {
   // 조건을 AND 배열로 조립 — OR/status 키 충돌 방지(완료필터·검색이 각각 OR을 쓸 수 있음)
   const and: Record<string, unknown>[] = []
   if (status) and.push({ status })
+  // 취소 주문 제외 — 입금관리처럼 "받을 돈"만 봐야 하는 화면용.
+  // (완료 탭은 취소를 일부러 포함하므로 기본값은 제외하지 않는다)
+  if (searchParams.get('excludeCancelled') === '1') and.push({ status: { not: 'cancelled' } })
   if (Object.keys(paymentStatusFilter).length) and.push(paymentStatusFilter)
   if (customerId) and.push({ customerId: Number(customerId) })
   // 완료 필터: '1'=완료(배송완료) 또는 취소, '0'=진행중(완료 안 됨 & 취소 아님)

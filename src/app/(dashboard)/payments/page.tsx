@@ -45,7 +45,7 @@ export default function PaymentsPage() {
   const t = useT()
   const [tab, setTab] = useState<'sales' | 'purchase'>('sales')
   // 클라 캐시: 미입금 주문(원시 응답 캐시) → dueDate 정렬은 파생. 전건 조회 후 화면은 100건씩 더 보기.
-  const { data: ordersRaw, isLoading: loading, refresh: loadOrders } = useApiCache<{ orders: Order[] }>('/api/orders?paymentStatus=unpaid,partial&limit=1000')
+  const { data: ordersRaw, isLoading: loading, refresh: loadOrders } = useApiCache<{ orders: Order[] }>('/api/orders?paymentStatus=unpaid,partial&excludeCancelled=1&limit=1000')
   const orders = useMemo(() => {
     const list = [...(ordersRaw?.orders ?? [])]
     list.sort((a, b) => {

@@ -23,9 +23,12 @@ async function buildDashboard(range: string) {
     prevStart = prevMonthStart
     prevEnd = monthStart
   }
-  // 자사재고(internal) 주문은 매출·미수금·최근주문 등 판매 지표에서 제외
-  const periodWhere = periodStart ? { orderDate: { gte: periodStart }, internal: false } : { internal: false }
-  const prevWhere = prevStart && prevEnd ? { orderDate: { gte: prevStart, lt: prevEnd }, internal: false } : null
+  // 판매 지표(매출·이익·미수금·최근주문)에서 빼는 것
+  //  - internal: 자사재고 주문 — 우리가 우리한테 파는 것이라 매출이 아님
+  //  - cancelled: 취소 주문 — 매출도 아니고 받을 돈도 아님
+  const SALES_EXCLUDE = { internal: false, status: { not: 'cancelled' } }
+  const periodWhere = periodStart ? { orderDate: { gte: periodStart }, ...SALES_EXCLUDE } : { ...SALES_EXCLUDE }
+  const prevWhere = prevStart && prevEnd ? { orderDate: { gte: prevStart, lt: prevEnd }, ...SALES_EXCLUDE } : null
 
   const [
     monthOrders,
@@ -69,8 +72,9 @@ async function buildDashboard(range: string) {
     prisma.purchaseOrder.count({
       where: { expectedDate: { lt: now }, status: { notIn: ['received', 'cancelled'] } },
     }),
+    // 미입금: 취소 주문은 받을 돈이 아니므로 제외
     prisma.order.findMany({
-      where: { paymentStatus: { in: ['unpaid', 'partial'] }, internal: false },
+      where: { paymentStatus: { in: ['unpaid', 'partial'] }, ...SALES_EXCLUDE },
       include: { customer: true },
       orderBy: { dueDate: 'asc' },
     }),
@@ -79,7 +83,7 @@ async function buildDashboard(range: string) {
     }),
     prisma.order.findMany({
       take: 10,
-      where: { internal: false },
+      where: { ...SALES_EXCLUDE },
       include: {
         customer: true,
         items: { include: { product: { include: { supplier: true } } }, take: 3 },

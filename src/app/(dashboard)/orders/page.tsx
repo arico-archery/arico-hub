@@ -478,6 +478,7 @@ export default function OrdersPage() {
               const stepDone     = getStepDone(order)
               const currentStep  = getCurrentStep(stepDone)
               const isComplete   = !!order.completedAt
+              const isCancelled  = order.status === 'cancelled'
               const suppliers    = [...new Set(order.items.map(i => i.product.supplierCode))]
 
               return (
@@ -488,7 +489,15 @@ export default function OrdersPage() {
                   >
                     {/* 주문번호 */}
                     <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900 dark:text-gray-100">{order.orderNo}</p>
+                      <p className="font-medium flex items-center gap-1.5">
+                        {/* 완료 탭에는 배송완료와 취소가 함께 있다. 취소는 배지로 구분한다. */}
+                        <span className={isCancelled ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-900 dark:text-gray-100'}>{order.orderNo}</span>
+                        {isCancelled && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                            {t.orders.statusCancelled}
+                          </span>
+                        )}
+                      </p>
                       <div className="flex gap-1 mt-1 flex-wrap">
                         {suppliers.map(s => <SupplierBadge key={s} code={s} />)}
                       </div>
@@ -550,7 +559,8 @@ export default function OrdersPage() {
                       {order.subtotalJpy > order.totalAmountJpy && (
                         <p className="text-green-600 text-xs">{t.customers.discountBadge} {[order.discountRate > 0 ? `${order.discountRate}%` : '', order.discountAmount > 0 ? formatJpy(order.discountAmount) : ''].filter(Boolean).join('+')}</p>
                       )}
-                      {unpaid > 0 && (
+                      {/* 취소 주문의 잔액은 받을 돈이 아니므로 미수로 표시하지 않는다 */}
+                      {unpaid > 0 && !isCancelled && (
                         <p className="text-red-500 text-xs">{t.orders.unpaidAmount} {formatJpy(unpaid)}</p>
                       )}
                     </td>

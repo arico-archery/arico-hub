@@ -30,14 +30,17 @@ async function buildAnalytics(rangeParam: string) {
     }
   })
 
-  // 자사재고(internal) 주문은 매출·통계에서 제외
-  const where = startFrom ? { orderDate: { gte: startFrom }, internal: false } : { internal: false }
+  // 매출·통계에서 빼는 것
+  //  - internal: 자사재고 주문 — 우리가 우리한테 파는 것이라 매출이 아님
+  //  - cancelled: 취소 주문 — 매출도 아니고 받을 돈도 아님
+  const SALES_EXCLUDE = { internal: false, status: { not: 'cancelled' } }
+  const where = startFrom ? { orderDate: { gte: startFrom }, ...SALES_EXCLUDE } : { ...SALES_EXCLUDE }
 
   // 월별 데이터
   const monthlyData = await Promise.all(
     months.map(async m => {
       const agg = await prisma.order.aggregate({
-        where: { orderDate: { gte: m.start, lt: m.end }, internal: false },
+        where: { orderDate: { gte: m.start, lt: m.end }, ...SALES_EXCLUDE },
         _sum: { totalAmountJpy: true, totalCostJpy: true },
         _count: true,
       })
@@ -62,7 +65,7 @@ async function buildAnalytics(rangeParam: string) {
   // 상품별 TOP 10
   const topItems = await prisma.orderItem.groupBy({
     by: ['productId'],
-    where: startFrom ? { order: { orderDate: { gte: startFrom }, internal: false } } : { order: { internal: false } },
+    where: { order: where },
     _sum: { salePriceJpy: true, costPriceJpy: true },
     _count: true,
     orderBy: { _sum: { salePriceJpy: 'desc' } },
@@ -78,7 +81,7 @@ async function buildAnalytics(rangeParam: string) {
 
   // 공급사별 / 브랜드별 매출
   const allOrderItems = await prisma.orderItem.findMany({
-    where: startFrom ? { order: { orderDate: { gte: startFrom }, internal: false } } : { order: { internal: false } },
+    where: { order: where },
     select: {
       salePriceJpy: true, costPriceJpy: true, quantity: true,
       product: { select: { supplierCode: true, brand: true } },
