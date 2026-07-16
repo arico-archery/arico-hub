@@ -1,28 +1,83 @@
-// Smaregi 재고 연동 인터페이스.
-// ⚠️ API 키 제공 전까지 스텁(빈 결과) — API 들어오면 이 파일의 함수 내부만 실제 호출로 교체하면 됨.
-// 연결 키 = 바코드(JAN). Smaregi가 재고 SSOT, MakeShop↔Smaregi는 이미 연동됨.
+// Smaregi(スマレジ) 플랫폼 API 클라이언트.
+// 스마레지 = ARICO 상품·옵션·재고의 마스터 소스. MakeShop 온라인 주문도 스마레지에 유입됨.
+// 인증 = OAuth2 client_credentials. 비밀값은 Vercel 환경변수에만:
+//   SMAREGI_CONTRACT_ID / SMAREGI_CLIENT_ID / SMAREGI_CLIENT_SECRET  (+ 선택 SMAREGI_ENV=dev|prod)
+// 토큰: POST {ID_BASE}/app/{계약ID}/token (Basic 인증), 1시간 유효 → 메모리 캐시.
+// API: {API_BASE}/{계약ID}/pos/... (Bearer 토큰).
 
-export type StockMap = Map<string, number> // barcode(JAN) → 재고수량
+const CONTRACT = process.env.SMAREGI_CONTRACT_ID || ''
+const CLIENT_ID = process.env.SMAREGI_CLIENT_ID || ''
+const CLIENT_SECRET = process.env.SMAREGI_CLIENT_SECRET || ''
+const IS_DEV = process.env.SMAREGI_ENV === 'dev'   // 미설정=본번(prod)
+const ID_BASE = IS_DEV ? 'https://id.smaregi.dev' : 'https://id.smaregi.jp'
+const API_BASE = IS_DEV ? 'https://api.smaregi.dev' : 'https://api.smaregi.jp'
 
-export const SMAREGI_ENABLED = false // API 연동되면 true
+// 요청 스코프(자체앱에 부여돼 있어야 함). 없는 스코프는 토큰발급 시 에러.
+export const SMAREGI_SCOPES = 'pos.products:read pos.stock:read pos.transactions:read'
 
-/**
- * 바코드 목록의 현재 재고를 조회한다.
- * TODO(API): Smaregi 플랫폼 API(재고 조회)로 교체.
- *   - 인증: 발급된 토큰/계약 정보 사용
- *   - 엔드포인트: 상품 재고(stock) 조회, JAN/상품코드로 필터
- *   - 반환: barcode → quantity 맵
- */
-export async function getStockByBarcodes(barcodes: string[]): Promise<StockMap> {
-  void barcodes
-  if (!SMAREGI_ENABLED) return new Map()
-  // 실제 구현 자리 (API 제공 시)
-  return new Map()
+export function smaregiConfigured(): boolean {
+  return !!(CONTRACT && CLIENT_ID && CLIENT_SECRET)
 }
 
-/** 단일 바코드 재고 (없으면 null = 미연동/미등록) */
-export async function getStock(barcode: string): Promise<number | null> {
-  if (!barcode || !SMAREGI_ENABLED) return null
-  const m = await getStockByBarcodes([barcode])
-  return m.get(barcode) ?? null
+export class SmaregiError extends Error {
+  detail?: unknown
+  constructor(message: string, detail?: unknown) { super(message); this.name = 'SmaregiError'; this.detail = detail }
+}
+
+// ── 토큰(캐시) ─────────────────────────────────────────────
+let tokenCache = { token: '', exp: 0 }
+async function getToken(scope = SMAREGI_SCOPES): Promise<string> {
+  if (tokenCache.token && Date.now() < tokenCache.exp) return tokenCache.token
+  const basic = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64')
+  let res: Response
+  try {
+    res = await fetch(`${ID_BASE}/app/${CONTRACT}/token`, {
+      method: 'POST',
+      headers: { Authorization: `Basic ${basic}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'client_credentials', scope }),
+    })
+  } catch (e) { throw new SmaregiError('token_fetch_failed', String(e)) }
+  const txt = await res.text()
+  if (!res.ok) throw new SmaregiError(`token_http_${res.status}`, txt.slice(0, 400))
+  let j: { access_token?: string; expires_in?: number }
+  try { j = JSON.parse(txt) } catch { throw new SmaregiError('token_parse_failed', txt.slice(0, 200)) }
+  if (!j.access_token) throw new SmaregiError('token_missing', txt.slice(0, 200))
+  tokenCache = { token: j.access_token, exp: Date.now() + ((j.expires_in || 3600) - 60) * 1000 }
+  return tokenCache.token
+}
+
+// ── 공용 GET ───────────────────────────────────────────────
+export async function smaregiGet<T = unknown>(path: string, params?: Record<string, string | number>): Promise<T> {
+  if (!smaregiConfigured()) throw new SmaregiError('not_configured')
+  const token = await getToken()
+  const qs = params ? '?' + new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString() : ''
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE}/${CONTRACT}${path}${qs}`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    })
+  } catch (e) { throw new SmaregiError('api_fetch_failed', String(e)) }
+  const txt = await res.text()
+  if (!res.ok) throw new SmaregiError(`http_${res.status}`, txt.slice(0, 400))
+  try { return JSON.parse(txt) as T } catch { throw new SmaregiError('parse_failed', txt.slice(0, 200)) }
+}
+
+// ── 상품 (pos.products:read) ───────────────────────────────
+// systemCode 대응: 스마레지 productCode ↔ MakeShop 商品番号 매핑은 착수 시 확정.
+export type SmaregiProduct = {
+  productId: string; productCode: string; productName: string
+  price?: string; cost?: string; groupCode?: string; categoryId?: string
+  [k: string]: unknown
+}
+export async function getProductsPage(page = 1, limit = 100): Promise<SmaregiProduct[]> {
+  return smaregiGet<SmaregiProduct[]>('/pos/products', { limit, page })
+}
+
+// ── 재고 (pos.stock:read) ──────────────────────────────────
+export type SmaregiStock = {
+  productId: string; storeId?: string; stockAmount?: string; layawayStockAmount?: string
+  [k: string]: unknown
+}
+export async function getStockPage(page = 1, limit = 100): Promise<SmaregiStock[]> {
+  return smaregiGet<SmaregiStock[]>('/pos/stock', { limit, page })
 }
