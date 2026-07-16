@@ -4,8 +4,8 @@ import { makeshopQuery, makeshopConfigured } from '@/lib/makeshop'
 
 export const maxDuration = 60
 
-// 로그인 없이 특정 주문의 basket 원본을 통째로 덤프(진단). HMAC 보호.
-// ?from=YYYYMMDD&to=YYYYMMDD [&sys=systemOrderNumber]
+// 로그인 없이 basket 옵션 후보필드를 하나씩 시험(진단). HMAC 보호.
+// ?from=YYYYMMDD&to=YYYYMMDD&sys=systemOrderNumber
 export async function GET(req: Request) {
   const secret = process.env.AUTH_SECRET || ''
   if (!secret) return NextResponse.json({ error: 'server_not_configured' }, { status: 500 })
@@ -19,21 +19,23 @@ export async function GET(req: Request) {
   const from = url.searchParams.get('from') || '20260222'
   const to = url.searchParams.get('to') || '20260222'
   const sys = url.searchParams.get('sys') || ''
-  // 옵션 후보 필드까지 전부 요청
-  const q = `query searchOrder($input: SearchOrderRequest!){ searchOrder(input: $input){ orders { systemOrderNumber deliveryInfos { basketInfos {
-    productCode productName variationCustomCode variationName variationJanCode optionCode productNameOptions variation1ItemId variation2ItemId janCode amount price
-    customSelects { customSelectName selectedItemName }
-  } } } } }`
-  type B = Record<string, unknown>
-  const data = await makeshopQuery<{ searchOrder?: { orders?: { systemOrderNumber: string; deliveryInfos?: { basketInfos?: B[] }[] }[] } }>(
-    q, { input: { startOrderDate: `${from}000000`, endOrderDate: `${to}235959`, page: 1, limit: 100 } },
-  )
-  const hit = (data.searchOrder?.orders ?? []).filter(o => !sys || o.systemOrderNumber === sys)
-  return NextResponse.json({
-    ok: true, matched: hit.length,
-    orders: hit.slice(0, 3).map(o => ({
-      sys: o.systemOrderNumber,
-      baskets: (o.deliveryInfos || []).flatMap(d => d.basketInfos || []),
-    })),
-  })
+  const fields = (url.searchParams.get('fields') || 'variationName,variationJanCode,optionCode,productNameOptions,variation1ItemId,variation2ItemId,productCustomCode,addcode')
+    .split(',').map(s => s.trim()).filter(Boolean)
+
+  const results: Record<string, unknown> = {}
+  for (const f of fields) {
+    try {
+      const q = `query searchOrder($input: SearchOrderRequest!){ searchOrder(input: $input){ orders { systemOrderNumber deliveryInfos { basketInfos { productName ${f} } } } } }`
+      type B = Record<string, unknown>
+      const data = await makeshopQuery<{ searchOrder?: { orders?: { systemOrderNumber: string; deliveryInfos?: { basketInfos?: B[] }[] }[] } }>(
+        q, { input: { startOrderDate: `${from}000000`, endOrderDate: `${to}235959`, page: 1, limit: 100 } },
+      )
+      const hit = (data.searchOrder?.orders ?? []).filter(o => !sys || o.systemOrderNumber === sys)
+      const vals = hit.flatMap(o => (o.deliveryInfos || []).flatMap(d => (d.basketInfos || []).map(b => ({ name: String(b.productName).slice(0, 28), [f]: b[f] }))))
+      results[f] = { ok: true, vals: vals.slice(0, 3) }
+    } catch (e) {
+      results[f] = { ok: false, error: String(e).slice(0, 70) }
+    }
+  }
+  return NextResponse.json({ ok: true, results })
 }
