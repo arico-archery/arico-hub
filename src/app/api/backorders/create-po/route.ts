@@ -72,12 +72,14 @@ export async function POST(req: Request) {
         if (supplier.discount > 0 && supplier.discount < 1) price *= supplier.discount
         return Math.round(price * rate)
       })()
+      // 그룹핑은 옵션코드(정밀)로, 발주서 표시는 읽기 쉬운 라벨(스마레지 해석) 우선
       const opt = item.optionMemo || ''
+      const optDisplay = item.optionLabel || opt
       const key = `${p.id}|${opt}`
       if (productMap.has(key)) {
         productMap.get(key)!.quantity += item.quantity
       } else {
-        productMap.set(key, { productId: p.id, quantity: item.quantity, unitCostJpy: costJpy, optionMemo: opt })
+        productMap.set(key, { productId: p.id, quantity: item.quantity, unitCostJpy: costJpy, optionMemo: optDisplay })
       }
     }
 

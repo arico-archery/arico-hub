@@ -31,6 +31,7 @@ type BackorderItem = {
   costPriceJpy: number
   procureStatus: 'needed' | 'ordered' | 'received'
   optionMemo: string
+  optionLabel?: string
   purchaseOrderId: number | null
   order: {
     id: number
@@ -256,7 +257,7 @@ export default function BackordersPage() {
       [t.backorders.colBrand]: i.product.brand || '',
       [t.backorders.colProduct]: i.product.name,
       [t.backorders.colProductCode]: i.product.productCode,
-      [t.backorders.colOption]: i.optionMemo || [i.product.optionSize, i.product.optionColor].filter(Boolean).join(' / '),
+      [t.backorders.colOption]: i.optionLabel || i.optionMemo || [i.product.optionSize, i.product.optionColor].filter(Boolean).join(' / '),
       [t.backorders.colQty]: i.quantity,
       [t.backorders.colCost]: i.costPriceJpy,
       [t.backorders.colCostTotal]: i.costPriceJpy * i.quantity,
@@ -546,9 +547,9 @@ export default function BackordersPage() {
                                 </td>
                                 {/* 비고 */}
                                 <td className="px-3 py-3">
-                                  {item.optionMemo ? (
+                                  {(item.optionLabel || item.optionMemo) ? (
                                     <span className="text-xs px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-medium border border-amber-200 dark:border-amber-700/50 whitespace-pre-wrap">
-                                      {item.optionMemo}
+                                      {item.optionLabel || item.optionMemo}
                                     </span>
                                   ) : (
                                     <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>

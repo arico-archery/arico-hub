@@ -38,6 +38,7 @@ type Order = {
     procureStatus: string
     product: { name: string; supplierCode: string; supplier: { name: string }; optionSize: string; optionColor: string }
     optionMemo: string
+    optionLabel?: string
     catalogImage?: string
   }[]
 }
@@ -592,9 +593,9 @@ export default function OrdersPage() {
                                     <Thumb src={item.catalogImage} size={32} />
                                     <SupplierBadge code={item.product.supplierCode} />
                                     <span className="text-gray-700 dark:text-gray-300">{item.product.name}</span>
-                                    {item.optionMemo && (
+                                    {(item.optionLabel || item.optionMemo) && (
                                       <span className="text-xs px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-medium border border-amber-200 dark:border-amber-700/50">
-                                        {item.optionMemo}
+                                        {item.optionLabel || item.optionMemo}
                                       </span>
                                     )}
                                     <span className="text-gray-500 dark:text-gray-400">×{item.quantity}</span>

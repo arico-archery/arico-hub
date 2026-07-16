@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { maxCustomerSeq } from '@/lib/seq'
 import { calcCostJpy } from '@/lib/utils'
+import { resolveOptionLabels, extractOptionCode } from '@/lib/smaregi-option'
 import {
   getAllOrdersDetailed, fmtOrderDate,
   memberPostal, memberAddress,
@@ -148,6 +149,8 @@ export async function runImport(days: number, win?: { start: string; end: string
     await writeStatus({ state: 'running', days, startedAt, finishedAt: null, created: 0, dup: 0, partial: 0 })
     const { rows, catMap, prodMap, rates, memberMap } = await buildPreview(days, win)
     const targets = rows.filter(r => !r.dup && r.items.length > 0)   // 중복 아닌 전부(미매칭 포함). 품목 0(=レンタルリム만)은 제외
+    // 옵션코드(variationCustomCode) → 사람이 읽는 옵션 라벨(스마레지) 사전 해석
+    const optLabelMap = await resolveOptionLabels(targets.flatMap(r => r.items.map(i => i.option)))
 
     // 거래처 코드 러닝 카운터
     let custSeq = await maxCustomerSeq()
@@ -214,12 +217,13 @@ export async function runImport(days: number, win?: { start: string; end: string
       // 품목 데이터 (미매칭은 ETC 상품으로).
       // 배송완료·취소 주문은 이미 발주·입고 끝난 것 → 조달상태 received(백오더 제외).
       const procureStatus = (r.orderStatus === 'delivered' || r.orderStatus === 'cancelled') ? 'received' : 'needed'
-      const itemsData: { productId: number; quantity: number; salePriceJpy: number; costPriceJpy: number; optionMemo: string; procureStatus: string }[] = []
+      const itemsData: { productId: number; quantity: number; salePriceJpy: number; costPriceJpy: number; optionMemo: string; optionLabel: string; procureStatus: string }[] = []
       for (const it of r.items) {
         const prod = await resolveProduct(it.productCode, it.productName, it.price)
         if (!it.matched && !etcSeen.has(it.productCode)) { etcSeen.add(it.productCode); etcCreated++ }
         const costJpy = Math.round(calcCostJpy(prod, rates))
-        itemsData.push({ productId: prod.id, quantity: it.amount, salePriceJpy: Math.round(it.price), costPriceJpy: costJpy, optionMemo: it.option, procureStatus })
+        const optionLabel = optLabelMap.get(extractOptionCode(it.option) || '') || ''
+        itemsData.push({ productId: prod.id, quantity: it.amount, salePriceJpy: Math.round(it.price), costPriceJpy: costJpy, optionMemo: it.option, optionLabel, procureStatus })
       }
       const subtotal = itemsData.reduce((s, it) => s + it.salePriceJpy * it.quantity, 0)
       const totalCost = itemsData.reduce((s, it) => s + it.costPriceJpy * it.quantity, 0)

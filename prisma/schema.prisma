@@ -140,7 +140,8 @@ model OrderItem {
   costPriceJpy    Float          // cost price in JPY at time of order
   // 조달 상태: needed(미발주) | ordered(발주완료) | received(입고완료)
   procureStatus   String         @default("needed")
-  optionMemo      String         @default("")  // 사이즈/컬러/기타 비고 (예: LH, シルバー 280, 赤)
+  optionMemo      String         @default("")  // 사이즈/컬러/기타 비고 (예: LH, シルバー 280, 赤). MakeShop 주문은 옵션코드(variationCustomCode)
+  optionLabel     String         @default("")  // 사람이 읽는 옵션 — 스마레지로 코드 해석(예: レッド, RH/ピンク). 없으면 optionMemo 표시
   purchaseOrderId Int?           // 연결된 발주서
   purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
   createdAt       DateTime       @default(now())

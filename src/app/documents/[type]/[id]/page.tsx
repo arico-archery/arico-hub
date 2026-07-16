@@ -119,7 +119,7 @@ export default async function DocumentPage({
     rows = order.items.map(it => ({
       date: fmtDocDateShort(order.orderDate),
       name: it.product.name,
-      opt: it.optionMemo || '',
+      opt: it.optionLabel || it.optionMemo || '',
       txId: String(order.id),
       code: it.product.productCode,
       taxRate: 10,
