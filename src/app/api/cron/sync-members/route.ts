@@ -19,13 +19,17 @@ export async function GET(req: Request) {
 
   const mode = url.searchParams.get('mode') === 'new' ? 'new' : 'all'
   let page = Math.max(1, Number(url.searchParams.get('page')) || 1)
-  const agg = { fetched: 0, created: 0, updated: 0, skipped: 0 }
+  const agg = { fetched: 0, created: 0, updated: 0, skipped: 0, marked: 0 }
   const t0 = Date.now()
   while (true) {
+    const pageStart = Date.now()
     const r = await syncMembersPage(mode, page, PAGE_LIMIT)
-    agg.fetched += r.count; agg.created += r.created; agg.updated += r.updated; agg.skipped += r.skipped
+    const pageMs = Date.now() - pageStart
+    agg.fetched += r.count; agg.created += r.created; agg.updated += r.updated; agg.skipped += r.skipped; agg.marked += r.marked
     if (!r.hasMore) return NextResponse.json({ ok: true, done: true, ...agg })
     page++
-    if (Date.now() - t0 > 48000) return NextResponse.json({ ok: true, done: false, nextPage: page, ...agg })
+    // 다음 페이지가 방금 페이지만큼 걸린다고 보고, 60초(maxDuration) 안에 못 끝낼 것 같으면 넘긴다.
+    // (예전엔 경과시간만 봐서, 다음 페이지 도중 함수가 통째로 죽었다 → FUNCTION_INVOCATION_TIMEOUT)
+    if (Date.now() - t0 + pageMs > 50000) return NextResponse.json({ ok: true, done: false, nextPage: page, ...agg })
   }
 }
