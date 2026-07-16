@@ -63,11 +63,12 @@ export async function getShop(): Promise<ShopInfo | null> {
 
 // ── 상품 (searchProduct) ─────────────────────────────
 // systemCode = 商品番号(12자리) → AricoCatalog.productCode 와 동일 키.
-export type MakeshopProduct = { uid: string; systemCode: string; productName: string; sellPrice: number }
+// display = 진열 여부(Y/N). N이면 자사몰 미진열(=판매 안 함).
+export type MakeshopProduct = { uid: string; systemCode: string; productName: string; sellPrice: number; display: string }
 
 export async function searchProductPage(page: number, limit = 1000): Promise<MakeshopProduct[]> {
   const data = await makeshopQuery<{ searchProduct?: { products?: MakeshopProduct[] } }>(
-    `query searchProduct($input: SearchProductRequest!){ searchProduct(input: $input){ products { uid systemCode productName sellPrice } } }`,
+    `query searchProduct($input: SearchProductRequest!){ searchProduct(input: $input){ products { uid systemCode productName sellPrice display } } }`,
     { input: { page, limit } },
   )
   return data.searchProduct?.products ?? []
