@@ -32,6 +32,39 @@ export function fmtDocDatePadded(d: Date | string | null | undefined, lang: DocL
   return lang === 'ja' ? `${y}年${m}月${day}日` : `${y}-${m}-${day}`
 }
 
+// 고객용 문서(청구서·견적서) 표기 정리 — 【取り寄せ商品】 같은 납기 안내 태그 제거.
+// 상품명 접두뿐 아니라 옵션값 안(예 "カラー : 【取寄せ商品】パープル")에도 섞여 있어 전역 제거.
+//  예: 【取り寄せ商品】Diamond コンパウンドボウ → Diamond コンパウンドボウ
+export function cleanDocText(s: string | null | undefined): string {
+  return String(s || '')
+    .replace(/【\s*お?取り?寄せ(商品)?\s*】/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// 청구서에 넣지 않을 옵션그룹 — 상품 사양이 아니라 재고/납기 안내.
+const NOISE_OPTION_GROUP = /^(在庫状況|即納商品|即納)$/
+
+// 옵션 표기 정리 — 태그 제거 + 안내성 옵션그룹 제거 + "라벨 : 값 / 라벨 : 값" 정돈.
+//  예: "スパイン : 600 在庫状況 : 取り寄せ【納期…】" → "スパイン : 600"
+//      "カラー : ブラック 左右 : LH" → "カラー : ブラック / 左右 : LH"
+// "라벨 : 값" 구조가 아니면(스마레지 해석 옵션 등) 태그만 제거해 그대로 반환.
+export function cleanDocOption(s: string | null | undefined): string {
+  const t = cleanDocText(s)
+  if (!t) return ''
+  const marks = [...t.matchAll(/([^\s:：]+)\s*[:：]\s*/g)]
+  if (!marks.length) return t
+  const parts: string[] = []
+  for (let i = 0; i < marks.length; i++) {
+    const label = marks[i][1]
+    const start = (marks[i].index ?? 0) + marks[i][0].length
+    const end = i + 1 < marks.length ? (marks[i + 1].index ?? t.length) : t.length
+    const value = t.slice(start, end).replace(/[/、,]\s*$/, '').trim()
+    if (!NOISE_OPTION_GROUP.test(label) && value) parts.push(`${label} : ${value}`)
+  }
+  return parts.join(' / ').trim()
+}
+
 // 税込 금액에서 내부 소비세 = floor(amount × rate / (100 + rate))
 export function inclusiveTax(amountInclusive: number, ratePct: number): number {
   return Math.floor((amountInclusive * ratePct) / (100 + ratePct))

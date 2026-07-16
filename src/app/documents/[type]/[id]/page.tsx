@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { notFound } from 'next/navigation'
 import { formatJpy } from '@/lib/utils'
-import { DOC_TEXT, DOC_LANGS, DocLang, DocType, fmtDocDate, fmtDocDateShort, fmtDocDatePadded, inclusiveTax } from '@/lib/documents'
+import { DOC_TEXT, DOC_LANGS, DocLang, DocType, fmtDocDate, fmtDocDateShort, fmtDocDatePadded, inclusiveTax, cleanDocText, cleanDocOption } from '@/lib/documents'
 import DocToolbar from './DocToolbar'
 
 async function getSettings(): Promise<Record<string, string>> {
@@ -118,8 +118,10 @@ export default async function DocumentPage({
     }
     rows = order.items.map(it => ({
       date: fmtDocDateShort(order.orderDate),
-      name: it.product.name,
-      opt: it.optionLabel || it.optionMemo || '',
+      // 고객용 문서(청구서·견적서)는 자사몰(ARICO 카탈로그) 상품명으로 — 【取り寄せ商品】 태그 제거.
+      // 자사몰명이 없으면(수동 주문 등) 공급사 상품명으로 폴백. 옵션도 같은 태그 제거.
+      name: cleanDocText(it.shopProductName) || it.product.name,
+      opt: cleanDocOption(it.optionLabel || it.optionMemo || ''),
       txId: String(order.id),
       code: it.product.productCode,
       taxRate: 10,
