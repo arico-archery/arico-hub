@@ -126,9 +126,11 @@ export function fmtOrderDate(d: Date): string {
 
 // ── 주문 상세 (searchOrder, 품목·입금·수령인 포함) ─────────────────
 // 실제 스키마: 주문 품목은 deliveryInfos[].basketInfos[] 에 있음.
+export type MakeshopCustomSelect = { customSelectName: string; selectedItemName: string }
 export type MakeshopBasket = {
   productCode: string; variationCustomCode: string; janCode: string
   amount: number; price: number; productName: string
+  customSelects?: MakeshopCustomSelect[]   // 옵션그룹 선택값(原糸/サービング/サイズ 등)
 }
 export type MakeshopDelivery = {
   deliveryStatus: string; shippingCharge: number
@@ -147,7 +149,7 @@ const ORDER_DETAIL_QUERY = `query searchOrder($input: SearchOrderRequest!){
       systemOrderNumber displayOrderNumber orderDate memberId sumPrice paymentStatusCode
       deliveryInfos {
         deliveryStatus shippingCharge slipNumber deliveryDate estimatedShipmentDate
-        basketInfos { productCode variationCustomCode janCode amount price productName }
+        basketInfos { productCode variationCustomCode janCode amount price productName customSelects { customSelectName selectedItemName } }
       }
     }
   }

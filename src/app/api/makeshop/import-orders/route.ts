@@ -40,7 +40,15 @@ function mapDelivery(o: { deliveryInfos: { deliveryStatus: string; slipNumber: s
   return { orderStatus: 'pending', trackingNo: '', shipDate: null }
 }
 
-type PreviewItem = { productCode: string; productName: string; variationCustomCode: string; option: string; amount: number; price: number; matched: boolean; supplierCode: string | null; catalogName: string | null }
+type PreviewItem = { productCode: string; productName: string; variationCustomCode: string; option: string; customLabel: string; amount: number; price: number; matched: boolean; supplierCode: string | null; catalogName: string | null }
+
+// customSelects(옵션그룹 선택값) → "サービング: ブラック / サイズ: 66 / ..." 라벨
+function customSelectLabel(b: { customSelects?: { customSelectName: string; selectedItemName: string }[] }): string {
+  return (b.customSelects || [])
+    .map(c => `${(c.customSelectName || '').trim()}: ${(c.selectedItemName || '').trim()}`)
+    .filter(s => s !== ': ')
+    .join(' / ')
+}
 
 // MakeShop basket에서 옵션(색/사이즈 등) 추출. 우선 variationCustomCode, 없으면 빈값.
 // (실제 옵션이 어느 필드에 오는지 미리보기의 variationCustomCode/productName로 확인 후 보강)
@@ -90,6 +98,7 @@ async function buildPreview(days: number, win?: { start: string; end: string }) 
       return {
         productCode: b.productCode, productName: b.productName,
         variationCustomCode: b.variationCustomCode || '', option: basketOption(b),
+        customLabel: customSelectLabel(b),
         amount: Number(b.amount) || 0, price: Number(b.price) || 0,
         matched: !!prod, supplierCode: prod?.supplierCode ?? null, catalogName: cat?.name ?? null,
       }
@@ -222,7 +231,8 @@ export async function runImport(days: number, win?: { start: string; end: string
         const prod = await resolveProduct(it.productCode, it.productName, it.price)
         if (!it.matched && !etcSeen.has(it.productCode)) { etcSeen.add(it.productCode); etcCreated++ }
         const costJpy = Math.round(calcCostJpy(prod, rates))
-        const optionLabel = optLabelMap.get(extractOptionCode(it.option) || '') || ''
+        // 옵션 라벨: 옵션그룹 선택값(customSelects) 우선, 없으면 옵션코드→스마레지 해석
+        const optionLabel = it.customLabel || optLabelMap.get(extractOptionCode(it.option) || '') || ''
         itemsData.push({ productId: prod.id, quantity: it.amount, salePriceJpy: Math.round(it.price), costPriceJpy: costJpy, optionMemo: it.option, optionLabel, procureStatus })
       }
       const subtotal = itemsData.reduce((s, it) => s + it.salePriceJpy * it.quantity, 0)
