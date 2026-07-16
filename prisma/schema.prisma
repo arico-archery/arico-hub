@@ -255,3 +255,23 @@ model AricoCatalog {
   @@index([barcode])
   @@map("arico_catalog")
 }
+
+// 스마레지 재고 캐시 — 스마레지(마스터)에서 동기화한 상품·재고 스냅샷. 재고 탭 표시용.
+model SmaregiProduct {
+  id            Int      @id @default(autoincrement())
+  productId     String   @unique              // 스마레지 내부 productId
+  productCode   String   @default("")         // 스마레지 상품코드(13자리)
+  name          String   @default("")
+  size          String   @default("")         // 옵션(사이즈/색상 등)
+  color         String   @default("")
+  price         Int      @default(0)
+  cost          Int      @default(0)
+  stock         Int      @default(0)          // 전 점포 합계 재고
+  storeStock    String   @default("")         // JSON {storeId: qty} (점포별)
+  displayFlag   String   @default("")         // 스마레지 진열 플래그
+  syncedAt      DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  @@index([productCode])
+  @@map("smaregi_product")
+}
