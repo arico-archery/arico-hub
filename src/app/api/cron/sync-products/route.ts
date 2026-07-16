@@ -17,30 +17,26 @@ export async function GET(req: Request) {
   if (!ok) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   if (!makeshopConfigured()) return NextResponse.json({ ok: false, error: 'not_configured' }, { status: 503 })
 
-  const limit = 300
-  let page = Math.max(1, Number(url.searchParams.get('page')) || 1)
-  const existing = new Set((await prisma.aricoCatalog.findMany({ select: { productCode: true } })).map(r => r.productCode))
+  const limit = 200
+  const page = Math.max(1, Number(url.searchParams.get('page')) || 1)
   const agg = { fetched: 0, created: 0, updated: 0, skipped: 0 }
-  const t0 = Date.now()
-  while (true) {
-    const products = await searchProductPage(page, limit)
-    agg.fetched += products.length
-    const CONC = 10
-    for (let i = 0; i < products.length; i += CONC) {
-      await Promise.allSettled(products.slice(i, i + CONC).map(p => {
-        const code = String(p.systemCode ?? '').trim()
-        if (!code) { agg.skipped++; return Promise.resolve() }
-        const name = String(p.productName ?? '').trim()
-        const priceJpy = Math.round(Number(p.sellPrice) || 0)
-        const active = p.display === 'Y'   // 자사몰 진열 여부 (N=미진열=판매안함)
-        const isNew = !existing.has(code)
-        return prisma.aricoCatalog.upsert({ where: { productCode: code }, update: { name, priceJpy, active }, create: { productCode: code, name, priceJpy, active } })
-          .then(() => { if (isNew) { agg.created++; existing.add(code) } else agg.updated++ })
-          .catch(() => { agg.skipped++ })
-      }))
-    }
-    if (products.length < limit) return NextResponse.json({ ok: true, done: true, ...agg })
-    page++
-    if (Date.now() - t0 > 48000) return NextResponse.json({ ok: true, done: false, nextPage: page, ...agg })
+  // 요청당 1페이지만 처리(타임아웃 확실 방지). 클라이언트가 nextPage로 반복.
+  const products = await searchProductPage(page, limit)
+  agg.fetched = products.length
+  const CONC = 10
+  for (let i = 0; i < products.length; i += CONC) {
+    await Promise.allSettled(products.slice(i, i + CONC).map(async p => {
+      const code = String(p.systemCode ?? '').trim()
+      if (!code) { agg.skipped++; return }
+      const name = String(p.productName ?? '').trim()
+      const priceJpy = Math.round(Number(p.sellPrice) || 0)
+      const active = p.display === 'Y'   // 자사몰 진열 여부 (N=미진열=판매안함)
+      try {
+        const r = await prisma.aricoCatalog.upsert({ where: { productCode: code }, update: { name, priceJpy, active }, create: { productCode: code, name, priceJpy, active }, select: { createdAt: true, updatedAt: true } })
+        if (r.createdAt.getTime() === r.updatedAt.getTime()) agg.created++; else agg.updated++
+      } catch { agg.skipped++ }
+    }))
   }
+  const done = products.length < limit
+  return NextResponse.json({ ok: true, done, ...(done ? {} : { nextPage: page + 1 }), ...agg })
 }
