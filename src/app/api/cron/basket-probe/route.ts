@@ -21,15 +21,7 @@ export async function GET(req: Request) {
   const start = `${from}000000`, end = `${to}235959`
   // 객체/배열형 옵션필드 후보 — 하위필드까지 포함한 표현
   const candidates = [
-    'optionInfos { optionTitle optionValue }',
-    'optionInfos { title value }',
-    'optionInfos { optionName optionValue }',
-    'optionInfos { name value }',
-    'orderProductOptionInfos { optionTitle optionValue }',
-    'productOptionInfos { optionTitle optionValue }',
-    'orderOptionInfos { optionTitle optionValue }',
-    'options { optionTitle optionValue }',
-    'basketOptionInfos { optionTitle optionValue }',
+    'customSelects { customSelectName selectedItemName inputValue }',
   ]
 
   const results: Record<string, unknown> = {}
