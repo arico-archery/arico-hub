@@ -15,6 +15,10 @@ export const maxDuration = 60   // Pro면 60초까지 (대량 수신 대비)
 // 수신 제외 품목 — レンタルリム(림 렌탈 구독)은 유통 대상 아님(2026-07-15 결정, 앞으로도 미처리)
 const EXCLUDE_ITEM = /レンタルリム/
 
+// 자체제작 공급사 — ARICO 자사 제작·서비스(STRING·핑거슬링·加工費·福袋 등).
+// 공급사에 발주하는 물건이 아니므로 백오더(발주 대상)에 넣지 않는다(2026-07-16 지안 확인).
+const SELF_MADE_SUPPLIER = 'ARICO'
+
 // 입금상태 매핑(2026-07-15 확정, 지안 확인):
 //  0000=代引き입금완료 · 0001=현금입금완료 · 0002=입금완료 · 0004=仮売上(고객결제완료) · 1002=포인트/¥0(미수금 없음) → 입금완료
 //  0003=취소(배송상태에서 cancelled 처리) · 그 외 → 미입금
@@ -225,11 +229,13 @@ export async function runImport(days: number, win?: { start: string; end: string
       }
       // 품목 데이터 (미매칭은 ETC 상품으로).
       // 배송완료·취소 주문은 이미 발주·입고 끝난 것 → 조달상태 received(백오더 제외).
-      const procureStatus = (r.orderStatus === 'delivered' || r.orderStatus === 'cancelled') ? 'received' : 'needed'
+      const baseProcure = (r.orderStatus === 'delivered' || r.orderStatus === 'cancelled') ? 'received' : 'needed'
       const itemsData: { productId: number; quantity: number; salePriceJpy: number; costPriceJpy: number; optionMemo: string; optionLabel: string; procureStatus: string }[] = []
       for (const it of r.items) {
         const prod = await resolveProduct(it.productCode, it.productName, it.price)
         if (!it.matched && !etcSeen.has(it.productCode)) { etcSeen.add(it.productCode); etcCreated++ }
+        // ARICO = 자체제작·서비스(STRING/핑거슬링/加工費 등) → 공급사 발주 대상 아님 → 백오더 제외
+        const procureStatus = prod.supplierCode === SELF_MADE_SUPPLIER ? 'received' : baseProcure
         const costJpy = Math.round(calcCostJpy(prod, rates))
         // 옵션 라벨: 옵션그룹 선택값(customSelects) 우선, 없으면 옵션코드→스마레지 해석
         const optionLabel = it.customLabel || optLabelMap.get(extractOptionCode(it.option) || '') || ''
