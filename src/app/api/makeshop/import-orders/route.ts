@@ -72,7 +72,7 @@ type PreviewRow = {
 }
 
 // 주문 수신 + 매칭. days 만큼 과거 주문을 가져와 productCode로 매칭한다.
-async function buildPreview(days: number, win?: { start: string; end: string }) {
+export async function buildPreview(days: number, win?: { start: string; end: string }) {
   const now = new Date()
   // win(명시 구간)이 있으면 그걸 쓰고, 없으면 최근 days일. 종료일 +1일 버퍼(UTC-JST 시차 당일 누락 방지).
   const start = win?.start ?? fmtOrderDate(new Date(now.getTime() - days * 86400000))
@@ -157,6 +157,74 @@ const STATUS_KEY = 'makeshop_import_status'
 async function writeStatus(s: Record<string, unknown>) {
   const value = JSON.stringify(s)
   await prisma.setting.upsert({ where: { key: STATUS_KEY }, create: { key: STATUS_KEY, value }, update: { value } })
+}
+
+// 이미 받은 주문의 "현재 상태"를 자사몰에서 읽어와 반영한다.
+// 자사몰이 아는 것만 대상: 입금 · 발송/배송완료(운송장·발송일) · 취소.
+// 발주·입고는 자사몰에 없는 개념이라 손대지 않는다.
+//
+// 되돌리기(다운그레이드)는 하지 않는다 — 자사몰이 모르는 사정(계좌이체를 앱에만
+// 기록, 앱에서 먼저 발송 처리 등)을 지워버리기 때문. 단 취소는 예외로 항상 반영한다.
+//
+// dryRun=true면 쓰지 않고 무엇이 바뀔지만 돌려준다(운영 DB라 사전 확인용).
+type RefreshRow = { externalOrderNo: string; payment: string; orderStatus: string; trackingNo: string; shipDate: string | null; dup: boolean }
+export async function refreshExisting(rows: RefreshRow[], dryRun = false) {
+  const changes: { orderNo: string; from: string; to: string }[] = []
+  let refreshed = 0
+  const allDup = rows.filter(r => r.dup)
+  if (!allDup.length) return { refreshed, changes }
+
+  const cur = await prisma.order.findMany({
+    where: { externalOrderNo: { in: allDup.map(r => r.externalOrderNo) }, internal: false },
+    select: {
+      id: true, orderNo: true, externalOrderNo: true, status: true, paymentStatus: true,
+      paidAmountJpy: true, totalAmountJpy: true, paymentDate: true,
+      trackingNo: true, shippingDate: true, completedAt: true,
+    },
+  })
+  const byNo = new Map(cur.map(o => [o.externalOrderNo, o]))
+  const now = new Date()
+  const SHIPPED_ALREADY = new Set(['shipped', 'delivered'])
+
+  for (const r of allDup) {
+    const o = byNo.get(r.externalOrderNo)
+    if (!o) continue
+    const data: Record<string, unknown> = {}
+
+    // ① 취소 — 항상 반영(유일한 되돌리기)
+    if (r.orderStatus === 'cancelled' && o.status !== 'cancelled') {
+      data.status = 'cancelled'
+    } else if (o.status !== 'cancelled') {
+      // ② 입금 — 미입금/일부 → 완납만. 완납을 미입금으로 되돌리지 않는다
+      if (r.payment === 'paid' && o.paymentStatus !== 'paid') {
+        data.paymentStatus = 'paid'
+        data.paidAmountJpy = o.totalAmountJpy
+        if (!o.paymentDate) data.paymentDate = now
+      }
+      // ③ 발송·배송완료 — 자사몰이 발송했는데 앱이 아직 모를 때만
+      if (r.orderStatus === 'delivered' && !SHIPPED_ALREADY.has(o.status)) {
+        const d = r.shipDate ? new Date(r.shipDate) : now
+        data.status = 'delivered'
+        data.deliveryDate = d
+        if (!o.completedAt) data.completedAt = d
+        if (!o.shippingDate) data.shippingDate = d
+      }
+      // ④ 운송장 — 비어 있을 때만 채운다
+      if (r.trackingNo && !o.trackingNo) data.trackingNo = r.trackingNo
+    }
+
+    if (!Object.keys(data).length) continue
+    refreshed++
+    if (changes.length < 40) {
+      changes.push({
+        orderNo: o.orderNo,
+        from: `${o.status}/${o.paymentStatus}`,
+        to: `${(data.status as string) ?? o.status}/${(data.paymentStatus as string) ?? o.paymentStatus}${data.trackingNo ? ' +운송장' : ''}`,
+      })
+    }
+    if (!dryRun) await prisma.order.update({ where: { id: o.id }, data })
+  }
+  return { refreshed, changes }
 }
 
 // 실제 수신 로직 (POST·cron 공용). 결과 객체 반환.
@@ -303,10 +371,12 @@ export async function runImport(days: number, win?: { start: string; end: string
       }
     }
 
+    const { refreshed } = await refreshExisting(rows)
+
     skipped = rows.filter(r => r.dup).length
     const partial = rows.filter(r => !r.dup && !r.allMatched).length
-    await writeStatus({ state: 'done', days, startedAt, finishedAt: new Date().toISOString(), created, dup: skipped, partial, custCreated, custUpdated, optionFilled })
-    return { ok: true, created, skipped, dup: skipped, etcCreated, custCreated, custUpdated, partial, optionFilled }
+    await writeStatus({ state: 'done', days, startedAt, finishedAt: new Date().toISOString(), created, dup: skipped, partial, custCreated, custUpdated, optionFilled, refreshed })
+    return { ok: true, created, skipped, dup: skipped, etcCreated, custCreated, custUpdated, partial, optionFilled, refreshed }
   } catch (e) {
     const err = e instanceof MakeshopError ? { error: e.message, detail: e.detail } : { error: String(e) }
     await writeStatus({ state: 'error', days, startedAt, finishedAt: new Date().toISOString(), created: 0, dup: 0, partial: 0, error: String(err.error) }).catch(() => {})

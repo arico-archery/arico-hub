@@ -47,7 +47,7 @@ export default function MakeshopPage() {
       const res = await fetch(`/api/makeshop/import-orders?days=${days}`, { method: 'POST' })
       const d = await res.json()
       if (!res.ok || !d.ok) { setErr(`${d.error}${d.detail ? ' — ' + JSON.stringify(d.detail).slice(0, 300) : ''}`); return }
-      setResult(L(`✅ 주문 ${d.created}건 생성 · 거래처 신규 ${d.custCreated}·갱신 ${d.custUpdated} · 중복제외 ${d.dup} · 일부미매칭 ${d.partial} · ETC상품 ${d.etcCreated}`, `✅ 受注 ${d.created}件作成 · 取引先 新規 ${d.custCreated}·更新 ${d.custUpdated} · 重複除外 ${d.dup} · 一部未マッチ ${d.partial} · ETC商品 ${d.etcCreated}`))
+      setResult(L(`✅ 주문 ${d.created}건 생성 · 기존 주문 상태 갱신 ${d.refreshed ?? 0} · 거래처 신규 ${d.custCreated}·갱신 ${d.custUpdated} · 일부미매칭 ${d.partial} · ETC상품 ${d.etcCreated}`, `✅ 受注 ${d.created}件作成 · 既存受注の状態を更新 ${d.refreshed ?? 0} · 取引先 新規 ${d.custCreated}·更新 ${d.custUpdated} · 一部未マッチ ${d.partial} · ETC商品 ${d.etcCreated}`))
       loadPreview()
     } catch (e) { setErr(String(e)) } finally { setImporting(false) }
   }
@@ -174,7 +174,7 @@ export default function MakeshopPage() {
       <ConfirmDialog
         open={confirmOpen}
         title={L('MakeShop 주문 가져오기', 'MakeShop受注取込')}
-        message={L(`${summary?.importable ?? 0}건의 주문을 생성합니다. (중복만 제외 · 미매칭 품목은 ETC 상품으로 생성 → 주문관리에서 수정)\n거래처도 자동 연동됩니다. 진행할까요?`, `${summary?.importable ?? 0}件の受注を作成します。(重複のみ除外 · 未マッチ品はETC商品として作成 → 受注管理で修正)\n取引先も自動連携。進めますか？`)}
+        message={L(`${summary?.importable ?? 0}건의 주문을 생성합니다. (미매칭 품목은 ETC 상품으로 생성 → 주문관리에서 수정)\n이미 받은 주문은 자사몰의 현재 상태(입금·발송·취소)를 읽어와 반영합니다. 발주·입고 등 앱에서 한 작업은 건드리지 않습니다.\n거래처도 자동 연동됩니다. 진행할까요?`, `${summary?.importable ?? 0}件の受注を作成します。(未マッチ品はETC商品として作成 → 受注管理で修正)\n取込済の受注は、MakeShopの現在の状態(入金・発送・キャンセル)を読み取って反映します。発注・入荷などアプリ側の作業には触れません。\n取引先も自動連携。進めますか？`)}
         confirmText={L('가져오기', '取込')}
         cancelText={L('취소', 'キャンセル')}
         onConfirm={() => { setConfirmOpen(false); runImport() }}

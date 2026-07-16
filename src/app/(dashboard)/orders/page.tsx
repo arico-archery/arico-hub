@@ -162,7 +162,8 @@ export default function OrdersPage() {
 
   // MakeShop 수신 (수동) — 상태를 서버(Setting)에 기록하고 폴링해서 탭 이동/새로고침에도 유지.
   const { lang } = useI18n()
-  type MsStatus = { state: 'idle' | 'running' | 'done' | 'error'; startedAt?: string; finishedAt?: string; created?: number; dup?: number; partial?: number; error?: string }
+  // refreshed = 이미 받은 주문 중 자사몰의 현재 상태(입금·발송·취소)를 반영한 건수
+  type MsStatus = { state: 'idle' | 'running' | 'done' | 'error'; startedAt?: string; finishedAt?: string; created?: number; dup?: number; refreshed?: number; partial?: number; error?: string }
   const [msStatus, setMsStatus] = useState<MsStatus | null>(null)
   const [msConfirm, setMsConfirm] = useState(false)
   const [exportConfirm, setExportConfirm] = useState(false)   // CSV 내보내기 확인창
@@ -341,7 +342,8 @@ export default function OrdersPage() {
       {msStatus?.state === 'done' && !msDismissed && (
         <div className="mb-4 flex items-center justify-between gap-3 px-4 py-2.5 rounded-lg text-sm font-medium bg-emerald-50 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-700">
           <span>
-            ✅ {lang === 'ja' ? '取込完了' : '수신 완료'} · {t.orders.msImported} {msStatus.created ?? 0} · {t.orders.msDup} {msStatus.dup ?? 0} · {t.orders.msPartial} {msStatus.partial ?? 0}
+            {/* 무엇이 실제로 바뀌었는지 보이게: 생성 / 갱신(자사몰 현재 상태 반영) / 변화없음 */}
+            ✅ {lang === 'ja' ? '取込完了' : '수신 완료'} · {t.orders.msImported} {msStatus.created ?? 0} · {t.orders.msRefreshed} {msStatus.refreshed ?? 0} · {t.orders.msUnchanged} {Math.max(0, (Number(msStatus.dup) || 0) - (Number(msStatus.refreshed) || 0))} · {t.orders.msPartial} {msStatus.partial ?? 0}
             {msStatus.finishedAt ? ` · ${new Date(msStatus.finishedAt).toLocaleTimeString(lang === 'ja' ? 'ja-JP' : 'ko-KR', { hour: '2-digit', minute: '2-digit' })}` : ''}
           </span>
           <button onClick={() => setMsDismissed(true)} className="text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-100 shrink-0"><X className="w-4 h-4" /></button>

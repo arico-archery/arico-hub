@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import crypto from 'node:crypto'
-import { getAllOrdersDetailed, makeshopConfigured, MakeshopError } from '@/lib/makeshop'
+import { MakeshopError, makeshopConfigured } from '@/lib/makeshop'
+import { buildPreview, refreshExisting } from '@/app/api/makeshop/import-orders/route'
 
 export const maxDuration = 60
 
-// 특정 주문의 MakeShop 원본을 확인하는 일회성 진단(운영자용). HMAC 보호.
-// ?from=YYYYMMDD&to=YYYYMMDD&no=<systemOrderNumber>
-// 확인 끝나면 이 파일은 지운다.
+// 자사몰 "현재 상태 반영"이 무엇을 바꿀지 쓰기 없이 미리 보는 진단(운영자용). HMAC 보호.
+// ?days=N — 운영 DB라 실제 수신 전에 영향 범위를 먼저 확인하는 용도.
 export async function GET(req: Request) {
   const secret = process.env.AUTH_SECRET || ''
   if (!secret) return NextResponse.json({ error: 'server_not_configured' }, { status: 500 })
@@ -17,26 +17,19 @@ export async function GET(req: Request) {
   if (!ok) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   if (!makeshopConfigured()) return NextResponse.json({ ok: false, error: 'not_configured' }, { status: 503 })
 
-  const from = url.searchParams.get('from') || ''
-  const to = url.searchParams.get('to') || ''
-  const no = url.searchParams.get('no') || ''
-  if (!/^\d{8}$/.test(from) || !/^\d{8}$/.test(to)) {
-    return NextResponse.json({ ok: false, error: 'from/to(YYYYMMDD) 필요' }, { status: 400 })
-  }
-
+  const days = Math.min(365, Math.max(1, Number(url.searchParams.get('days')) || 90))
   try {
-    const orders = await getAllOrdersDetailed(`${from}000000`, `${to}235959`)
-    const hit = no ? orders.filter(o => o.systemOrderNumber === no) : []
-    // 그 기간 전체의 결제코드 분포도 함께 — 매핑에 없는 코드가 또 있는지 확인용
-    const codeDist: Record<string, number> = {}
-    for (const o of orders) codeDist[o.paymentStatusCode || '(빈값)'] = (codeDist[o.paymentStatusCode || '(빈값)'] || 0) + 1
-
+    const { rows } = await buildPreview(days)
+    const { refreshed, changes } = await refreshExisting(rows, true)   // dryRun
+    const dup = rows.filter(r => r.dup).length
     return NextResponse.json({
-      ok: true,
-      fetched: orders.length,
-      codeDist,
-      found: hit.length,
-      order: hit[0] ?? null,
+      ok: true, days,
+      total: rows.length,
+      newOrders: rows.filter(r => !r.dup && r.items.length > 0).length,
+      alreadyImported: dup,
+      wouldRefresh: refreshed,
+      wouldStaySame: dup - refreshed,
+      changes,
     })
   } catch (e) {
     const err = e instanceof MakeshopError ? { error: e.message, detail: e.detail } : { error: String(e) }
