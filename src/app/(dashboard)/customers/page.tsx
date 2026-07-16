@@ -15,6 +15,7 @@ type Customer = {
   customerType: string; taxRegNo: string; legalName: string
   postalCode: string; billingAddress: string; contactPerson: string
   discountRate: number; discountAmount: number; externalMemberId: string
+  withdrawn: boolean
   _count: { orders: number }
   orders: { totalAmountJpy: number; paidAmountJpy: number }[]
 }
@@ -499,6 +500,8 @@ export default function CustomersPage() {
                   )
 
                   const isExpanded = expandedId === c.id
+                  // 이름을 끝내 받지 못해 회원ID가 이름 자리에 들어간 탈퇴회원
+                  const nameLost = c.withdrawn && !!c.externalMemberId && c.name.trim() === c.externalMemberId.trim()
                   return (
                   <Fragment key={c.id}>
                     <tr onClick={() => setExpandedId(isExpanded ? null : c.id)} className={`cursor-pointer transition-colors ${isExpanded ? 'bg-blue-50/60 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/30'}`}>
@@ -509,7 +512,17 @@ export default function CustomersPage() {
                           <div>
                             {c.nameKana && <p className="sm:hidden text-[11px] text-gray-400 dark:text-gray-500 leading-tight">{c.nameKana}</p>}
                             <div className="flex items-center gap-1.5">
-                              <p className="font-semibold text-gray-900 dark:text-gray-100">{c.name}</p>
+                              {/* 退会会員: 이름을 받은 적 없어 회원ID가 이름에 들어간 경우만 '退会会員'으로 대체.
+                                  이름이 남아 있으면 그대로 두고 배지만 붙인다(과거 주문에서 누구인지 잃지 않도록). */}
+                              <p className={`font-semibold ${nameLost ? 'text-gray-400 dark:text-gray-500 italic' : 'text-gray-900 dark:text-gray-100'}`}>
+                                {nameLost ? t.customers.withdrawnName : c.name}
+                              </p>
+                              {nameLost && <span className="text-[11px] text-gray-400 dark:text-gray-500 shrink-0">{c.externalMemberId}</span>}
+                              {c.withdrawn && (
+                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                                  {t.customers.withdrawnBadge}
+                                </span>
+                              )}
                               <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 ${TYPE_BADGE[c.customerType || 'individual'] || TYPE_BADGE.individual}`}>
                                 {t.customers[(CUSTOMER_TYPES.find(x => x.v === (c.customerType || 'individual')) || CUSTOMER_TYPES[0]).key]}
                               </span>

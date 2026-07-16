@@ -92,6 +92,8 @@ model Customer {
   discountRate   Float  @default(0)             // 거래처 기본 할인율 % (주문 시 자동 적용)
   discountAmount Float  @default(0)             // 거래처 기본 정액 할인 JPY (퍼센트 차감 후 추가 차감)
   externalMemberId String @default("")          // MakeShop 회원ID (주문 수신 시 거래처 연결/중복방지)
+  // 退会会員: MakeShop이 회원ID만 남기고 개인정보를 전부 지운 상태(탈퇴). 회원 동기화가 판정한다.
+  withdrawn        Boolean @default(false)
   orders      Order[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
