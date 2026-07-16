@@ -73,6 +73,18 @@ export async function getProductsPage(page = 1, limit = 100): Promise<SmaregiPro
   return smaregiGet<SmaregiProduct[]>('/pos/products', { limit, page })
 }
 
+// ── 부문(部門/카테고리) (pos.products:read) ────────────────
+export type SmaregiCategory = { categoryId: string; categoryName: string; [k: string]: unknown }
+export async function getAllCategories(): Promise<SmaregiCategory[]> {
+  const out: SmaregiCategory[] = []
+  for (let page = 1; page <= 50; page++) {
+    const chunk = await smaregiGet<SmaregiCategory[]>('/pos/categories', { limit: 100, page })
+    out.push(...chunk)
+    if (chunk.length < 100) break
+  }
+  return out
+}
+
 // ── 재고 (pos.stock:read) ──────────────────────────────────
 export type SmaregiStock = {
   productId: string; storeId?: string; stockAmount?: string; layawayStockAmount?: string

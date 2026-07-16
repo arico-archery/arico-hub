@@ -7,8 +7,8 @@ import { useT } from '@/lib/i18n'
 import { formatJpy } from '@/lib/utils'
 
 type Row = {
-  id: number; productId: string; productCode: string; name: string
-  size: string; color: string; price: number; stock: number
+  id: number; productId: string; productCode: string; name: string; category: string
+  size: string; color: string; price: number; stock: number; stockTokyo: number; stockAichi: number
 }
 type Resp = {
   rows: Row[]; total: number; page: number; limit: number
@@ -133,30 +133,36 @@ export default function InventoryPage() {
 
       {/* 테이블 */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 overflow-x-auto">
-        <table className="w-full text-sm min-w-[640px]">
+        <table className="w-full text-sm min-w-[900px]">
           <thead>
             <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-600">
+              <th className="text-left px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.inventory.colCategory}</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.inventory.colName}</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.inventory.colOption}</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.inventory.colCode}</th>
               <th className="text-right px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.inventory.colPrice}</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.inventory.colStock}</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.inventory.colTotal}</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.inventory.colTokyo}</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-700 dark:text-gray-200">{t.inventory.colAichi}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
             {loading ? (
-              <tr><td colSpan={5} className="text-center py-16 text-gray-400">{t.common.loading}</td></tr>
+              <tr><td colSpan={8} className="text-center py-16 text-gray-400">{t.common.loading}</td></tr>
             ) : !data?.rows.length ? (
-              <tr><td colSpan={5} className="text-center py-16 text-gray-400">
+              <tr><td colSpan={8} className="text-center py-16 text-gray-400">
                 <Warehouse className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>{t.inventory.empty}</p>
               </td></tr>
             ) : data.rows.map(r => (
               <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{r.category || '-'}</td>
                 <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{r.name}</td>
                 <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{[r.size, r.color].filter(Boolean).join(' / ') || '-'}</td>
                 <td className="px-4 py-3 text-xs text-gray-400 font-mono">{r.productCode}</td>
                 <td className="px-4 py-3 text-right tabular-nums text-gray-700 dark:text-gray-300">{formatJpy(r.price)}</td>
-                <td className={`px-4 py-3 text-right tabular-nums font-semibold ${r.stock <= 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'}`}>{r.stock.toLocaleString()}</td>
+                <td className={`px-4 py-3 text-right tabular-nums font-bold ${r.stock <= 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'}`}>{r.stock.toLocaleString()}</td>
+                <td className="px-4 py-3 text-right tabular-nums text-gray-600 dark:text-gray-300">{r.stockTokyo.toLocaleString()}</td>
+                <td className="px-4 py-3 text-right tabular-nums text-gray-600 dark:text-gray-300">{r.stockAichi.toLocaleString()}</td>
               </tr>
             ))}
           </tbody>

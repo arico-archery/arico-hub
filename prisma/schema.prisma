@@ -262,11 +262,14 @@ model SmaregiProduct {
   productId     String   @unique              // 스마레지 내부 productId
   productCode   String   @default("")         // 스마레지 상품코드(13자리)
   name          String   @default("")
+  category      String   @default("")         // 부문명(部門/카테고리)
   size          String   @default("")         // 옵션(사이즈/색상 등)
   color         String   @default("")
   price         Int      @default(0)
   cost          Int      @default(0)
   stock         Int      @default(0)          // 전 점포 합계 재고
+  stockTokyo    Int      @default(0)          // 도쿄매장(store 2) 재고
+  stockAichi    Int      @default(0)          // 아이치매장(store 1) 재고
   storeStock    String   @default("")         // JSON {storeId: qty} (점포별)
   displayFlag   String   @default("")         // 스마레지 진열 플래그
   syncedAt      DateTime @default(now())
