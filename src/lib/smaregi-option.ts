@@ -1,8 +1,9 @@
 import { prisma } from './prisma'
 
 // 주문 옵션메모에서 스마레지 상품코드(=variationCustomCode) 추출. 코드형이 아니면 null.
+// 앞의 #／＃／T／t 접두(MakeShop 변형코드 접두) 제거 후 10~14자리 숫자면 코드로 인정.
 export function extractOptionCode(memo: string | null | undefined): string | null {
-  const m = String(memo || '').trim().replace(/^[#＃]/, '')
+  const m = String(memo || '').trim().replace(/^[#＃TtＴｔ]+/, '')
   return /^\d{10,14}$/.test(m) ? m : null
 }
 
