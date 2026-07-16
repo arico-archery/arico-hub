@@ -19,11 +19,22 @@ export async function GET(req: Request) {
   const from = url.searchParams.get('from') || '20260612'
   const to = url.searchParams.get('to') || '20260616'
   const start = `${from}000000`, end = `${to}235959`
-  const candidates = (url.searchParams.get('fields') || 'optionInfos,options,orderOptions,productOptions,selectOptions,orderProductOptions,customText,freeText,addField,orderComment,comment,note')
-    .split(',').map(s => s.trim()).filter(Boolean)
+  // 객체/배열형 옵션필드 후보 — 하위필드까지 포함한 표현
+  const candidates = [
+    'optionInfos { optionTitle optionValue }',
+    'optionInfos { title value }',
+    'optionInfos { optionName optionValue }',
+    'optionInfos { name value }',
+    'orderProductOptionInfos { optionTitle optionValue }',
+    'productOptionInfos { optionTitle optionValue }',
+    'orderOptionInfos { optionTitle optionValue }',
+    'options { optionTitle optionValue }',
+    'basketOptionInfos { optionTitle optionValue }',
+  ]
 
   const results: Record<string, unknown> = {}
   for (const f of candidates) {
+    const fieldName = f.split(/[\s{]/)[0]   // 표현에서 필드명 추출
     try {
       const q = `query searchOrder($input: SearchOrderRequest!){ searchOrder(input: $input){ orders { systemOrderNumber deliveryInfos { basketInfos { productName variationCustomCode ${f} } } } } }`
       const data = await makeshopQuery<{ searchOrder?: { orders?: { deliveryInfos?: { basketInfos?: Record<string, unknown>[] }[] }[] } }>(q, { input: { startOrderDate: start, endOrderDate: end, page: 1, limit: 50 } })
@@ -32,15 +43,15 @@ export async function GET(req: Request) {
       for (const o of data.searchOrder?.orders ?? []) {
         for (const d of o.deliveryInfos ?? []) {
           for (const b of d.basketInfos ?? []) {
-            if (String(b.productName ?? '').includes('ARICO STRING') && samples.length < 3) {
-              samples.push({ name: b.productName, vcc: b.variationCustomCode, [f]: b[f] })
+            if (String(b.productName ?? '').includes('ARICO STRING') && samples.length < 2) {
+              samples.push({ name: b.productName, opt: b[fieldName] })
             }
           }
         }
       }
       results[f] = { ok: true, samples }
     } catch (e) {
-      results[f] = { ok: false, error: String(e).slice(0, 100) }
+      results[f] = { ok: false, error: String(e).slice(0, 80) }
     }
   }
   return NextResponse.json({ ok: true, results })
