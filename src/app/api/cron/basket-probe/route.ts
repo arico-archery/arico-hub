@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import crypto from 'node:crypto'
-import { getAllOrdersDetailed, makeshopConfigured } from '@/lib/makeshop'
+import { makeshopQuery, makeshopConfigured } from '@/lib/makeshop'
 
 export const maxDuration = 60
 
@@ -19,8 +19,16 @@ export async function GET(req: Request) {
   const from = url.searchParams.get('from') || '20260222'
   const to = url.searchParams.get('to') || '20260222'
   const sys = url.searchParams.get('sys') || ''
-  const orders = await getAllOrdersDetailed(`${from}000000`, `${to}235959`)
-  const hit = orders.filter(o => !sys || o.systemOrderNumber === sys)
+  // 옵션 후보 필드까지 전부 요청
+  const q = `query searchOrder($input: SearchOrderRequest!){ searchOrder(input: $input){ orders { systemOrderNumber deliveryInfos { basketInfos {
+    productCode productName variationCustomCode variationName variationJanCode optionCode productNameOptions variation1ItemId variation2ItemId janCode amount price
+    customSelects { customSelectName selectedItemName }
+  } } } } }`
+  type B = Record<string, unknown>
+  const data = await makeshopQuery<{ searchOrder?: { orders?: { systemOrderNumber: string; deliveryInfos?: { basketInfos?: B[] }[] }[] } }>(
+    q, { input: { startOrderDate: `${from}000000`, endOrderDate: `${to}235959`, page: 1, limit: 100 } },
+  )
+  const hit = (data.searchOrder?.orders ?? []).filter(o => !sys || o.systemOrderNumber === sys)
   return NextResponse.json({
     ok: true, matched: hit.length,
     orders: hit.slice(0, 3).map(o => ({
