@@ -54,6 +54,7 @@ export default async function DocumentPage({
   // ── 데이터 정규화 ────────────────────────────────────
   let docNoVal = ''
   let recipientName = ''
+  let recipientOrg = ''          // 거래처명 위에 작게 쓰는 회사·단체명
   let recipientLines: string[] = []
   let recipientHonorific = T.honorific
   let dateRows: DateRow[] = []
@@ -107,6 +108,8 @@ export default async function DocumentPage({
       const c = order.customer
       const isOrg = c.customerType === 'institution' || c.customerType === 'corporation'
       recipientName = isOrg ? (c.legalName || c.company || c.name) : c.name
+      // 회사·단체명이 있으면 이름 위에 작게 (예: 上智大学 / 山﨑海光 様). 이름과 같으면 생략.
+      recipientOrg = c.company && c.company !== recipientName ? c.company : ''
       recipientHonorific = c.honorific || (isOrg ? T.honorific : T.honorificPerson)
       recipientLines = [
         c.postalCode ? `〒${c.postalCode}` : '',
@@ -191,6 +194,7 @@ export default async function DocumentPage({
         {/* 상단: 수신(좌) + 문서정보·발행처(우) */}
         <div className="flex justify-between gap-8 mb-4">
           <div className="flex-1 min-w-0 pt-1">
+            {recipientOrg && <p className="text-[12px] text-gray-600 leading-tight">{recipientOrg}</p>}
             <p className="text-lg font-bold border-b-2 border-gray-800 pb-1 inline-block">{recipientName} {recipientHonorific}</p>
             <div className="mt-2 space-y-0.5 text-gray-700 text-[12px]">
               {recipientLines.map((l, i) => <p key={i}>{l}</p>)}
@@ -282,7 +286,6 @@ export default async function DocumentPage({
                 <td className={`${cell} align-top`}>
                   <p className="font-medium">{r.name}</p>
                   {r.opt && <p className="text-[11px] text-amber-700">{r.opt}</p>}
-                  <p className="text-[10px] text-gray-400">{T.txId} {r.txId} · {T.productCode} {r.code}</p>
                 </td>
                 <td className={`${cell} align-top text-center`}>{r.taxRate}%</td>
                 <td className={`${cell} align-top text-center`}>{r.qty}</td>
