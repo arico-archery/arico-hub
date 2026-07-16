@@ -5,8 +5,13 @@ import { buildPreview, refreshExisting } from '@/app/api/makeshop/import-orders/
 
 export const maxDuration = 60
 
-// 자사몰 "현재 상태 반영"이 무엇을 바꿀지 쓰기 없이 미리 보는 진단(운영자용). HMAC 보호.
-// ?days=N — 운영 DB라 실제 수신 전에 영향 범위를 먼저 확인하는 용도.
+// MakeShop 수신이 무엇을 바꿀지 쓰기 없이 미리 보는 도구(운영자용). HMAC 보호.
+//
+// ?days=N (기본 90) — 신규 생성 건수 + 이미 받은 주문 중 자사몰의 현재 상태
+// (입금·발송·취소)를 반영해 바뀔 건수와 그 내역을 돌려준다. DB에 쓰지 않는다.
+//
+// 로컬과 운영이 같은 DB를 쓰므로, 범위가 큰 수신 전에 영향을 먼저 확인할 때 쓴다.
+// 예: curl ".../api/cron/diag-import-preview?token=<HMAC>&days=90"
 export async function GET(req: Request) {
   const secret = process.env.AUTH_SECRET || ''
   if (!secret) return NextResponse.json({ error: 'server_not_configured' }, { status: 500 })
