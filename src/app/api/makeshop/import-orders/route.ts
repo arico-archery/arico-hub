@@ -44,6 +44,14 @@ function mapDelivery(o: { deliveryInfos: { deliveryStatus: string; slipNumber: s
   return { orderStatus: 'pending', trackingNo: '', shipDate: null }
 }
 
+// 자사몰이 「발송완료」라 해도 미입금이면 완료(delivered)로 넘기지 않는다.
+// 완료 탭으로 사라지면 받을 돈을 놓치기 때문. 발송 사실만 shipped로 기록해
+// 진행중에 남기고 미수로 계속 잡히게 한다. 입금이 확인되면 그때 완료가 된다.
+function effectiveStatus(msStatus: 'pending' | 'delivered' | 'cancelled', paid: boolean): 'pending' | 'shipped' | 'delivered' | 'cancelled' {
+  if (msStatus === 'delivered' && !paid) return 'shipped'
+  return msStatus
+}
+
 type PreviewItem = { productCode: string; productName: string; variationCustomCode: string; option: string; customLabel: string; amount: number; price: number; matched: boolean; supplierCode: string | null; catalogName: string | null }
 
 // MakeShop 옵션 → 사람이 읽는 라벨.
@@ -184,7 +192,6 @@ export async function refreshExisting(rows: RefreshRow[], dryRun = false) {
   })
   const byNo = new Map(cur.map(o => [o.externalOrderNo, o]))
   const now = new Date()
-  const SHIPPED_ALREADY = new Set(['shipped', 'delivered'])
 
   for (const r of allDup) {
     const o = byNo.get(r.externalOrderNo)
@@ -201,13 +208,21 @@ export async function refreshExisting(rows: RefreshRow[], dryRun = false) {
         data.paidAmountJpy = o.totalAmountJpy
         if (!o.paymentDate) data.paymentDate = now
       }
-      // ③ 발송·배송완료 — 자사몰이 발송했는데 앱이 아직 모를 때만
-      if (r.orderStatus === 'delivered' && !SHIPPED_ALREADY.has(o.status)) {
+      // ③ 발송·배송완료 — 자사몰이 발송했는데 앱이 아직 모를 때만.
+      //    미입금이면 완료로 넘기지 않고 발송(shipped)까지만 → 진행중에 남아 미수로 계속 잡힌다.
+      //    나중에 입금이 확인되면 그때 shipped → delivered 로 올라간다.
+      if (r.orderStatus === 'delivered' && o.status !== 'delivered') {
+        const paidNow = data.paymentStatus === 'paid' || o.paymentStatus === 'paid'
         const d = r.shipDate ? new Date(r.shipDate) : now
-        data.status = 'delivered'
-        data.deliveryDate = d
-        if (!o.completedAt) data.completedAt = d
-        if (!o.shippingDate) data.shippingDate = d
+        if (paidNow) {
+          data.status = 'delivered'
+          data.deliveryDate = d
+          if (!o.completedAt) data.completedAt = d
+          if (!o.shippingDate) data.shippingDate = d
+        } else if (o.status !== 'shipped') {
+          data.status = 'shipped'
+          if (!o.shippingDate) data.shippingDate = d
+        }
       }
       // ④ 운송장 — 비어 있을 때만 채운다
       if (r.trackingNo && !o.trackingNo) data.trackingNo = r.trackingNo
@@ -327,11 +342,11 @@ export async function runImport(days: number, win?: { start: string; end: string
         customerId: customerId!, externalOrderNo: r.externalOrderNo, orderDate,
         paymentStatus: paid ? 'paid' : 'unpaid', paidAmountJpy: paid ? subtotal : 0,
         paymentDate: paid ? orderDate : null,
-        // 배송상태 반영: 배송완료 시 발송일·송장·완료일 세팅
-        status: r.orderStatus,
+        // 배송상태 반영: 완료일은 입금된 주문에만 — 미입금은 발송(shipped)까지만 두고 진행중에 남긴다
+        status: effectiveStatus(r.orderStatus, paid),
         ...(r.trackingNo ? { trackingNo: r.trackingNo } : {}),
         ...(shipDate ? { shippingDate: shipDate } : {}),
-        ...(r.orderStatus === 'delivered' && shipDate ? { deliveryDate: shipDate, completedAt: shipDate } : {}),
+        ...(effectiveStatus(r.orderStatus, paid) === 'delivered' && shipDate ? { deliveryDate: shipDate, completedAt: shipDate } : {}),
         subtotalJpy: subtotal, totalAmountJpy: subtotal, totalCostJpy: totalCost, memo: '',
         items: { create: itemsData },
       })
