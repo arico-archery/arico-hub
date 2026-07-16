@@ -230,7 +230,7 @@ export async function runImport(days: number, win?: { start: string; end: string
       // 품목 데이터 (미매칭은 ETC 상품으로).
       // 배송완료·취소 주문은 이미 발주·입고 끝난 것 → 조달상태 received(백오더 제외).
       const baseProcure = (r.orderStatus === 'delivered' || r.orderStatus === 'cancelled') ? 'received' : 'needed'
-      const itemsData: { productId: number; quantity: number; salePriceJpy: number; costPriceJpy: number; optionMemo: string; optionLabel: string; procureStatus: string }[] = []
+      const itemsData: { productId: number; quantity: number; salePriceJpy: number; costPriceJpy: number; optionMemo: string; optionLabel: string; shopProductName: string; procureStatus: string }[] = []
       for (const it of r.items) {
         const prod = await resolveProduct(it.productCode, it.productName, it.price)
         if (!it.matched && !etcSeen.has(it.productCode)) { etcSeen.add(it.productCode); etcCreated++ }
@@ -239,7 +239,7 @@ export async function runImport(days: number, win?: { start: string; end: string
         const costJpy = Math.round(calcCostJpy(prod, rates))
         // 옵션 라벨: 옵션그룹 선택값(customSelects) 우선, 없으면 옵션코드→스마레지 해석
         const optionLabel = it.customLabel || optLabelMap.get(extractOptionCode(it.option) || '') || ''
-        itemsData.push({ productId: prod.id, quantity: it.amount, salePriceJpy: Math.round(it.price), costPriceJpy: costJpy, optionMemo: it.option, optionLabel, procureStatus })
+        itemsData.push({ productId: prod.id, quantity: it.amount, salePriceJpy: Math.round(it.price), costPriceJpy: costJpy, optionMemo: it.option, optionLabel, shopProductName: it.productName || '', procureStatus })
       }
       const subtotal = itemsData.reduce((s, it) => s + it.salePriceJpy * it.quantity, 0)
       const totalCost = itemsData.reduce((s, it) => s + it.costPriceJpy * it.quantity, 0)

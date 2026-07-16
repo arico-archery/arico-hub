@@ -142,6 +142,7 @@ model OrderItem {
   procureStatus   String         @default("needed")
   optionMemo      String         @default("")  // 사이즈/컬러/기타 비고 (예: LH, シルバー 280, 赤). MakeShop 주문은 옵션코드(variationCustomCode)
   optionLabel     String         @default("")  // 사람이 읽는 옵션 — 스마레지로 코드 해석(예: レッド, RH/ピンク). 없으면 optionMemo 표시
+  shopProductName String         @default("")  // 고객이 실제 주문한 자사몰(MakeShop) 상품명 — 공급사 상품명(일반명)과 달라 변형정보를 담음
   purchaseOrderId Int?           // 연결된 발주서
   purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
   createdAt       DateTime       @default(now())

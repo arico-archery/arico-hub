@@ -39,6 +39,7 @@ type Order = {
     product: { name: string; supplierCode: string; supplier: { name: string }; optionSize: string; optionColor: string }
     optionMemo: string
     optionLabel?: string
+    shopProductName?: string
     catalogImage?: string
   }[]
 }
@@ -592,7 +593,13 @@ export default function OrdersPage() {
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <Thumb src={item.catalogImage} size={32} />
                                     <SupplierBadge code={item.product.supplierCode} />
-                                    <span className="text-gray-700 dark:text-gray-300">{item.product.name}</span>
+                                    {/* 고객이 실제 주문한 자사몰 상품명 우선(변형정보 포함). 공급사 상품명은 아래 작게(발주용) */}
+                                    <span className="text-gray-700 dark:text-gray-300">
+                                      {item.shopProductName || item.product.name}
+                                      {item.shopProductName && item.shopProductName !== item.product.name && (
+                                        <span className="block text-[11px] text-gray-400 dark:text-gray-500">{item.product.name}</span>
+                                      )}
+                                    </span>
                                     {(item.optionLabel || item.optionMemo) && (
                                       <span className="text-xs px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-medium border border-amber-200 dark:border-amber-700/50">
                                         {item.optionLabel || item.optionMemo}

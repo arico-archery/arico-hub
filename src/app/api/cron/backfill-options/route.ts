@@ -43,7 +43,7 @@ export async function GET(req: Request) {
     })).map(o => [o.externalOrderNo, o]))
 
     let updated = 0, skipped = 0
-    const ups: { id: number; label: string }[] = []
+    const ups: { id: number; label: string; shopName: string }[] = []
     for (const o of orders) {
       const dbo = dbOrders.get(o.systemOrderNumber)
       if (!dbo) { skipped++; continue }
@@ -52,11 +52,15 @@ export async function GET(req: Request) {
       for (let i = 0; i < dbo.items.length && i < baskets.length; i++) {
         const b = baskets[i]
         const label = customSelectLabel(b) || smMap.get(extractOptionCode(b.variationCustomCode) || '') || ''
-        if (label) ups.push({ id: dbo.items[i].id, label })
+        const shopName = (b.productName || '').trim()   // 고객이 실제 주문한 자사몰 상품명
+        if (label || shopName) ups.push({ id: dbo.items[i].id, label, shopName })
       }
     }
     for (let i = 0; i < ups.length; i += 20) {
-      await Promise.allSettled(ups.slice(i, i + 20).map(u => prisma.orderItem.update({ where: { id: u.id }, data: { optionLabel: u.label } })))
+      await Promise.allSettled(ups.slice(i, i + 20).map(u => prisma.orderItem.update({
+        where: { id: u.id },
+        data: { ...(u.label ? { optionLabel: u.label } : {}), ...(u.shopName ? { shopProductName: u.shopName } : {}) },
+      })))
     }
     updated = ups.length
     return NextResponse.json({ ok: true, fetched: orders.length, matchedOrders: dbOrders.size, updated, skipped })
