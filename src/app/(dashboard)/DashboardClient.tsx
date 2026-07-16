@@ -8,7 +8,7 @@ import {
   TrendingUp, DollarSign, AlertCircle, Truck, Package, ShoppingCart,
   ClipboardList, Banknote, AlertTriangle, Tag, Percent
 } from 'lucide-react'
-import { useT } from '@/lib/i18n'
+import { useI18n } from '@/lib/i18n'
 
 const SUPPLIER_NAMES: Record<string, Record<string, string>> = {
   ko: { ARICO: 'ARICO', JVD: 'JVD', MK: 'MK Korea', FIVICS: 'FIVICS', SIBUYA: 'Shibuya', KOREA: 'Korea Archery', ANGEL: 'Angel', WJ: 'WJ Sports', KOWA: 'KOWA', ETC: '기타' },
@@ -87,7 +87,7 @@ function Sparkline({ values, color, labels, fmt, caption }: {
 }
 
 export default function DashboardClient({ initialData }: { initialData: DashboardData }) {
-  const t = useT()
+  const { t, lang } = useI18n()
   // 서버에서 받은 초기 데이터로 시작 → 첫 페인트부터 데이터 보유(클라 fetch 워터폴 제거)
   const [data, setData] = useState<DashboardData | null>(initialData)
   const [trend, setTrend] = useState<MonthPoint[]>([])
@@ -302,7 +302,7 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
                 className="flex items-center gap-2 rounded-lg px-3 py-2 hover:opacity-80 transition-opacity"
                 style={{ backgroundColor: `${color}14`, border: `1px solid ${color}33` }}>
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                <span className="text-xs font-medium text-gray-700 dark:text-gray-200">{SUPPLIER_NAMES['ko'][code] ?? code}</span>
+                <span className="text-xs font-medium text-gray-700 dark:text-gray-200">{SUPPLIER_NAMES[lang][code] ?? code}</span>
                 <span className="text-sm font-bold tabular-nums" style={{ color }}>{formatNumber(cnt)}</span>
                 {unpricedCount > 0 && (
                   <span className="text-[10px] font-semibold text-orange-500 flex items-center gap-0.5">

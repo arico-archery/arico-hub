@@ -9,6 +9,9 @@ const TYPE_LABEL: Record<DocType, Record<DocLang, string>> = {
   po:      { ja: '発注書', ko: '발주서', en: 'PO' },
 }
 
+const ISSUER_LABEL: Record<DocLang, string> = { ja: '発行元', ko: '발행처', en: 'Issuer' }
+const BANK_LABEL: Record<DocLang, string> = { ja: '口座', ko: '계좌', en: 'Bank' }
+
 export default function DocToolbar({
   type, id, lang, backHref, issuers = [], issuerIdx = 0, banks = [], bankIdx = 0,
 }: { type: DocType; id: string; lang: DocLang; backHref: string; issuers?: string[]; issuerIdx?: number; banks?: string[]; bankIdx?: number }) {
@@ -63,14 +66,14 @@ export default function DocToolbar({
       {issuers.length > 1 && (
         <select value={issuerIdx} onChange={e => goProfile(Number(e.target.value), bankIdx)}
           className="px-2 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200">
-          {issuers.map((lbl, i) => <option key={i} value={i}>발행처: {lbl}</option>)}
+          {issuers.map((lbl, i) => <option key={i} value={i}>{ISSUER_LABEL[lang]}: {lbl}</option>)}
         </select>
       )}
       {/* 계좌 프로필 선택 (청구서, 여러 개일 때) */}
       {banks.length > 1 && (
         <select value={bankIdx} onChange={e => goProfile(issuerIdx, Number(e.target.value))}
           className="px-2 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200">
-          {banks.map((lbl, i) => <option key={i} value={i}>계좌: {lbl}</option>)}
+          {banks.map((lbl, i) => <option key={i} value={i}>{BANK_LABEL[lang]}: {lbl}</option>)}
         </select>
       )}
 

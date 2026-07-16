@@ -330,7 +330,7 @@ export default function SettingsPage() {
                 {([
                   { key: 'company_name', label: t.settings.companyName, placeholder: 'ARICO' },
                   { key: 'company_regno', label: t.settings.companyRegno, placeholder: 'T1234567890123' },
-                  { key: 'company_ceo', label: '代表者', placeholder: '尹 惠善' },
+                  { key: 'company_ceo', label: t.settings.companyCeo, placeholder: '尹 惠善' },
                   { key: 'company_contact', label: t.settings.companyContact, placeholder: '山田 太郎' },
                   { key: 'company_tel', label: 'TEL', placeholder: '+81-3-0000-0000' },
                   { key: 'company_email', label: 'Email', placeholder: 'sbs@arico.co.jp' },
@@ -382,12 +382,12 @@ export default function SettingsPage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {([
-                  { key: 'bank_name', label: '銀行名', placeholder: '例) 三菱UFJ銀行' },
-                  { key: 'bank_branch', label: '支店名', placeholder: '例) 渋谷支店' },
-                  { key: 'bank_account_type', label: '口座種別', placeholder: '普通 / 当座' },
-                  { key: 'bank_account_no', label: '口座番号', placeholder: '例) 1234567' },
-                  { key: 'bank_account_holder', label: '口座名義', placeholder: '例) カ）アリコ' },
-                  { key: 'bank_note', label: '備考', placeholder: '振込手数料はご負担ください' },
+                  { key: 'bank_name', label: t.settings.bankName, placeholder: '例) 三菱UFJ銀行' },
+                  { key: 'bank_branch', label: t.settings.bankBranch, placeholder: '例) 渋谷支店' },
+                  { key: 'bank_account_type', label: t.settings.bankType, placeholder: '普通 / 当座' },
+                  { key: 'bank_account_no', label: t.settings.bankNo, placeholder: '例) 1234567' },
+                  { key: 'bank_account_holder', label: t.settings.bankHolder, placeholder: '例) カ）アリコ' },
+                  { key: 'bank_note', label: t.settings.bankNote, placeholder: '振込手数料はご負担ください' },
                 ] as const).map(({ key, label, placeholder }) => (
                   <div key={key}>
                     <label className="text-xs font-semibold text-gray-700 dark:text-gray-200 mb-1 block">{label}</label>

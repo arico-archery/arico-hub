@@ -112,7 +112,7 @@ export default function OrdersPage() {
     confirmed: { label: t.orders.statusConfirmed, color: 'bg-blue-100 text-blue-700' },
     shipped:   { label: t.orders.statusShipped,   color: 'bg-yellow-100 text-yellow-700' },
     delivered: { label: t.orders.statusDelivered, color: 'bg-green-100 text-green-700' },
-    cancelled: { label: t.common.cancel,          color: 'bg-red-100 text-red-700' },
+    cancelled: { label: t.orders.statusCancelled, color: 'bg-red-100 text-red-700' },
   }
   const PAY_LABELS_T: Record<string, { label: string; color: string }> = {
     unpaid:  { label: t.orders.payUnpaid,  color: 'bg-red-100 text-red-700' },

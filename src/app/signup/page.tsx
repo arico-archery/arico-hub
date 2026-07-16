@@ -4,8 +4,17 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { AricoMark } from '@/components/Logo'
+import AuthLangToggle from '@/components/AuthLangToggle'
+import { useT } from '@/lib/i18n'
+
+// 'ARICO의 {domain} 이메일만…' → @arico.group 만 강조해서 렌더
+function domainNote(text: string) {
+  const [pre, post] = text.split('{domain}')
+  return <>{pre}<span className="font-semibold">@arico.group</span>{post}</>
+}
 
 export default function SignupPage() {
+  const t = useT()
   const router = useRouter()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -20,11 +29,11 @@ export default function SignupPage() {
     e.preventDefault()
     setError('')
     if (!email.trim().toLowerCase().endsWith('@arico.group')) {
-      setError('@arico.group 이메일만 가입할 수 있습니다.')
+      setError(t.auth.errDomain)
       return
     }
-    if (password.length < 8) { setError('비밀번호는 8자 이상이어야 합니다.'); return }
-    if (password !== password2) { setError('비밀번호가 일치하지 않습니다.'); return }
+    if (password.length < 8) { setError(t.auth.errWeakPassword); return }
+    if (password !== password2) { setError(t.auth.errPasswordMismatch); return }
     setLoading(true)
     try {
       const res = await fetch('/api/auth/signup', {
@@ -38,62 +47,66 @@ export default function SignupPage() {
         setSent(true)
       } else {
         setError(
-          d.error === 'domain' ? '@arico.group 이메일만 가입할 수 있습니다.'
-            : d.error === 'exists' ? '이미 가입된 이메일입니다. 로그인해 주세요.'
-            : d.error === 'weak_password' ? '비밀번호는 8자 이상이어야 합니다.'
-            : '회원가입 중 오류가 발생했습니다.',
+          d.error === 'domain' ? t.auth.errDomain
+            : d.error === 'exists' ? t.auth.errExists
+            : d.error === 'weak_password' ? t.auth.errWeakPassword
+            : t.auth.errSignup,
         )
       }
     } catch {
-      setError('연결 오류')
+      setError(t.auth.errConn)
     } finally {
       setLoading(false)
     }
   }
 
+  // '{email} 로 보낸 메일의…' → 이메일 주소만 강조해서 렌더
+  const [sentPre, sentPost] = t.auth.sentDesc.split('{email}')
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900 p-4">
       <div className="w-full max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8">
+        <AuthLangToggle />
         <div className="flex flex-col items-center mb-6">
           <AricoMark size={48} />
-          <h1 className="mt-3 text-xl font-bold text-gray-900 dark:text-white">회원가입</h1>
+          <h1 className="mt-3 text-xl font-bold text-gray-900 dark:text-white">{t.auth.signup}</h1>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">ARICO Distribution Hub</p>
         </div>
 
         {sent && (
           <div className="text-center space-y-3">
             <div className="w-12 h-12 mx-auto rounded-full bg-green-50 dark:bg-green-900/30 flex items-center justify-center text-2xl">✉️</div>
-            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">인증 메일을 보냈습니다</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400"><span className="font-medium">{email}</span> 로 보낸 메일의 링크를 클릭하면 인증이 완료되고 자동 로그인됩니다. (24시간 이내 유효)</p>
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t.auth.sentTitle}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{sentPre}<span className="font-medium">{email}</span>{sentPost}</p>
             {devLink && (
               <div className="text-left bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-lg p-3">
-                <p className="text-[11px] text-amber-700 dark:text-amber-300 mb-1">※ 이메일 발송이 아직 설정되지 않아 메일이 가지 않습니다. 아래 링크로 인증하세요:</p>
+                <p className="text-[11px] text-amber-700 dark:text-amber-300 mb-1">{t.auth.devLinkNote}</p>
                 <a href={devLink} className="text-xs text-blue-600 break-all hover:underline">{devLink}</a>
               </div>
             )}
-            <Link href="/login" className="inline-block text-blue-600 hover:underline text-sm font-medium">로그인으로 이동</Link>
+            <Link href="/login" className="inline-block text-blue-600 hover:underline text-sm font-medium">{t.auth.goLogin}</Link>
           </div>
         )}
 
         {!sent && <form onSubmit={submit} className="space-y-3">
           <input
             type="text" value={name} onChange={e => setName(e.target.value)}
-            placeholder="이름"
+            placeholder={t.auth.name}
             className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <input
             type="email" required value={email} onChange={e => setEmail(e.target.value)}
-            placeholder="이메일 (@arico.group)"
+            placeholder={t.auth.email}
             className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <input
             type="password" required value={password} onChange={e => setPassword(e.target.value)}
-            placeholder="비밀번호 (8자 이상)"
+            placeholder={t.auth.passwordNew}
             className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <input
             type="password" required value={password2} onChange={e => setPassword2(e.target.value)}
-            placeholder="비밀번호 확인"
+            placeholder={t.auth.passwordConfirm}
             className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
@@ -101,16 +114,16 @@ export default function SignupPage() {
             type="submit" disabled={loading}
             className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            {loading ? '가입 중…' : '회원가입'}
+            {loading ? t.auth.signingUp : t.auth.signup}
           </button>
         </form>}
 
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-4 text-center">
-          이미 계정이 있으신가요?{' '}
-          <Link href="/login" className="text-blue-600 hover:underline font-medium">로그인</Link>
+          {t.auth.hasAccount}{' '}
+          <Link href="/login" className="text-blue-600 hover:underline font-medium">{t.auth.login}</Link>
         </p>
         <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-2 text-center">
-          ARICO의 <span className="font-semibold">@arico.group</span> 이메일만 가입할 수 있습니다.
+          {domainNote(t.auth.domainNoteSignup)}
         </p>
       </div>
     </div>

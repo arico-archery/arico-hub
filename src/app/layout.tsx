@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { I18nProvider } from "@/lib/i18n";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -27,7 +28,10 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="h-full bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-gray-100">{children}</body>
+      <body className="h-full bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-gray-100">
+        {/* 로그인·회원가입도 한/일 전환이 되도록 프로바이더는 루트에 둔다 */}
+        <I18nProvider>{children}</I18nProvider>
+      </body>
     </html>
   );
 }
