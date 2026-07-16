@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import crypto from 'node:crypto'
-import { makeshopQuery, makeshopConfigured } from '@/lib/makeshop'
+import { getAllOrdersDetailed, makeshopConfigured } from '@/lib/makeshop'
 
 export const maxDuration = 60
 
-// 로그인 없이 SearchedOrder basketInfos의 후보 옵션필드 존재 여부를 시험(진단). HMAC 보호.
-// ?fields=optionInfos,options,... &from=YYYYMMDD&to=YYYYMMDD  (ARICO STRING 품목 샘플 위주)
+// 로그인 없이 basket 원본 덤프(진단) — 옵션(variationCustomCode/customSelects)이 없는 품목의
+// janCode·productName을 확인해 옵션 복원 가능성 판단. HMAC 보호.
 export async function GET(req: Request) {
   const secret = process.env.AUTH_SECRET || ''
   if (!secret) return NextResponse.json({ error: 'server_not_configured' }, { status: 500 })
@@ -16,35 +16,23 @@ export async function GET(req: Request) {
   if (!okAuth) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   if (!makeshopConfigured()) return NextResponse.json({ ok: false, error: 'not_configured' }, { status: 503 })
 
-  const from = url.searchParams.get('from') || '20260612'
-  const to = url.searchParams.get('to') || '20260616'
-  const start = `${from}000000`, end = `${to}235959`
-  // 객체/배열형 옵션필드 후보 — 하위필드까지 포함한 표현
-  const candidates = [
-    'customSelects { customSelectName selectedItemName inputValue }',
-  ]
-
-  const results: Record<string, unknown> = {}
-  for (const f of candidates) {
-    const fieldName = f.split(/[\s{]/)[0]   // 표현에서 필드명 추출
-    try {
-      const q = `query searchOrder($input: SearchOrderRequest!){ searchOrder(input: $input){ orders { systemOrderNumber deliveryInfos { basketInfos { productName variationCustomCode ${f} } } } } }`
-      const data = await makeshopQuery<{ searchOrder?: { orders?: { deliveryInfos?: { basketInfos?: Record<string, unknown>[] }[] }[] } }>(q, { input: { startOrderDate: start, endOrderDate: end, page: 1, limit: 50 } })
-      // ARICO STRING 품목의 그 필드값 샘플
-      const samples: unknown[] = []
-      for (const o of data.searchOrder?.orders ?? []) {
-        for (const d of o.deliveryInfos ?? []) {
-          for (const b of d.basketInfos ?? []) {
-            if (String(b.productName ?? '').includes('ARICO STRING') && samples.length < 2) {
-              samples.push({ name: b.productName, opt: b[fieldName] })
-            }
-          }
-        }
+  const from = url.searchParams.get('from') || '20260608'
+  const to = url.searchParams.get('to') || '20260618'
+  const orders = await getAllOrdersDetailed(`${from}000000`, `${to}235959`)
+  let noOpt = 0, noOptWithJan = 0, total = 0
+  const samples: unknown[] = []
+  for (const o of orders) {
+    for (const d of o.deliveryInfos || []) {
+      for (const b of d.basketInfos || []) {
+        total++
+        const hasVcc = !!(b.variationCustomCode || '').trim()
+        const hasCs = (b.customSelects || []).length > 0
+        if (hasVcc || hasCs) continue
+        noOpt++
+        if ((b.janCode || '').trim()) noOptWithJan++
+        if (samples.length < 8) samples.push({ name: b.productName, productCode: b.productCode, janCode: b.janCode, vcc: b.variationCustomCode })
       }
-      results[f] = { ok: true, samples }
-    } catch (e) {
-      results[f] = { ok: false, error: String(e).slice(0, 80) }
     }
   }
-  return NextResponse.json({ ok: true, results })
+  return NextResponse.json({ ok: true, totalBaskets: total, noOption: noOpt, noOptionWithJanCode: noOptWithJan, samples })
 }
