@@ -26,28 +26,24 @@ export async function GET(req: Request) {
     ? { paymentStatus: { in: paymentStatus.split(',').map(s => s.trim()) } }
     : paymentStatus ? { paymentStatus } : {}
 
-  const where = {
-    ...(status ? { status } : {}),
-    ...paymentStatusFilter,
-    ...(customerId ? { customerId: Number(customerId) } : {}),
-    // 완료 필터: '1'=completedAt 있음, '0'=completedAt 없음
-    ...(completed === '1' ? { completedAt: { not: null } } : {}),
-    ...(completed === '0' ? { completedAt: null } : {}),
-    ...(Object.keys(orderDateFilter).length ? { orderDate: orderDateFilter } : {}),
-    // 배송대기: 모든 주문품목이 입고완료(received)인데 아직 미발송
-    ...(readyToShip === '1' ? {
-      shippingDate: null,
-      items: { some: {}, every: { procureStatus: 'received' } },
-    } : {}),
-    ...(q ? {
-      OR: [
-        { orderNo: { contains: q, mode: 'insensitive' as const } },
-        { customer: { name: { contains: q, mode: 'insensitive' as const } } },
-        { customer: { company: { contains: q, mode: 'insensitive' as const } } },
-        { memo: { contains: q, mode: 'insensitive' as const } },
-      ]
-    } : {}),
-  }
+  // 조건을 AND 배열로 조립 — OR/status 키 충돌 방지(완료필터·검색이 각각 OR을 쓸 수 있음)
+  const and: Record<string, unknown>[] = []
+  if (status) and.push({ status })
+  if (Object.keys(paymentStatusFilter).length) and.push(paymentStatusFilter)
+  if (customerId) and.push({ customerId: Number(customerId) })
+  // 완료 필터: '1'=완료(배송완료) 또는 취소, '0'=진행중(완료 안 됨 & 취소 아님)
+  if (completed === '1') and.push({ OR: [{ completedAt: { not: null } }, { status: 'cancelled' }] })
+  if (completed === '0') and.push({ completedAt: null }, { status: { not: 'cancelled' } })
+  if (Object.keys(orderDateFilter).length) and.push({ orderDate: orderDateFilter })
+  // 배송대기: 모든 주문품목이 입고완료(received)인데 아직 미발송
+  if (readyToShip === '1') and.push({ shippingDate: null, items: { some: {}, every: { procureStatus: 'received' } } })
+  if (q) and.push({ OR: [
+    { orderNo: { contains: q, mode: 'insensitive' as const } },
+    { customer: { name: { contains: q, mode: 'insensitive' as const } } },
+    { customer: { company: { contains: q, mode: 'insensitive' as const } } },
+    { memo: { contains: q, mode: 'insensitive' as const } },
+  ] })
+  const where = and.length ? { AND: and } : {}
 
   const exportCsv = searchParams.get('format') === 'csv'
 

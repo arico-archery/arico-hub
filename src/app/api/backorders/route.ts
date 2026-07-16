@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { extractOptionCode } from '@/lib/smaregi-option'
 
 /**
  * GET /api/backorders
@@ -46,5 +47,17 @@ export async function GET(req: Request) {
     ],
   })
 
-  return NextResponse.json(items)
+  // 스마레지 재고 부착 — 옵션코드(=스마레지 productCode)로 조회. 재고 없는 것만 실제 발주 대상.
+  const codes = [...new Set(items.map(i => extractOptionCode(i.optionMemo)).filter((c): c is string => !!c))]
+  const smRows = codes.length
+    ? await prisma.smaregiProduct.findMany({ where: { productCode: { in: codes } }, select: { productCode: true, stock: true, stockTokyo: true, stockAichi: true } })
+    : []
+  const smMap = new Map(smRows.map(s => [s.productCode, s]))
+  const enriched = items.map(i => {
+    const c = extractOptionCode(i.optionMemo)
+    const sm = c ? smMap.get(c) : null
+    return { ...i, smaregiStock: sm ? { total: sm.stock, tokyo: sm.stockTokyo, aichi: sm.stockAichi } : null }
+  })
+
+  return NextResponse.json(enriched)
 }

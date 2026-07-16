@@ -32,6 +32,7 @@ type BackorderItem = {
   procureStatus: 'needed' | 'ordered' | 'received'
   optionMemo: string
   optionLabel?: string
+  smaregiStock?: { total: number; tokyo: number; aichi: number } | null
   purchaseOrderId: number | null
   order: {
     id: number
@@ -259,6 +260,7 @@ export default function BackordersPage() {
       [t.backorders.colProductCode]: i.product.productCode,
       [t.backorders.colOption]: i.optionLabel || i.optionMemo || [i.product.optionSize, i.product.optionColor].filter(Boolean).join(' / '),
       [t.backorders.colQty]: i.quantity,
+      [t.backorders.colStock]: i.smaregiStock ? `${i.smaregiStock.total} (${i.smaregiStock.tokyo}/${i.smaregiStock.aichi})` : '',
       [t.backorders.colCost]: i.costPriceJpy,
       [t.backorders.colCostTotal]: i.costPriceJpy * i.quantity,
       [t.backorders.colStatus]: label[i.procureStatus] || i.procureStatus,
@@ -447,6 +449,7 @@ export default function BackordersPage() {
                             <th className="text-left px-3 py-2 font-semibold text-gray-600 dark:text-gray-300 text-xs">{t.backorders.colProduct}</th>
                             <th className="text-left px-3 py-2 font-semibold text-gray-600 dark:text-gray-300 text-xs w-32">{t.backorders.colMemo}</th>
                             <th className="text-center px-3 py-2 font-semibold text-gray-600 dark:text-gray-300 text-xs w-14">{t.backorders.colQty}</th>
+                            <th className="text-center px-3 py-2 font-semibold text-gray-600 dark:text-gray-300 text-xs w-24">{t.backorders.colStock}</th>
                             <th className="text-right px-3 py-2 font-semibold text-gray-600 dark:text-gray-300 text-xs w-28">{t.common.cost}</th>
                             <th className="text-center px-3 py-2 font-semibold text-gray-600 dark:text-gray-300 text-xs w-28">{t.common.status}</th>
                           </tr>
@@ -556,6 +559,18 @@ export default function BackordersPage() {
                                   )}
                                 </td>
                                 <td className="px-3 py-3 text-center font-medium text-gray-700 dark:text-gray-200">{item.quantity}</td>
+                                {/* 스마레지 재고 — 부족(<수량)이면 빨강(발주 필요), 충분이면 초록 */}
+                                <td className="px-3 py-3 text-center text-xs tabular-nums">
+                                  {item.smaregiStock ? (
+                                    <span className={item.smaregiStock.total < item.quantity ? 'text-red-600 dark:text-red-400 font-bold' : 'text-emerald-600 dark:text-emerald-400 font-semibold'}
+                                      title={`東京 ${item.smaregiStock.tokyo} / 愛知 ${item.smaregiStock.aichi}`}>
+                                      {item.smaregiStock.total}
+                                      <span className="text-gray-400 dark:text-gray-500 font-normal"> ({item.smaregiStock.tokyo}/{item.smaregiStock.aichi})</span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-300 dark:text-gray-600">—</span>
+                                  )}
+                                </td>
                                 <td className="px-3 py-3 text-right font-medium text-gray-600 dark:text-gray-300 tabular-nums text-sm">
                                   {formatJpy(item.costPriceJpy * item.quantity)}
                                 </td>
