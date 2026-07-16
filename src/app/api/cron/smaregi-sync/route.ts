@@ -17,18 +17,26 @@ export async function GET(req: Request) {
   if (!ok) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   if (!smaregiConfigured()) return NextResponse.json({ ok: false, error: 'not_configured' }, { status: 503 })
 
-  const phase = url.searchParams.get('phase') === 'stock' ? 'stock' : 'products'
-  const page = Math.max(1, Number(url.searchParams.get('page')) || 1)
+  let phase: 'products' | 'stock' = url.searchParams.get('phase') === 'stock' ? 'stock' : 'products'
+  let page = Math.max(1, Number(url.searchParams.get('page')) || 1)
+  const agg = { products: 0, stock: 0 }
+  const t0 = Date.now()
 
   try {
-    if (phase === 'products') {
-      const { count, done } = await syncProductsPage(page)
-      if (done) await resetStock()   // 상품 끝 → 재고 합산 전 초기화
-      return NextResponse.json({ ok: true, phase, page, count, next: done ? { phase: 'stock', page: 1 } : { phase: 'products', page: page + 1 } })
-    } else {
-      const { count, done } = await syncStockPage(page)
-      return NextResponse.json({ ok: true, phase, page, count, done, ...(done ? {} : { next: { phase: 'stock', page: page + 1 } }) })
+    // 시간예산(~48초)까지 여러 페이지 처리 → 왕복 최소화. 남으면 next 커서 반환.
+    while (Date.now() - t0 < 48000) {
+      if (phase === 'products') {
+        const { count, done } = await syncProductsPage(page)
+        agg.products += count
+        if (done) { await resetStock(); phase = 'stock'; page = 1 } else page++
+      } else {
+        const { count, done } = await syncStockPage(page)
+        agg.stock += count
+        if (done) return NextResponse.json({ ok: true, done: true, ...agg })
+        page++
+      }
     }
+    return NextResponse.json({ ok: true, done: false, next: { phase, page }, ...agg })
   } catch (e) {
     const err = e instanceof SmaregiError ? { error: e.message, detail: e.detail } : { error: String(e) }
     return NextResponse.json({ ok: false, ...err }, { status: 502 })
