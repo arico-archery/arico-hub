@@ -205,13 +205,17 @@ export default async function DocumentPage({
               <p><span className="text-gray-500">No: </span>{docNoVal}</p>
               {dateRows[0] && <p><span className="text-gray-500">{dateRows[0].label}: </span>{dateRows[0].value}</p>}
             </div>
-            <div className="mt-2 border border-gray-300 rounded p-2.5 space-y-0.5">
+            <div className="relative mt-2 border border-gray-300 rounded p-2.5 space-y-0.5">
               <p className="font-bold text-[13px]">{seller.name}</p>
               {seller.regNo && <p className="text-gray-600">{T.regNo}: {seller.regNo}</p>}
               {seller.address && <p className="text-gray-600">{seller.address}</p>}
               {seller.tel && <p className="text-gray-600">TEL: {seller.tel}</p>}
               {seller.ceo && <p className="text-gray-600">{T.representative}: {seller.ceo}</p>}
               {seller.contact && <p className="text-gray-600">{T.contactLabel}: {seller.contact}</p>}
+              {/* 社印 — 발행처 박스 우측 하단에 겹쳐 찍는다(일본 청구서 角印 관행). 인쇄 시에도 색 유지. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/arico-stamp.png" alt="" width={64} height={64} aria-hidden="true"
+                className="pointer-events-none select-none absolute -right-2 -bottom-2 w-16 h-16 object-contain mix-blend-multiply [print-color-adjust:exact] [-webkit-print-color-adjust:exact]" />
             </div>
           </div>
         </div>
