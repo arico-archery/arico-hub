@@ -14,6 +14,8 @@ export async function GET(req: Request) {
     : stockRaw === 'low' ? { stock: { lte: 0 } }
     : {}
 
+  const category = (searchParams.get('category') ?? '').trim()   // 部門名 정확일치
+
   const where = {
     ...(q ? { OR: [
       { name: { contains: q, mode: 'insensitive' as const } },
@@ -21,18 +23,22 @@ export async function GET(req: Request) {
       { size: { contains: q, mode: 'insensitive' as const } },
     ] } : {}),
     ...stockFilter,
+    ...(category ? { category } : {}),
   }
 
-  const [rows, total, lastSync, stats] = await Promise.all([
+  const [rows, total, lastSync, stats, catGroups] = await Promise.all([
     prisma.smaregiProduct.findMany({ where, orderBy: [{ name: 'asc' }], skip: (page - 1) * limit, take: limit }),
     prisma.smaregiProduct.count({ where }),
     prisma.smaregiProduct.findFirst({ orderBy: { syncedAt: 'desc' }, select: { syncedAt: true } }),
     prisma.smaregiProduct.aggregate({ _count: true, _sum: { stock: true } }),
+    // 部門 목록 — 자주 쓰는 것이 위로 오게 건수 내림차순(101종이라 드롭다운으로 고른다)
+    prisma.smaregiProduct.groupBy({ by: ['category'], _count: true, orderBy: { _count: { category: 'desc' } } }),
   ])
 
   return NextResponse.json({
     rows, total, page, limit,
     lastSync: lastSync?.syncedAt ?? null,
     totalProducts: stats._count, totalStock: stats._sum.stock ?? 0,
+    categories: catGroups.filter(c => c.category).map(c => ({ name: c.category, count: c._count })),
   })
 }

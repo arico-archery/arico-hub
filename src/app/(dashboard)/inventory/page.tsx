@@ -13,6 +13,7 @@ type Row = {
 type Resp = {
   rows: Row[]; total: number; page: number; limit: number
   lastSync: string | null; totalProducts: number; totalStock: number
+  categories?: { name: string; count: number }[]   // 部門 목록 (건수 내림차순)
 }
 
 export default function InventoryPage() {
@@ -22,6 +23,8 @@ export default function InventoryPage() {
   const [q, setQ] = useState('')
   // 재고 필터: 전체 / 재고 있음(>0) / 재고 없음(≤0). 토글 두 개면 둘 다 켜는 모순이 생겨 3택으로 둔다.
   const [stockFilter, setStockFilter] = useState<'all' | 'in' | 'low'>('all')
+  // 部門 필터 — 101종이라 칩이 아니라 드롭다운. 빈 문자열 = 전체
+  const [category, setCategory] = useState('')
   const [page, setPage] = useState(1)
   const [confirm, setConfirm] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -32,13 +35,14 @@ export default function InventoryPage() {
     const p = new URLSearchParams({ page: String(page), limit: '50' })
     if (q) p.set('q', q)
     if (stockFilter !== 'all') p.set('stock', stockFilter)
+    if (category) p.set('category', category)
     const res = await fetch(`/api/smaregi/inventory?${p}`)
     setData(await res.json())
     setLoading(false)
-  }, [q, stockFilter, page])
+  }, [q, stockFilter, category, page])
 
   useEffect(() => { load() }, [load])
-  useEffect(() => { setPage(1) }, [q, stockFilter])
+  useEffect(() => { setPage(1) }, [q, stockFilter, category])
 
   // 스마레지 동기화 — 커서 따라 반복 호출
   const runSync = async () => {
@@ -124,6 +128,30 @@ export default function InventoryPage() {
           />
           {q && <button onClick={() => setQ('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600"><X className="w-3.5 h-3.5" /></button>}
         </div>
+        {/* 部門 필터 — 101종이라 드롭다운. 자주 쓰는 것이 위로(건수 내림차순) */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{t.inventory.colCategory}</span>
+          <select
+            value={category}
+            onChange={e => setCategory(e.target.value)}
+            className={`px-3 py-2 rounded-lg border text-xs font-medium max-w-56 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
+              category
+                ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/25 text-emerald-800 dark:text-emerald-200'
+                : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+            }`}
+          >
+            <option value="">{t.common.all}</option>
+            {(data?.categories ?? []).map(c => (
+              <option key={c.name} value={c.name}>{c.name} ({c.count})</option>
+            ))}
+          </select>
+          {category && (
+            <button onClick={() => setCategory('')} className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" title={t.common.all}>
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
         {/* 재고 필터 — 전체 / 재고 있음 / 재고 없음 */}
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{t.inventory.stockFilter}</span>
