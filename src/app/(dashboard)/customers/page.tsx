@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, Fragment } from 'react'
 import { useCachedState } from '@/lib/useApiCache'
 import Link from 'next/link'
-import { Users, Plus, Phone, Mail, MapPin, Pencil, Check, X, Trash2, Search, ShoppingCart, Upload, FileDown, FileSpreadsheet, Camera, Download, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Users, Plus, Phone, Mail, MapPin, Pencil, Check, X, Trash2, Search, ShoppingCart, Upload, FileDown, FileSpreadsheet, Camera, Download, ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { formatJpy } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
@@ -134,9 +134,12 @@ export default function CustomersPage() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [searchQ, setSearchQ] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('all')   // all | individual | institution | corporation
+  // 탈퇴회원은 기본으로 감춘다 — 자사몰 탈퇴로 개인정보가 지워져 목록에서 할 수 있는 일이 없다.
+  // 지우지는 않는다: 주문 이력이 이들을 가리키고 있어 지우면 그 주문의 거래처가 사라진다.
+  const [showWithdrawn, setShowWithdrawn] = useState(false)
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 20
-  useEffect(() => { setPage(1) }, [searchQ, typeFilter])
+  useEffect(() => { setPage(1) }, [searchQ, typeFilter, showWithdrawn])
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editForm, setEditForm] = useState<FormState>(EMPTY_FORM)
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
@@ -307,8 +310,12 @@ export default function CustomersPage() {
     setDeleteConfirm(null)
   }
 
+  // 탈퇴 제외가 먼저 — 구분 필터의 건수와 실제 행 수가 어긋나지 않게 이 목록을 공통 기준으로 쓴다.
+  const visibleCustomers = showWithdrawn ? customers : customers.filter(c => !c.withdrawn)
+  const withdrawnCount = customers.filter(c => c.withdrawn).length
+
   // 필터된 목록 (검색·구분) — tbody와 페이지네이션이 공유
-  const filteredCustomers = customers.filter(c => {
+  const filteredCustomers = visibleCustomers.filter(c => {
     if (typeFilter !== 'all' && (c.customerType || 'individual') !== typeFilter) return false
     if (!searchQ) return true
     const q = searchQ.toLowerCase()
@@ -322,7 +329,8 @@ export default function CustomersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t.customers.title}</h1>
-          <p className="text-gray-600 font-medium text-sm mt-1">{t.common.total} {customers.length}{t.customers.subtitleCount}</p>
+          {/* 목록에 실제로 보이는 수 — 탈퇴를 감춘 상태에서 전체 수를 적으면 행 수와 안 맞아 혼란스럽다 */}
+          <p className="text-gray-600 font-medium text-sm mt-1">{t.common.total} {visibleCustomers.length}{t.customers.subtitleCount}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative w-full sm:w-auto">
@@ -385,7 +393,7 @@ export default function CustomersPage() {
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 mr-1">{t.customers.labelType}</span>
         {([{ v: 'all', label: t.common.all }, ...CUSTOMER_TYPES.map(({ v, key }) => ({ v, label: t.customers[key] }))]).map(({ v, label }) => {
-          const count = v === 'all' ? customers.length : customers.filter(c => (c.customerType || 'individual') === v).length
+          const count = v === 'all' ? visibleCustomers.length : visibleCustomers.filter(c => (c.customerType || 'individual') === v).length
           const active = typeFilter === v
           return (
             <button key={v} type="button" onClick={() => setTypeFilter(v)}
@@ -395,6 +403,16 @@ export default function CustomersPage() {
             </button>
           )
         })}
+        {/* 탈퇴회원 — 평소엔 감춰두고 필요할 때만 켠다. 0명이면 버튼 자체를 숨긴다. */}
+        {withdrawnCount > 0 && (
+          <button type="button" onClick={() => setShowWithdrawn(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ml-auto ${showWithdrawn ? 'bg-gray-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+            title={t.customers.showWithdrawnTooltip}>
+            {showWithdrawn ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+            {t.customers.showWithdrawn}
+            <span className={`text-xs tabular-nums ${showWithdrawn ? 'text-white/70' : 'text-gray-400 dark:text-gray-500'}`}>{withdrawnCount}</span>
+          </button>
+        )}
       </div>
 
       {importOpen && (
