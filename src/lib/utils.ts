@@ -74,9 +74,8 @@ export function calcCostJpy(
   const rateToJpy = rates.find(r => r.currency === p.supplier.currency)?.rateToJpy ?? 1
   let price = p.costPrice
 
-  // 'SIBUYA'는 옛 코드 — SHIBUYA로 이름을 바로잡는 중이라 DB 이관이 끝날 때까지 함께 인정한다.
-  // (인정하지 않으면 이관 도중 掛率 분기를 타지 못해 원가가 틀리게 계산된다) 이관 후 제거.
-  if (p.supplierCode === 'SHIBUYA' || p.supplierCode === 'SIBUYA') {
+  if (p.supplierCode === 'SHIBUYA') {
+    // 브랜드 표기는 SHIBUYA/SIBUYA 둘 다 들어올 수 있어 둘 다 자체 브랜드로 본다
     const isShibuyaBrand = /SHIBUYA|SIBUYA/i.test(p.brand)
     price = price * (isShibuyaBrand ? 0.62 : 0.65)              // 希望小売価格(税込) × 掛率
   } else if (p.supplierCode === 'ANGEL') {
@@ -109,9 +108,6 @@ export const SUPPLIER_COLORS: Record<string, string> = {
   WJ: '#f97316',
   KOWA: '#14b8a6',  // KOWA 광학
   ETC: '#64748b',  // 기타 브랜드 (수동 입력)
-  // 옛 코드 SIBUYA → SHIBUYA 로 이름을 바로잡는 중. DB 이관이 끝날 때까지 색을 잃지 않도록 남겨둔다.
-  // 이관 확인 후 이 줄은 지운다.
-  SIBUYA: '#0ea5e9',
 }
 
 export const SUPPLIER_LIST = ['ARICO', 'JVD', 'MK', 'FIVICS', 'SHIBUYA', 'KOREA', 'ANGEL', 'WJ', 'KOWA', 'ETC'] as const
