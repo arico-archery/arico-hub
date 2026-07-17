@@ -141,7 +141,9 @@ export default function PurchaseOrdersPage() {
         <div className="w-px h-5 bg-gray-200 dark:bg-gray-600" />
         <div>
           <span className="text-xs text-gray-600 dark:text-gray-400 font-medium mr-2">{t.common.status}</span>
-          {['', ...Object.keys(STATUS_STYLE)].map(s => (
+          {/* 'confirmed'(재고확인)는 단계를 없애 더 이상 생기지 않는다 — 필터에서 제외.
+              STATUS_STYLE에는 남겨둬 과거 데이터가 있어도 배지가 정상 표시된다. */}
+          {['', ...Object.keys(STATUS_STYLE).filter(s => s !== 'confirmed')].map(s => (
             <button
               key={s || 'all'}
               onClick={() => setStatusFilter(s)}

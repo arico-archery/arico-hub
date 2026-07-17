@@ -64,7 +64,8 @@ export default function PaymentsPage() {
   // 클라 캐시: 매입(발주) 원시 응답 → 지급대상 상태만 파생
   const { data: posRaw, isLoading: posLoading, refresh: loadPOs } = useApiCache<{ orders: PurchasePO[] }>('/api/purchase-orders?limit=1000')
   const pos = useMemo(
-    () => (posRaw?.orders ?? []).filter((p) => ['confirmed', 'paid', 'partial', 'received'].includes(p.status)),
+    // 발주완료부터 지급 대상 (재고확인 단계는 없앰). 'confirmed'는 과거 데이터 호환용.
+    () => (posRaw?.orders ?? []).filter((p) => ['ordered', 'confirmed', 'paid', 'partial', 'received'].includes(p.status)),
     [posRaw],
   )
 

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, Truck, CheckCircle, Clock, Package,
-  AlertCircle, Edit2, Save, X, Trash2, FileText, ClipboardCheck, Banknote
+  AlertCircle, Edit2, Save, X, Trash2, FileText, Banknote
 } from 'lucide-react'
 import { formatJpy } from '@/lib/utils'
 import SupplierBadge from '@/components/SupplierBadge'
@@ -55,14 +55,14 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
   const [memo, setMemo]       = useState('')
   const [expectedDate, setExpectedDate] = useState('')
   const [receiveQty, setReceiveQty] = useState<Record<number, string>>({})
+  // 「나머지 없음」 — 못 받은 수량은 더 안 온다 → 백오더로 되돌리고 발주 종료
+  const [closeRemainder, setCloseRemainder] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  // 재고확인(제조사 청구서)
-  const [confirmQty, setConfirmQty] = useState<Record<number, string>>({})
+  // 제조사 청구서(매입 지급 시 기록)
   const [supplierInvoiceNo, setSupplierInvoiceNo] = useState('')
   const [confirmedForeign, setConfirmedForeign] = useState('')
   const [confirmedTotalJpy, setConfirmedTotalJpy] = useState('')
-  const [confirming, setConfirming] = useState(false)
   // 매입 지급
   const [payDate, setPayDate] = useState('')
   const [paying, setPaying] = useState(false)
@@ -98,44 +98,22 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
     setLoading(false)
   }
 
-  // 재고확인 저장 (제조사 청구서 수령 → 확정수량·청구액 입력)
-  const handleConfirm = async () => {
+  // 매입 지급(제조사 입금) 처리 — 제조사 청구서 번호·확정 청구액도 함께 기록
+  const handlePay = async () => {
     if (!po) return
-    setConfirming(true)
-    const confirmItems = po.items.map(item => ({
-      itemId: item.id,
-      confirmedQty: Number(confirmQty[item.id] ?? (item.confirmedQty ?? item.quantity)),
-    }))
-    // 확정 JPY 미입력 시 확정수량×단가 합계로 자동 계산
-    const autoJpy = confirmItems.reduce((s, ci) => {
-      const it = po.items.find(i => i.id === ci.itemId)
-      return s + (it ? it.unitCostJpy * ci.confirmedQty : 0)
-    }, 0)
+    setPaying(true)
+    // 확정 청구액(엔) 미입력 시 발주 총액으로
+    const jpy = Number(confirmedTotalJpy) || po.totalCostJpy
     await fetch(`/api/purchase-orders/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        confirmItems,
+        pay: { paidAmountJpy: jpy, paidDate: payDate || null },
         supplierInvoiceNo,
         confirmedCurrency: po.supplier.currency,
         confirmedForeign: Number(confirmedForeign) || 0,
-        confirmedTotalJpy: Number(confirmedTotalJpy) || autoJpy,
+        confirmedTotalJpy: jpy,
       }),
-    })
-    setConfirming(false)
-    setConfirmQty({})
-    fetchPo()
-  }
-
-  // 매입 지급(제조사 입금) 처리
-  const handlePay = async () => {
-    if (!po) return
-    setPaying(true)
-    const amount = po.confirmedTotalJpy || po.totalCostJpy
-    await fetch(`/api/purchase-orders/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pay: { paidAmountJpy: amount, paidDate: payDate || null } }),
     })
     setPaying(false)
     fetchPo()
@@ -152,10 +130,11 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
     await fetch(`/api/purchase-orders/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ receiveItems }),
+      body: JSON.stringify({ receiveItems, closeRemainder }),
     })
     setSaving(false)
     setReceiveQty({})
+    setCloseRemainder(false)
     fetchPo()
   }
 
@@ -198,20 +177,18 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
   const overdue  = po.expectedDate && new Date(po.expectedDate) < new Date() && po.status !== 'received' && po.status !== 'cancelled'
   const totalReceived = po.items.reduce((s, i) => s + i.receivedQty * i.unitCostJpy, 0)
 
-  // 매입 진행 단계 (발주 → 재고확인 → 매입지급 → 입고)
+  // 매입 진행 단계 (발주 → 매입지급 → 입고). 'confirmed'는 과거 데이터 호환용.
   const isCancelled = po.status === 'cancelled'
   const stepOrdered   = ['ordered', 'confirmed', 'paid', 'partial', 'received'].includes(po.status)
-  const stepConfirmed = !!po.confirmedDate || ['confirmed', 'paid', 'partial', 'received'].includes(po.status)
   const stepPaid      = po.paymentStatus === 'paid' || ['paid', 'partial', 'received'].includes(po.status)
   const stepReceived  = po.status === 'received'
   const steps = [
     { label: t.purchaseOrders.stepOrdered, done: stepOrdered },
-    { label: t.purchaseOrders.stepConfirmed, done: stepConfirmed },
     { label: t.purchaseOrders.stepPaid, done: stepPaid },
     { label: t.purchaseOrders.stepReceived, done: stepReceived },
   ]
-  const canConfirm = !isCancelled && (po.status === 'ordered' || po.status === 'confirmed')
-  const canReceive = !isCancelled && stepConfirmed && !allDone
+  // 재고확인 단계를 없앴으므로 발주완료면 바로 입고할 수 있다
+  const canReceive = !isCancelled && stepOrdered && !allDone
   const confirmedTotalForView = po.confirmedTotalJpy || po.totalCostJpy
   const fmtCur = (v: number, cur: string) => `${cur === 'JPY' || !cur ? '¥' : '$'}${v.toLocaleString()}`
 
@@ -328,14 +305,25 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
                 {t.purchaseOrders.detailItemsHeader} ({po.items.length}{t.common.cases})
               </h2>
               {canReceive && (
-                <button
-                  onClick={handleReceive}
-                  disabled={saving}
-                  className="flex items-center gap-1.5 bg-green-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
-                >
-                  <Truck className="w-3.5 h-3.5" />
-                  {saving ? t.common.processing : t.purchaseOrders.detailReceiveBtn}
-                </button>
+                <div className="flex items-center gap-3">
+                  {/* 나머지 없음 = 못 받은 수량은 더 안 온다 → 백오더로 되돌리고 이 발주 종료 */}
+                  <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300 cursor-pointer select-none" title={t.purchaseOrders.closeRemainderHint}>
+                    <input
+                      type="checkbox" checked={closeRemainder}
+                      onChange={e => setCloseRemainder(e.target.checked)}
+                      className="w-3.5 h-3.5 accent-amber-500"
+                    />
+                    {t.purchaseOrders.closeRemainder}
+                  </label>
+                  <button
+                    onClick={handleReceive}
+                    disabled={saving}
+                    className="flex items-center gap-1.5 bg-green-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
+                  >
+                    <Truck className="w-3.5 h-3.5" />
+                    {saving ? t.common.processing : t.purchaseOrders.detailReceiveBtn}
+                  </button>
+                </div>
               )}
               {allDone && (
                 <span className="flex items-center gap-1 text-green-600 text-sm font-medium">
@@ -349,7 +337,6 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
                 <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700">
                   <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400">{t.purchaseOrders.detailColProduct}</th>
                   <th className="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400 w-20">{t.purchaseOrders.detailColOrdered}</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-500 dark:text-gray-400 w-24">{t.purchaseOrders.detailColConfirmed}</th>
                   <th className="text-center px-4 py-3 font-medium text-gray-500 dark:text-gray-400 w-28">{t.purchaseOrders.detailColReceived}</th>
                   <th className="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400 w-28">{t.purchaseOrders.detailColStock}</th>
                   <th className="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400 w-28">{t.purchaseOrders.detailColSubtotal}</th>
@@ -361,7 +348,6 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
                   const tgt      = item.confirmedQty ?? item.quantity
                   const done     = item.receivedQty >= tgt
                   const inputVal = receiveQty[item.id] ?? String(item.receivedQty)
-                  const cVal     = confirmQty[item.id] ?? (item.confirmedQty != null ? String(item.confirmedQty) : String(item.quantity))
                   const soldOut  = item.confirmedQty === 0
                   return (
                     <tr key={item.id} className={soldOut ? 'bg-red-50/40 dark:bg-red-900/10' : done && item.receivedQty > 0 ? 'bg-green-50/30 dark:bg-green-900/10' : ''}>
@@ -377,20 +363,6 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right text-gray-500 dark:text-gray-400">{item.quantity}</td>
-                      <td className="px-4 py-3 text-center">
-                        {canConfirm ? (
-                          <input
-                            type="number" min="0" max={item.quantity}
-                            className="w-16 text-center border border-gray-200 dark:border-gray-600 rounded px-2 py-1 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                            value={cVal}
-                            onChange={e => setConfirmQty(prev => ({ ...prev, [item.id]: e.target.value }))}
-                          />
-                        ) : item.confirmedQty != null ? (
-                          <span className={`font-medium ${soldOut ? 'text-red-500' : 'text-indigo-600 dark:text-indigo-300'}`}>{item.confirmedQty}</span>
-                        ) : (
-                          <span className="text-gray-300">—</span>
-                        )}
-                      </td>
                       <td className="px-4 py-3 text-center">
                         {soldOut ? (
                           <span className="text-gray-300">—</span>
@@ -443,60 +415,8 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
         </div>
 
         <div className="space-y-4">
-          {/* 재고확인 (제조사 청구서 수령) */}
-          {!isCancelled && (canConfirm || stepConfirmed) && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5 space-y-3">
-              <h3 className="font-semibold text-gray-900 dark:text-white text-sm flex items-center gap-2">
-                <ClipboardCheck className="w-4 h-4 text-indigo-500" />{t.purchaseOrders.confirmTitle}
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">{t.purchaseOrders.confirmDesc}</p>
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">{t.purchaseOrders.supplierInvoiceNo}</label>
-                <input
-                  type="text" value={supplierInvoiceNo} onChange={e => setSupplierInvoiceNo(e.target.value)}
-                  disabled={!canConfirm}
-                  className="w-full border border-gray-200 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 disabled:opacity-60 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  placeholder="INV-..."
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">{t.purchaseOrders.confirmedForeign} ({po.supplier.currency})</label>
-                  <input
-                    type="number" value={confirmedForeign} onChange={e => setConfirmedForeign(e.target.value)}
-                    disabled={!canConfirm}
-                    className="w-full border border-gray-200 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 disabled:opacity-60 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">{t.purchaseOrders.confirmedJpy} (¥)</label>
-                  <input
-                    type="number" value={confirmedTotalJpy} onChange={e => setConfirmedTotalJpy(e.target.value)}
-                    disabled={!canConfirm}
-                    className="w-full border border-gray-200 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 disabled:opacity-60 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    placeholder={t.purchaseOrders.confirmedAuto}
-                  />
-                </div>
-              </div>
-              {canConfirm ? (
-                <button
-                  onClick={handleConfirm} disabled={confirming}
-                  className="w-full flex items-center justify-center gap-1.5 bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-                >
-                  <ClipboardCheck className="w-4 h-4" />{confirming ? t.common.processing : t.purchaseOrders.confirmBtn}
-                </button>
-              ) : (
-                <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
-                  <CheckCircle className="w-3.5 h-3.5 text-green-500" />
-                  {t.purchaseOrders.confirmedOn} {po.confirmedDate ? new Date(po.confirmedDate).toLocaleDateString('ja-JP') : ''}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* 매입 지급 (제조사 입금) */}
-          {!isCancelled && stepConfirmed && (
+          {/* 매입 지급 (제조사 입금) — 제조사 청구서 정보도 여기서 함께 기록 */}
+          {!isCancelled && stepOrdered && (
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5 space-y-3">
               <h3 className="font-semibold text-gray-900 dark:text-white text-sm flex items-center gap-2">
                 <Banknote className="w-4 h-4 text-purple-500" />{t.purchaseOrders.payTitle}
@@ -505,23 +425,58 @@ export default function PurchaseOrderDetailPage({ params }: { params: Promise<{ 
                 <span className="text-gray-500 dark:text-gray-400">{t.purchaseOrders.payAmount}</span>
                 <span className="font-bold text-gray-900 dark:text-gray-100 tabular-nums">{formatJpy(confirmedTotalForView)}</span>
               </div>
-              {po.confirmedForeign > 0 && (
-                <div className="flex justify-between text-xs text-gray-400">
-                  <span>{po.supplier.currency}</span>
-                  <span className="tabular-nums">{fmtCur(po.confirmedForeign, po.supplier.currency)}</span>
-                </div>
-              )}
               {po.paymentStatus === 'paid' ? (
-                <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 text-sm">
-                  <p className="flex items-center gap-1.5 text-purple-700 dark:text-purple-300 font-medium">
-                    <CheckCircle className="w-4 h-4" />{t.purchaseOrders.paidLabel}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {po.paidDate ? new Date(po.paidDate).toLocaleDateString('ja-JP') : ''} · {formatJpy(po.paidAmountJpy)}
-                  </p>
-                </div>
+                <>
+                  {po.confirmedForeign > 0 && (
+                    <div className="flex justify-between text-xs text-gray-400">
+                      <span>{po.supplier.currency}</span>
+                      <span className="tabular-nums">{fmtCur(po.confirmedForeign, po.supplier.currency)}</span>
+                    </div>
+                  )}
+                  {po.supplierInvoiceNo && (
+                    <div className="flex justify-between text-xs text-gray-400">
+                      <span>{t.purchaseOrders.supplierInvoiceNo}</span>
+                      <span className="tabular-nums">{po.supplierInvoiceNo}</span>
+                    </div>
+                  )}
+                  <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3 text-sm">
+                    <p className="flex items-center gap-1.5 text-purple-700 dark:text-purple-300 font-medium">
+                      <CheckCircle className="w-4 h-4" />{t.purchaseOrders.paidLabel}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {po.paidDate ? new Date(po.paidDate).toLocaleDateString('ja-JP') : ''} · {formatJpy(po.paidAmountJpy)}
+                    </p>
+                  </div>
+                </>
               ) : (
                 <>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t.purchaseOrders.payInvoiceDesc}</p>
+                  <div>
+                    <label className="text-xs text-gray-400 mb-1 block">{t.purchaseOrders.supplierInvoiceNo}</label>
+                    <input
+                      type="text" value={supplierInvoiceNo} onChange={e => setSupplierInvoiceNo(e.target.value)}
+                      className="w-full border border-gray-200 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                      placeholder="INV-..."
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">{t.purchaseOrders.confirmedForeign} ({po.supplier.currency})</label>
+                      <input
+                        type="number" value={confirmedForeign} onChange={e => setConfirmedForeign(e.target.value)}
+                        className="w-full border border-gray-200 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">{t.purchaseOrders.confirmedJpy} (¥)</label>
+                      <input
+                        type="number" value={confirmedTotalJpy} onChange={e => setConfirmedTotalJpy(e.target.value)}
+                        className="w-full border border-gray-200 dark:border-gray-600 rounded px-2 py-1.5 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                        placeholder={t.purchaseOrders.confirmedAuto}
+                      />
+                    </div>
+                  </div>
                   <div>
                     <label className="text-xs text-gray-400 mb-1 block">{t.purchaseOrders.payDate}</label>
                     <DateInput value={payDate} onChange={setPayDate} />

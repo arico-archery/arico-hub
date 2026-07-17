@@ -62,9 +62,9 @@ async function buildDashboard(range: string) {
       by: ['procureStatus'],
       _count: true,
     }),
-    // 매입 지급 대기: 재고확인(confirmed) 됐으나 아직 미지급인 발주
+    // 매입 지급 대기: 발주완료 이후 아직 미지급인 발주 ('confirmed'는 과거 데이터 호환용)
     prisma.purchaseOrder.aggregate({
-      where: { status: 'confirmed', paymentStatus: 'unpaid' },
+      where: { status: { in: ['ordered', 'confirmed'] }, paymentStatus: 'unpaid' },
       _sum: { confirmedTotalJpy: true },
       _count: true,
     }),

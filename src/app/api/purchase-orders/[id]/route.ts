@@ -25,91 +25,71 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   return NextResponse.json(po)
 }
 
+// 제조사가 발주 수량만큼 못 준 경우, 못 받은 만큼을 백오더(재발주 대기)로 되돌린다.
+// 연결된 고객 주문품목에 확보수량(keep)을 오래된 순으로 할당하고, 넘치는 분은
+// 별도 행으로 분리해 미발주(needed)로 만든다 → 다음 발주에 다시 잡힌다.
+async function returnShortfallToBackorder(poId: number, productId: number, keepQty: number) {
+  const linked = await prisma.orderItem.findMany({
+    where: { purchaseOrderId: poId, productId },
+    orderBy: { id: 'asc' },
+  })
+  let keep = keepQty
+  for (const oi of linked) {
+    if (keep >= oi.quantity) {
+      keep -= oi.quantity                 // 이 주문품목은 전부 확보됨 → 발주에 유지
+    } else if (keep > 0) {
+      // 일부만 확보: keep 만큼만 이 발주에 남기고 나머지는 새 행으로 분리
+      const leftover = oi.quantity - keep
+      await prisma.orderItem.update({ where: { id: oi.id }, data: { quantity: keep } })
+      await prisma.orderItem.create({
+        data: {
+          orderId: oi.orderId, productId: oi.productId, quantity: leftover,
+          salePriceJpy: oi.salePriceJpy, costPriceJpy: oi.costPriceJpy,
+          procureStatus: 'needed', optionMemo: oi.optionMemo, purchaseOrderId: null,
+        },
+      })
+      keep = 0
+    } else {
+      // 확보분 소진: 주문품목 통째로 백오더로
+      await prisma.orderItem.update({
+        where: { id: oi.id },
+        data: { purchaseOrderId: null, procureStatus: 'needed' },
+      })
+    }
+  }
+}
+
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const body = await req.json()
-  const { status, expectedDate, receivedDate, memo, receiveItems, confirmItems, pay } = body
+  const { status, expectedDate, receivedDate, memo, receiveItems, pay } = body
   const poId = Number(id)
 
-  // ── 재고확인(제조사 청구서 수령): confirmItems = [{ itemId, confirmedQty }] ──
-  // + supplierInvoiceNo, confirmedForeign, confirmedCurrency, confirmedTotalJpy
-  if (confirmItems && Array.isArray(confirmItems)) {
-    for (const ci of confirmItems as { itemId: number; confirmedQty: number }[]) {
-      const item = await prisma.purchaseOrderItem.findUnique({ where: { id: ci.itemId } })
-      if (!item) continue
-      const cq = Math.max(0, Math.min(ci.confirmedQty, item.quantity))
-      await prisma.purchaseOrderItem.update({ where: { id: ci.itemId }, data: { confirmedQty: cq } })
-
-      // 확정수량 < 발주수량: 잔여분(품절 또는 부분재고)을 백오더로 되돌림(재발주 대기)
-      // 연결된 고객 주문품목에 확정수량(cq)을 순서대로 할당하고, 초과분은 분리해 needed 처리
-      if (cq < item.quantity) {
-        const linked = await prisma.orderItem.findMany({
-          where: { purchaseOrderId: poId, productId: item.productId },
-          orderBy: { id: 'asc' },
-        })
-        let keep = cq  // 이 발주에 남길 수량
-        for (const oi of linked) {
-          if (keep >= oi.quantity) {
-            keep -= oi.quantity          // 주문품목 전체를 발주에 유지
-          } else if (keep > 0) {
-            // 분할: keep 만큼만 발주 유지, 나머지는 신규 백오더 행으로 분리
-            const leftover = oi.quantity - keep
-            await prisma.orderItem.update({ where: { id: oi.id }, data: { quantity: keep } })
-            await prisma.orderItem.create({
-              data: {
-                orderId: oi.orderId, productId: oi.productId, quantity: leftover,
-                salePriceJpy: oi.salePriceJpy, costPriceJpy: oi.costPriceJpy,
-                procureStatus: 'needed', optionMemo: oi.optionMemo, purchaseOrderId: null,
-              },
-            })
-            keep = 0
-          } else {
-            // 남길 수량 소진: 주문품목 전체를 백오더로
-            await prisma.orderItem.update({
-              where: { id: oi.id },
-              data: { purchaseOrderId: null, procureStatus: 'needed' },
-            })
-          }
-        }
-      }
-    }
-
-    const confirmData: Record<string, unknown> = {
-      status: 'confirmed',
-      confirmedDate: new Date(),
-    }
-    if (body.supplierInvoiceNo !== undefined) confirmData.supplierInvoiceNo = String(body.supplierInvoiceNo)
-    if (body.confirmedCurrency !== undefined) confirmData.confirmedCurrency = String(body.confirmedCurrency)
-    if (body.confirmedForeign !== undefined) confirmData.confirmedForeign = Number(body.confirmedForeign) || 0
-    if (body.confirmedTotalJpy !== undefined) confirmData.confirmedTotalJpy = Number(body.confirmedTotalJpy) || 0
-    await prisma.purchaseOrder.update({ where: { id: poId }, data: confirmData })
-
-    // 확정된 품목의 고객 주문 품목 → '발주완료(ordered)'로 (아직 needed면)
-    await prisma.orderItem.updateMany({
-      where: { purchaseOrderId: poId, procureStatus: 'needed' },
-      data: { procureStatus: 'ordered' },
-    })
-  }
-
   // ── 매입 지급(제조사 입금): pay = { paidAmountJpy, paidDate } ──
+  // 제조사 청구서 정보(번호·확정 청구액)도 여기서 함께 기록한다.
   if (pay) {
-    await prisma.purchaseOrder.update({
-      where: { id: poId },
-      data: {
-        paymentStatus: 'paid',
-        paidAmountJpy: Number(pay.paidAmountJpy) || 0,
-        paidDate: pay.paidDate ? new Date(pay.paidDate) : new Date(),
-        status: 'paid',
-      },
-    })
+    const payData: Record<string, unknown> = {
+      paymentStatus: 'paid',
+      paidAmountJpy: Number(pay.paidAmountJpy) || 0,
+      paidDate: pay.paidDate ? new Date(pay.paidDate) : new Date(),
+      status: 'paid',
+    }
+    if (body.supplierInvoiceNo !== undefined) payData.supplierInvoiceNo = String(body.supplierInvoiceNo)
+    if (body.confirmedCurrency !== undefined) payData.confirmedCurrency = String(body.confirmedCurrency)
+    if (body.confirmedForeign !== undefined) payData.confirmedForeign = Number(body.confirmedForeign) || 0
+    if (body.confirmedTotalJpy !== undefined) payData.confirmedTotalJpy = Number(body.confirmedTotalJpy) || 0
+    await prisma.purchaseOrder.update({ where: { id: poId }, data: payData })
   }
 
   // 입고 처리: receiveItems = [{ itemId, receivedQty }]
+  //  + closeRemainder=true → 「나머지 없음」: 못 받은 수량은 더 안 온다는 뜻.
+  //    확보수량(confirmedQty)에 실입고량을 박아 발주를 종료시키고, 못 받은 만큼은
+  //    백오더로 되돌린다. 체크하지 않으면 기존대로 부분입고(2차 입고 대기)로 남는다.
   if (receiveItems && Array.isArray(receiveItems)) {
     for (const ri of receiveItems as { itemId: number; receivedQty: number }[]) {
       const item = await prisma.purchaseOrderItem.findUnique({ where: { id: ri.itemId } })
       if (!item) continue
-      // 확정수량이 있으면 그 수량까지만 입고 가능
+      // 확보수량이 정해졌으면 그 수량까지만 입고 가능
       const target = item.confirmedQty ?? item.quantity
       const newReceivedQty = Math.min(ri.receivedQty, target)
       await prisma.purchaseOrderItem.update({
@@ -127,7 +107,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       }
     }
 
-    // 입고 상태 자동 판정 (확정수량 기준; 품절 품목은 목표 0이라 자동 충족)
+    if (body.closeRemainder === true) {
+      const po = await prisma.purchaseOrder.findUnique({ where: { id: poId }, include: { items: true } })
+      for (const item of po?.items ?? []) {
+        if (item.receivedQty >= item.quantity) continue
+        // 실입고량으로 확보수량을 확정 → 이 발주는 더 기다리지 않는다
+        await prisma.purchaseOrderItem.update({ where: { id: item.id }, data: { confirmedQty: item.receivedQty } })
+        await returnShortfallToBackorder(poId, item.productId, item.receivedQty)
+      }
+    }
+
+    // 입고 상태 자동 판정 (확보수량 기준; 품절 품목은 목표 0이라 자동 충족)
     const updatedPo = await prisma.purchaseOrder.findUnique({
       where: { id: Number(id) },
       include: { items: true },
