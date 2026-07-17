@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { formatJpy, calcProfitRate } from '@/lib/utils'
 import SupplierBadge from '@/components/SupplierBadge'
 import ProfitBar from '@/components/ProfitBar'
+import SalesBar, { SalesBarLegend } from '@/components/SalesBar'
 import { BarChart3, Users, TrendingUp, DollarSign, ShoppingCart, RefreshCw, Tag, AlertTriangle } from 'lucide-react'
 import { useT } from '@/lib/i18n'
 
@@ -82,6 +83,7 @@ export default function AnalyticsPage() {
   const { monthlyData, allTime, topItems, supplierStats, brandStats, receivables, totalReceivable, totalOverdue, topCustomers } = data
   const maxSales = Math.max(...monthlyData.map(m => m.sales), 1)
   const maxBrandSales = Math.max(...brandStats.map(b => b.sales), 1)
+  const maxSupSales = Math.max(...Object.values(supplierStats).map(s => s.sales), 1)
 
   // '더 보기' 슬라이스 (기본 HEAD개)
   const supEntries = Object.entries(supplierStats).sort((a, b) => b[1].sales - a[1].sales)
@@ -170,15 +172,17 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-2 gap-6 mb-6">
         {/* 월별 추이 */}
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5">
-          <h2 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 text-blue-500" />
-            {t.analytics.monthlyTrend}
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-blue-500" />
+              {t.analytics.monthlyTrend}
+            </h2>
+            <SalesBarLegend costLabel={t.analytics.legendCost} profitLabel={t.analytics.legendProfit} />
+          </div>
           <div className="space-y-3">
             {monthlyData.map(m => {
               const profit = m.sales - m.cost
               const { margin } = calcProfitRate(m.sales, m.cost)
-              const barW = m.sales > 0 ? (m.sales / maxSales) * 100 : 0
               const monthLabel = `${m.month}${t.analytics.monthUnit}`
               return (
                 <div key={m.label}>
@@ -192,9 +196,7 @@ export default function AnalyticsPage() {
                       {profit > 0 && <span className="text-green-600 font-medium ml-1">(+{formatJpy(profit)})</span>}
                     </span>
                   </div>
-                  <div className="h-5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${barW}%` }} />
-                  </div>
+                  <SalesBar sales={m.sales} cost={m.cost} max={maxSales} />
                   {m.sales > 0 && (
                     <div className="text-right text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                       {t.analytics.margin} {margin.toFixed(1)}%
@@ -211,7 +213,10 @@ export default function AnalyticsPage() {
 
         {/* 공급사별 매출 */}
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5">
-          <h2 className="font-semibold text-gray-900 dark:text-white mb-4">{t.analytics.bySupplier}</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-900 dark:text-white">{t.analytics.bySupplier}</h2>
+            <SalesBarLegend costLabel={t.analytics.legendCost} profitLabel={t.analytics.legendProfit} />
+          </div>
           {Object.keys(supplierStats).length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-8">{t.common.noData}</p>
           ) : (
@@ -221,8 +226,9 @@ export default function AnalyticsPage() {
                   return (
                     <div key={code} className="flex items-center gap-3">
                       <SupplierBadge code={code} />
+                      {/* 막대 = 매출(회색 원가 + 초록 이익). 예전엔 마진율이라 월별 그래프와 뜻이 달랐다 */}
                       <div className="flex-1">
-                        <ProfitBar margin={margin} showLabel={false} />
+                        <SalesBar sales={stat.sales} cost={stat.cost} max={maxSupSales} height="h-3" />
                       </div>
                       <div className="text-right text-sm">
                         <p className="font-medium text-gray-900 dark:text-gray-100">{formatJpy(stat.sales)}</p>
@@ -241,17 +247,19 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* 브랜드별 매출 TOP 10 */}
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5">
-          <h2 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <Tag className="w-4 h-4 text-purple-500" />
-            {t.analytics.byBrand}
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <Tag className="w-4 h-4 text-purple-500" />
+              {t.analytics.byBrand}
+            </h2>
+            <SalesBarLegend costLabel={t.analytics.legendCost} profitLabel={t.analytics.legendProfit} />
+          </div>
           {brandStats.length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-8">{t.common.noData}</p>
           ) : (
             <div className="space-y-2.5">
               {brandShown.map(b => {
                 const { margin } = calcProfitRate(b.sales, b.cost)
-                const pct = (b.sales / maxBrandSales) * 100
                 return (
                   <div key={b.brand} className="text-sm">
                     <div className="flex items-center justify-between mb-1">
@@ -259,8 +267,8 @@ export default function AnalyticsPage() {
                       <span className="text-gray-700 dark:text-gray-300 font-semibold whitespace-nowrap ml-2">{formatJpy(b.sales)}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="flex-1 h-2 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
-                        <div className="h-full rounded-full bg-purple-500" style={{ width: `${pct}%` }} />
+                      <div className="flex-1">
+                        <SalesBar sales={b.sales} cost={b.cost} max={maxBrandSales} height="h-3" />
                       </div>
                       <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap w-24 text-right">
                         {t.analytics.margin} {margin.toFixed(1)}% · {b.qty}{t.common.items}
