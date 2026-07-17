@@ -1,19 +1,14 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { formatJpy, formatNumber, calcProfitRate, SUPPLIER_COLORS, SUPPLIER_LIST } from '@/lib/utils'
+import { formatJpy, formatNumber, calcProfitRate } from '@/lib/utils'
 import SupplierBadge from '@/components/SupplierBadge'
 import Link from 'next/link'
 import {
   TrendingUp, DollarSign, AlertCircle, Truck, Package, ShoppingCart,
-  ClipboardList, Banknote, AlertTriangle, Tag, Percent, Store, Warehouse
+  ClipboardList, Banknote, AlertTriangle, Store, Warehouse
 } from 'lucide-react'
 import { useI18n } from '@/lib/i18n'
-
-const SUPPLIER_NAMES: Record<string, Record<string, string>> = {
-  ko: { ARICO: 'ARICO', JVD: 'JVD', MK: 'MK Korea', FIVICS: 'FIVICS', SIBUYA: 'Shibuya', KOREA: 'Korea Archery', ANGEL: 'Angel', WJ: 'WJ Sports', KOWA: 'KOWA', ETC: '기타' },
-  ja: { ARICO: 'ARICO', JVD: 'JVD', MK: 'MK Korea', FIVICS: 'FIVICS', SIBUYA: 'Shibuya', KOREA: 'Korea Archery', ANGEL: 'Angel', WJ: 'WJ Sports', KOWA: 'KOWA', ETC: 'その他' },
-}
 
 export type DashboardData = {
   // 자사몰 수신·스마레지 동기화는 사람이 눌러야만 도는 작업 — 마지막 실행 시각
@@ -41,10 +36,6 @@ export type DashboardData = {
     customer: { name: string }
     items: { product: { supplierCode: string } }[]
   }[]
-  supplierStats: { supplierCode: string; _count: number }[]
-  totalProducts: number
-  pricedProducts: number
-  unpricedBySupplier: { supplierCode: string; _count: number }[]
 }
 
 type MonthPoint = { label: string; month: number; year: number; sales: number; cost: number; count: number }
@@ -121,44 +112,36 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
   }
 
   const { monthlySales, monthlyProfit, monthlyMargin, monthlyOrderCount, salesMoM, profitMoM,
-    marginMoMPts, procure, supplierPayable, overduePO, totalUnpaid, pendingShipment, overdueCount,
-    unpaidOrders, recentOrders, supplierStats, totalProducts, pricedProducts, unpricedBySupplier,
-    freshness } = data
-  const statsMap: Record<string, number> = {}
-  for (const s of supplierStats) statsMap[s.supplierCode] = s._count
-  const unpriced: Record<string, number> = {}
-  for (const u of (unpricedBySupplier ?? [])) unpriced[u.supplierCode] = u._count
-  const unpricedTotal = Math.max(0, totalProducts - pricedProducts)
+    procure, supplierPayable, overduePO, totalUnpaid, pendingShipment, overdueCount,
+    unpaidOrders, recentOrders, freshness } = data
 
   const momText = (v: number | null, unit = '%') =>
     v === null ? null : { up: v >= 0, label: `${v >= 0 ? '▲' : '▼'} ${Math.abs(v).toFixed(1)}${unit}` }
 
-  // 스파크라인 시계열 (항상 최근 6개월) + 월 라벨/포맷
+  // 스파크라인 시계열 (항상 최근 6개월) + 월 라벨
   const salesSeries  = trend.map(m => m.sales)
   const profitSeries = trend.map(m => m.sales - m.cost)
-  const marginSeries = trend.map(m => (m.sales > 0 ? ((m.sales - m.cost) / m.sales) * 100 : 0))
   const trendLabels  = trend.map(m => `${m.month}${t.analytics.monthUnit}`)
-  const fmtPct = (v: number) => `${v.toFixed(1)}%`
 
   const periodLabel = range === 'all' ? t.dashboard.periodAll : range === '6m' ? t.dashboard.period6m : t.dashboard.periodMonth
 
   const kpis = [
     { label: `${periodLabel} ${t.dashboard.salesShort}`, value: formatJpy(monthlySales), icon: DollarSign, mom: momText(salesMoM), sub: `${monthlyOrderCount}${t.common.cases}`, spark: salesSeries, sparkLabels: trendLabels, sparkFmt: formatJpy, color: '#2f7d55', href: '/analytics' },
     { label: `${periodLabel} ${t.dashboard.profitShort}`, value: formatJpy(monthlyProfit), icon: TrendingUp, mom: momText(profitMoM), sub: `${t.dashboard.marginRate} ${monthlyMargin.toFixed(1)}%`, spark: profitSeries, sparkLabels: trendLabels, sparkFmt: formatJpy, color: '#2f7d55', href: '/analytics' },
-    { label: t.dashboard.marginRate, value: `${monthlyMargin.toFixed(1)}%`, icon: Percent, mom: momText(marginMoMPts, '%p'), sub: periodLabel, spark: marginSeries, sparkLabels: trendLabels, sparkFmt: fmtPct, color: '#2f7d55', href: '/analytics' },
     { label: t.dashboard.unpaidTotal, value: formatJpy(totalUnpaid), icon: AlertCircle, mom: null, sub: overdueCount > 0 ? `${t.dashboard.overdue} ${overdueCount}${t.common.cases}` : `${unpaidOrders.length}${t.dashboard.unpaidCount}`, spark: null, sparkLabels: [] as string[], sparkFmt: formatJpy, color: '#ef4444', href: '/payments' },
   ]
 
-  // 운영 현황 / 할 일 타일
+  // 오늘 할 일 — 실제 업무 흐름 순서대로 나열한다.
+  //   ① 발주해야 할 것 → ② 제조사에 지급 → ③ 입고 기다림 → ④ 늦으면 독촉 → ⑤ 고객에게 발송
+  // (가격 미설정은 일일 운영이 아니라 상품 정비 백로그라 뺐다 — 공급사 상품 화면에서 본다)
   const ops = [
     { label: t.dashboard.procureNeeded, value: procure.needed, icon: ClipboardList, cls: 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800/50 text-red-600 dark:text-red-400', href: '/backorders' },
-    { label: t.dashboard.procureOrdered, value: procure.ordered, icon: Truck, cls: 'bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800/50 text-blue-600 dark:text-blue-400', href: '/backorders' },
-    // 배송대기 → 주문관리의 「배송대기」 탭을 바로 연다(같은 정의)
-    { label: t.dashboard.shippingPending, value: pendingShipment, icon: Package, cls: 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-100 dark:border-yellow-800/50 text-yellow-600 dark:text-yellow-500', href: '/orders?tab=ready' },
     // 재고확인 단계를 없앴으므로 지급 대기는 '발주완료(ordered)' 기준
     { label: t.dashboard.supplierPayable, value: supplierPayable.count, icon: Banknote, cls: 'bg-purple-50 dark:bg-purple-900/20 border-purple-100 dark:border-purple-800/50 text-purple-600 dark:text-purple-400', href: '/purchase-orders?status=ordered' },
+    { label: t.dashboard.procureOrdered, value: procure.ordered, icon: Truck, cls: 'bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800/50 text-blue-600 dark:text-blue-400', href: '/backorders' },
     { label: t.dashboard.overduePO, value: overduePO, icon: AlertTriangle, cls: 'bg-orange-50 dark:bg-orange-900/20 border-orange-100 dark:border-orange-800/50 text-orange-600 dark:text-orange-400', href: '/purchase-orders' },
-    { label: t.dashboard.priceUnset, value: unpricedTotal, icon: Tag, cls: 'bg-gray-50 dark:bg-gray-700/40 border-gray-100 dark:border-gray-600 text-gray-600 dark:text-gray-300', href: '/products?noPrice=1' },
+    // 배송대기 → 주문관리의 「배송대기」 탭을 바로 연다(같은 정의)
+    { label: t.dashboard.shippingPending, value: pendingShipment, icon: Package, cls: 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-100 dark:border-yellow-800/50 text-yellow-600 dark:text-yellow-500', href: '/orders?tab=ready' },
   ]
 
   // 매출 추세 차트 스케일
@@ -309,41 +292,6 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
         )}
       </div>
 
-      {/* E. 공급사별 상품 현황 (압축) */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700/60 p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            <Package className="w-4 h-4 text-gray-400" />
-            {t.dashboard.supplierStock}
-          </h2>
-          <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-gray-300 font-medium">
-            <span>{t.dashboard.totalProducts} <strong className="text-gray-900 dark:text-gray-100">{formatNumber(totalProducts)}</strong></span>
-            <span>{t.dashboard.priceSet} <strong className="text-blue-600">{formatNumber(pricedProducts)}</strong></span>
-            <Link href="/products" className="text-blue-600 hover:underline">{t.dashboard.manageProducts}</Link>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {SUPPLIER_LIST.map(code => {
-            const cnt = statsMap[code] ?? 0
-            const unpricedCount = unpriced[code] ?? 0
-            const color = SUPPLIER_COLORS[code] ?? '#6b7280'
-            return (
-              <Link key={code} href={`/products?supplier=${code}${unpricedCount > 0 ? '&noPrice=1' : ''}`}
-                className="flex items-center gap-2 rounded-lg px-3 py-2 hover:opacity-80 transition-opacity"
-                style={{ backgroundColor: `${color}14`, border: `1px solid ${color}33` }}>
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                <span className="text-xs font-medium text-gray-700 dark:text-gray-200">{SUPPLIER_NAMES[lang][code] ?? code}</span>
-                <span className="text-sm font-bold tabular-nums" style={{ color }}>{formatNumber(cnt)}</span>
-                {unpricedCount > 0 && (
-                  <span className="text-[10px] font-semibold text-orange-500 flex items-center gap-0.5">
-                    <Tag className="w-2.5 h-2.5" />{formatNumber(unpricedCount)}
-                  </span>
-                )}
-              </Link>
-            )
-          })}
-        </div>
-      </div>
 
       {/* 미입금 알림 + 최근 주문 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

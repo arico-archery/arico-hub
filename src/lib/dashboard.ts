@@ -39,10 +39,6 @@ async function buildDashboard(range: string) {
     unpaidOrders,
     pendingShipment,
     recentOrders,
-    supplierStats,
-    totalProducts,
-    pricedProducts,
-    unpricedGroups,
     msImportSetting,
     smaregiLatest,
   ] = await Promise.all([
@@ -96,18 +92,6 @@ async function buildDashboard(range: string) {
         items: { include: { product: { include: { supplier: true } } }, take: 3 },
       },
       orderBy: { createdAt: 'desc' },
-    }),
-    prisma.product.groupBy({
-      by: ['supplierCode'],
-      _count: true,
-    }),
-    prisma.product.count(),
-    prisma.product.count({ where: { salePriceJpy: { gt: 0 } } }),
-    // 공급사별 "판매가 미설정" 카운트 — 기존 클라이언트 8요청을 1쿼리로 통합
-    prisma.product.groupBy({
-      by: ['supplierCode'],
-      where: { salePriceJpy: 0 },
-      _count: true,
     }),
     // 데이터 신선도 — 자사몰 수신·스마레지 동기화는 사람이 버튼을 눌러야만 돈다.
     // 아무도 안 누르면 조용히 멈추므로 마지막 실행 시각을 대시보드에 보여준다.
@@ -171,10 +155,6 @@ async function buildDashboard(range: string) {
     overdueCount: overdueOrders.length,
     unpaidOrders,
     recentOrders,
-    supplierStats,
-    totalProducts,
-    pricedProducts,
-    unpricedBySupplier: unpricedGroups.map((g) => ({ supplierCode: g.supplierCode, _count: g._count })),
   }
 }
 
