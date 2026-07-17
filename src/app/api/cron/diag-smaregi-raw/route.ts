@@ -17,6 +17,27 @@ export async function GET(req: Request) {
   if (!ok) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   if (!smaregiConfigured()) return NextResponse.json({ ok: false, error: 'not_configured' }, { status: 503 })
 
+  // mode=layaway — 取り置き(예약) 수량이 전체에서 얼마나 되는지 집계
+  if (url.searchParams.get('mode') === 'layaway') {
+    let rows = 0, negRows = 0, layRows = 0, laySum = 0, negSum = 0
+    const samples: unknown[] = []
+    for (let page = 1; page <= 60; page++) {
+      const rs = await smaregiGet<{ productId: string; storeId: string; stockAmount: string; layawayStockAmount: string }[]>('/pos/stock', { limit: 1000, page })
+      for (const r of rs) {
+        rows++
+        const amt = Number(r.stockAmount) || 0
+        const lay = Number(r.layawayStockAmount) || 0
+        if (amt < 0) { negRows++; negSum += amt }
+        if (lay !== 0) {
+          layRows++; laySum += lay
+          if (samples.length < 6) samples.push({ productId: r.productId, storeId: r.storeId, 재고: r.stockAmount, 取り置き: r.layawayStockAmount })
+        }
+      }
+      if (rs.length < 1000) break
+    }
+    return NextResponse.json({ ok: true, mode: 'layaway', 재고행수: rows, 음수행: negRows, 음수합: negSum, 取り置き행: layRows, 取り置き합: laySum, samples })
+  }
+
   const pid = url.searchParams.get('productId') || '5137'
   const tries: Record<string, unknown> = {}
 
