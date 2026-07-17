@@ -15,7 +15,8 @@ export async function GET(req: Request) {
   if (!ok) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
   const made: { smId?: number; custId?: number; orderId?: number; prodId?: number } = {}
-  const CODE = '__TESTCODE_9999999999'
+  // 옵션코드는 10~14자리 숫자여야 인식된다(extractOptionCode). 실제와 겹치지 않을 값.
+  const CODE = '9999999999999'
   try {
     // 재고 5개짜리 가짜 스마레지 상품
     const sm = await prisma.smaregiProduct.create({
