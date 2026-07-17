@@ -100,6 +100,7 @@ export default function BackordersPage() {
   const [creating, setCreating]     = useState(false)
   const [lastResult, setLastResult] = useState<{ poNo: string; supplierCode: string; origin?: string; itemCount: number }[] | null>(null)
   const [confirmGroup, setConfirmGroup] = useState<{ ids: number[]; sc: string } | null>(null)  // 전체발주 확인 대상
+  const [confirmStocked, setConfirmStocked] = useState<number[] | null>(null)  // 재고 있는 품목이 섞였을 때 확인 대상
   // 백오더 단계 변형(옵션) 선택: orderItemId → {axes, list, sel}
   const [vData, setVData] = useState<Record<number, { axes: VariantAxis[]; list: VItem[]; sel: Record<string, string> } | 'none'>>({})
 
@@ -232,7 +233,18 @@ export default function BackordersPage() {
     }
   }
 
-  const createPO = () => submitPO(Array.from(selected))
+  // 스마레지에 재고가 있는데도 발주하려는 품목 — 있으면 발주 전에 한 번 물어본다.
+  // (재고가 이미 다른 주문에 배정됐을 수 있어 자동 제외는 하지 않는다. 판단은 사람이)
+  const stockedAmong = (ids: number[]) =>
+    items.filter(i => ids.includes(i.id) && i.smaregiStock && i.smaregiStock.total >= i.quantity)
+
+  const createPO = () => {
+    const ids = Array.from(selected)
+    if (ids.length === 0) return
+    const stocked = stockedAmong(ids)
+    if (stocked.length > 0) { setConfirmStocked(ids); return }   // 재고 있는 게 섞였다 → 확인
+    submitPO(ids)
+  }
 
   // 이 공급사 미발주 전체를 한 번에 발주 (확인 모달 후 진행)
   const createPOForGroup = (groupItems: BackorderItem[]) => {
@@ -723,8 +735,37 @@ export default function BackordersPage() {
         message={t.backorders.orderAllConfirm}
         confirmText={t.backorders.orderAllInGroup}
         cancelText={t.common.cancel}
-        onConfirm={() => { const g = confirmGroup; setConfirmGroup(null); if (g) submitPO(g.ids) }}
+        onConfirm={() => {
+          const g = confirmGroup
+          setConfirmGroup(null)
+          if (!g) return
+          // 전체 발주에도 재고 있는 품목이 섞일 수 있다 → 같은 확인을 한 번 더
+          if (stockedAmong(g.ids).length > 0) setConfirmStocked(g.ids)
+          else submitPO(g.ids)
+        }}
         onCancel={() => setConfirmGroup(null)}
+      />
+
+      {/* 재고가 있는데도 발주하려 할 때 — 자동으로 빼지 않고 사람에게 확인받는다.
+          스마레지 재고가 이미 다른 주문에 배정됐을 수 있어 앱이 단정할 수 없기 때문. */}
+      <ConfirmDialog
+        open={!!confirmStocked}
+        title={t.backorders.stockedWarnTitle}
+        message={
+          confirmStocked
+            ? `${t.backorders.stockedWarnMsg.replace('{n}', String(stockedAmong(confirmStocked).length))}\n\n` +
+              stockedAmong(confirmStocked).slice(0, 6).map(i =>
+                // 상품명이 먼저 와야 무엇인지 알 수 있다. 옵션은 뒤에 덧붙인다.
+                `· ${i.product.name.slice(0, 34)}${i.optionLabel ? ` (${i.optionLabel.slice(0, 20)})` : ''}\n` +
+                `   ${t.backorders.stockedWarnLine.replace('{s}', String(i.smaregiStock?.total)).replace('{q}', String(i.quantity))}`,
+              ).join('\n') +
+              (stockedAmong(confirmStocked).length > 6 ? `\n… +${stockedAmong(confirmStocked).length - 6}` : '')
+            : ''
+        }
+        confirmText={t.backorders.stockedWarnProceed}
+        cancelText={t.common.cancel}
+        onConfirm={() => { const ids = confirmStocked; setConfirmStocked(null); if (ids) submitPO(ids) }}
+        onCancel={() => setConfirmStocked(null)}
       />
 
       <ConfirmDialog
