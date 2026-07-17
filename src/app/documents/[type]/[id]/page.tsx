@@ -30,7 +30,7 @@ export default async function DocumentPage({
   const lang: DocLang = DOC_LANGS.includes(sp.lang as DocLang) ? (sp.lang as DocLang) : 'ja'
   const T = DOC_TEXT[lang]
   const yen = lang === 'ja' ? '円' : ''
-  const totalInclLabel = lang === 'ja' ? '合計金額（税込）' : lang === 'ko' ? '합계금액(세込)' : 'Total (incl.)'
+  const totalInclLabel = lang === 'ja' ? '合計金額（税込）' : lang === 'ko' ? '합계금액(세금 포함)' : 'Total (incl.)'
   const settings = await getSettings()
 
   // 발행처·계좌 프로필 (여러 개 중 ?issuer=N / ?bank=M 로 선택). 없으면 레거시 단일키 fallback.
@@ -237,21 +237,24 @@ export default async function DocumentPage({
         {/* intro */}
         <p className="mb-3">{T.intro[docType]}</p>
 
-        {/* 요약 박스: 件名 / 支払期限 / 合計金額(税込) */}
+        {/* 요약 박스: 件名 / 支払期限 / 合計金額(税込)
+            라벨 칸은 고정폭을 주지 않는다 — 「合計金額（税込）」·「합계금액(세금 포함)」처럼
+            언어마다 길이가 달라 고정폭(w-28)이면 접혀서 두 줄이 됐다. nowrap 으로 두면
+            가장 긴 라벨에 맞춰 칸이 알아서 넓어진다. */}
         <table className="w-[64%] mb-5 border-collapse">
           <tbody>
             <tr>
-              <th className={`${th} text-left w-28`}>{T.subject}</th>
+              <th className={`${th} text-left whitespace-nowrap`}>{T.subject}</th>
               <td className={cell}>{subject}</td>
             </tr>
             {dueRow && (
               <tr>
-                <th className={`${th} text-left`}>{dueRow.label}</th>
+                <th className={`${th} text-left whitespace-nowrap`}>{dueRow.label}</th>
                 <td className={cell}>{dueRow.value}</td>
               </tr>
             )}
             <tr>
-              <th className={`${th} text-left`}>{totalInclLabel}</th>
+              <th className={`${th} text-left whitespace-nowrap`}>{totalInclLabel}</th>
               {/* 청구서에서 제일 먼저 찾는 숫자 — 브랜드색으로 크게 */}
               <td className={`${cell} text-right font-bold text-lg tabular-nums`} style={{ color: ARICO_GREEN }}>{formatJpy(grandTotalIncl)} {yen}</td>
             </tr>
