@@ -6,7 +6,7 @@ import SupplierBadge from '@/components/SupplierBadge'
 import Link from 'next/link'
 import {
   TrendingUp, DollarSign, AlertCircle, Truck, Package, ShoppingCart,
-  ClipboardList, Banknote, AlertTriangle, Tag, Percent
+  ClipboardList, Banknote, AlertTriangle, Tag, Percent, Store, Warehouse
 } from 'lucide-react'
 import { useI18n } from '@/lib/i18n'
 
@@ -16,6 +16,8 @@ const SUPPLIER_NAMES: Record<string, Record<string, string>> = {
 }
 
 export type DashboardData = {
+  // 자사몰 수신·스마레지 동기화는 사람이 눌러야만 도는 작업 — 마지막 실행 시각
+  freshness?: { lastImportAt: string | null; lastSmaregiAt: string | null }
   monthlySales: number
   monthlyProfit: number
   monthlyMargin: number
@@ -120,7 +122,8 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
 
   const { monthlySales, monthlyProfit, monthlyMargin, monthlyOrderCount, salesMoM, profitMoM,
     marginMoMPts, procure, supplierPayable, overduePO, totalUnpaid, pendingShipment, overdueCount,
-    unpaidOrders, recentOrders, supplierStats, totalProducts, pricedProducts, unpricedBySupplier } = data
+    unpaidOrders, recentOrders, supplierStats, totalProducts, pricedProducts, unpricedBySupplier,
+    freshness } = data
   const statsMap: Record<string, number> = {}
   for (const s of supplierStats) statsMap[s.supplierCode] = s._count
   const unpriced: Record<string, number> = {}
@@ -150,8 +153,10 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
   const ops = [
     { label: t.dashboard.procureNeeded, value: procure.needed, icon: ClipboardList, cls: 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800/50 text-red-600 dark:text-red-400', href: '/backorders' },
     { label: t.dashboard.procureOrdered, value: procure.ordered, icon: Truck, cls: 'bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800/50 text-blue-600 dark:text-blue-400', href: '/backorders' },
-    { label: t.dashboard.shippingPending, value: pendingShipment, icon: Package, cls: 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-100 dark:border-yellow-800/50 text-yellow-600 dark:text-yellow-500', href: '/orders?status=confirmed' },
-    { label: t.dashboard.supplierPayable, value: supplierPayable.count, icon: Banknote, cls: 'bg-purple-50 dark:bg-purple-900/20 border-purple-100 dark:border-purple-800/50 text-purple-600 dark:text-purple-400', href: '/purchase-orders?status=confirmed' },
+    // 배송대기 → 주문관리의 「배송대기」 탭을 바로 연다(같은 정의)
+    { label: t.dashboard.shippingPending, value: pendingShipment, icon: Package, cls: 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-100 dark:border-yellow-800/50 text-yellow-600 dark:text-yellow-500', href: '/orders?tab=ready' },
+    // 재고확인 단계를 없앴으므로 지급 대기는 '발주완료(ordered)' 기준
+    { label: t.dashboard.supplierPayable, value: supplierPayable.count, icon: Banknote, cls: 'bg-purple-50 dark:bg-purple-900/20 border-purple-100 dark:border-purple-800/50 text-purple-600 dark:text-purple-400', href: '/purchase-orders?status=ordered' },
     { label: t.dashboard.overduePO, value: overduePO, icon: AlertTriangle, cls: 'bg-orange-50 dark:bg-orange-900/20 border-orange-100 dark:border-orange-800/50 text-orange-600 dark:text-orange-400', href: '/purchase-orders' },
     { label: t.dashboard.priceUnset, value: unpricedTotal, icon: Tag, cls: 'bg-gray-50 dark:bg-gray-700/40 border-gray-100 dark:border-gray-600 text-gray-600 dark:text-gray-300', href: '/products?noPrice=1' },
   ]
@@ -166,6 +171,31 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
         <p className="text-gray-600 dark:text-gray-400 text-sm mt-1 font-medium">
           {now.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })} {t.dashboard.subtitle}
         </p>
+      </div>
+
+      {/* 데이터 신선도 — 자사몰 수신·스마레지 동기화는 자동으로 돌지 않는다.
+          아무도 안 누르면 조용히 멈추므로, 마지막 실행이 오래됐으면 주황으로 알린다. */}
+      <div className="flex flex-wrap gap-2">
+        {([
+          { key: 'ms', label: t.dashboard.lastImport, at: freshness?.lastImportAt, href: '/makeshop', icon: Store },
+          { key: 'sm', label: t.dashboard.lastSmaregi, at: freshness?.lastSmaregiAt, href: '/inventory', icon: Warehouse },
+        ] as const).map(f => {
+          const hrs = f.at ? Math.floor((now.getTime() - new Date(f.at).getTime()) / 3600000) : null
+          const stale = hrs === null || hrs >= 24
+          const Icon = f.icon
+          return (
+            <Link key={f.key} href={f.href}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                stale
+                  ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800/50 text-orange-700 dark:text-orange-300 hover:bg-orange-100 dark:hover:bg-orange-900/30'
+                  : 'bg-gray-50 dark:bg-gray-700/40 border-gray-100 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}>
+              <Icon className="w-3.5 h-3.5 shrink-0" />
+              <span>{f.label}</span>
+              <span className="font-semibold">{hrs === null ? t.dashboard.neverRun : hrs < 1 ? t.dashboard.justNow : `${hrs}${t.dashboard.hoursAgo}`}</span>
+            </Link>
+          )
+        })}
       </div>
 
       {/* 기간 선택 토글 */}

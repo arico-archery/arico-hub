@@ -43,6 +43,8 @@ async function buildDashboard(range: string) {
     totalProducts,
     pricedProducts,
     unpricedGroups,
+    msImportSetting,
+    smaregiLatest,
   ] = await Promise.all([
     prisma.order.aggregate({
       where: periodWhere,
@@ -78,8 +80,13 @@ async function buildDashboard(range: string) {
       include: { customer: true },
       orderBy: { dueDate: 'asc' },
     }),
+    // 배송 대기 = 지금 바로 보낼 수 있는 주문. 주문관리 「배송대기」 탭과 같은 정의를 쓴다.
+    // (예전엔 status=pending/confirmed & 미발송이라, 물건도 안 들어온 주문까지 셌다)
     prisma.order.count({
-      where: { status: { in: ['confirmed', 'pending'] }, shippingDate: null, internal: false },
+      where: {
+        ...SALES_EXCLUDE, completedAt: null, shippingDate: null,
+        items: { some: {}, every: { procureStatus: 'received' } },
+      },
     }),
     prisma.order.findMany({
       take: 10,
@@ -102,6 +109,10 @@ async function buildDashboard(range: string) {
       where: { salePriceJpy: 0 },
       _count: true,
     }),
+    // 데이터 신선도 — 자사몰 수신·스마레지 동기화는 사람이 버튼을 눌러야만 돈다.
+    // 아무도 안 누르면 조용히 멈추므로 마지막 실행 시각을 대시보드에 보여준다.
+    prisma.setting.findUnique({ where: { key: 'makeshop_import_status' } }),
+    prisma.smaregiProduct.findFirst({ orderBy: { syncedAt: 'desc' }, select: { syncedAt: true } }),
   ])
 
   const monthlySales = monthOrders._sum.totalAmountJpy ?? 0
@@ -130,7 +141,18 @@ async function buildDashboard(range: string) {
   // 미결 중 연체 (dueDate 지남)
   const overdueOrders = unpaidOrders.filter((o) => o.dueDate && new Date(o.dueDate) < now)
 
+  // 마지막 자사몰 수신 시각 (수신 상태 JSON에서)
+  let lastImportAt: string | null = null
+  try {
+    const s = msImportSetting ? (JSON.parse(msImportSetting.value) as { finishedAt?: string }) : null
+    lastImportAt = s?.finishedAt ?? null
+  } catch { lastImportAt = null }
+
   return {
+    freshness: {
+      lastImportAt,                                            // 자사몰 주문 수신
+      lastSmaregiAt: smaregiLatest?.syncedAt?.toISOString() ?? null,  // 스마레지 재고
+    },
     monthlySales,
     monthlyProfit,
     monthlyMargin,

@@ -135,8 +135,12 @@ export default function OrdersPage() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const q = new URLSearchParams(window.location.search).get('q') ?? ''
+      const sp = new URLSearchParams(window.location.search)
+      const q = sp.get('q') ?? ''
       if (q) setSearchQ(q)
+      // 대시보드 「배송대기」 타일 등에서 탭을 직접 열 수 있게 (?tab=ready|done|active)
+      const tb = sp.get('tab')
+      if (tb === 'ready' || tb === 'done' || tb === 'active') setTab(tb)
     }
   }, [])
 

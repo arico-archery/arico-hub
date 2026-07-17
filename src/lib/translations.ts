@@ -157,6 +157,11 @@ const T = {
       overdue: '일 연체',
       due: '만기',
       unpaidCount: '건 미결제',
+      lastImport: '자사몰 수신',
+      lastSmaregi: '스마레지 동기화',
+      neverRun: '기록 없음',
+      justNow: '방금',
+      hoursAgo: '시간 전',
     },
     products: {
       title: '상품 관리',
@@ -1007,6 +1012,11 @@ const T = {
       overdue: '日延滞',
       due: '期限',
       unpaidCount: '件未払い',
+      lastImport: 'MakeShop取込',
+      lastSmaregi: 'スマレジ同期',
+      neverRun: '記録なし',
+      justNow: 'さっき',
+      hoursAgo: '時間前',
     },
     products: {
       title: '商品管理',
