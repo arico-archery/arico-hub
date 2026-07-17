@@ -59,7 +59,9 @@ function Sparkline({ values, color, labels, fmt, caption }: {
   const area = `${line} L${w} ${h} L0 ${h} Z`
   return (
     <div className="mt-2">
-      <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="w-full h-8">
+      {/* block + 명시적 height: SVG는 viewBox 비율(100:32)대로 세로를 늘리려 해서,
+          카드가 넓어지면 h-8(32px)을 무시하고 176px까지 자란다. 높이를 못 박는다. */}
+      <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="block w-full" style={{ height: 32 }}>
         <path d={area} fill={color} opacity={0.12} />
         <path d={line} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
         {/* 각 점에 마우스 올리면 월·값 툴팁 (투명 원으로 넓은 hover 영역) */}
@@ -148,7 +150,9 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
   const maxTrend = Math.max(...trend.map(m => m.sales), 1)
 
   return (
-    <div className="p-6 space-y-6">
+    // 넓은 모니터에서 카드가 한없이 늘어나 속이 비어 보이지 않도록 최대 너비를 준다
+    // (다른 화면들도 max-w-4xl/5xl 등으로 제한하고 있다)
+    <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t.dashboard.title}</h1>
         <p className="text-gray-600 dark:text-gray-400 text-sm mt-1 font-medium">
