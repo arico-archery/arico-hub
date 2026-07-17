@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useApiCache } from '@/lib/useApiCache'
-import { Search, RefreshCw, ChevronLeft, ChevronRight, Link2, Link2Off, X, Check, Wand2, ImageOff, Barcode, Languages, ScanLine, Layers, List, LayoutGrid, Plus, Pencil, Trash2 } from 'lucide-react'
+import { Search, RefreshCw, ChevronLeft, ChevronRight, Link2, Link2Off, X, Check, ImageOff, Barcode, Languages, ScanLine, Layers, List, LayoutGrid, Plus, Pencil, Trash2 } from 'lucide-react'
 import BarcodeScanner from '@/components/BarcodeScanner'
 import { formatNumber, SUPPLIER_COLORS } from '@/lib/utils'
 import Image from 'next/image'
@@ -271,15 +271,6 @@ function MatchModal({
   )
 }
 
-type PreviewItem = {
-  catName: string; translated?: string; prodName: string; supplier: string; score: number
-}
-type AutoMatchResult = {
-  matched: number; saved: number; priceApplied: number; lowScore: number; noSupplier: number
-  total: number; bySup: Record<string, number>; dryRun: boolean
-  preview?: PreviewItem[]
-} | null
-
 // ── 메인 페이지 ──────────────────────────────────────
 export default function CatalogPage() {
   const t = useT()
@@ -288,8 +279,6 @@ export default function CatalogPage() {
   const [page, setPage] = useState(1)
   const [modalItem, setModalItem] = useState<CatalogItem | null>(null)
   const [krwPerJpy] = useState(9.5)
-  const [autoMatching, setAutoMatching] = useState(false)
-  const [autoMatchResult, setAutoMatchResult] = useState<AutoMatchResult>(null)
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list')
   // 수동(이벤트) 상품 추가/편집
   const [editForm, setEditForm] = useState<{ id?: number; name: string; brand: string; priceJpy: string; point: string; imageUrl1: string } | null>(null)
@@ -425,28 +414,6 @@ export default function CatalogPage() {
     } catch { setBusyMsg('⚠️ error') } finally { setRefreshingId(null) }
   }
 
-  const handleAutoMatch = async (dryRun = false) => {
-    setAutoMatching(true)
-    setAutoMatchResult(null)
-    try {
-      const res = await fetch('/api/auto-match', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dryRun, threshold: 0.65 }),
-      })
-      const data = await res.json()
-      setAutoMatchResult(data)
-      if (!dryRun && data.saved > 0) {
-        // 결과 반영
-        fetchItems(page)
-        fetchStats()
-      }
-    } catch (e) {
-      console.error(e)
-    }
-    setAutoMatching(false)
-  }
-
   return (
     <div className="p-4">
       {/* 헤더 */}
@@ -480,24 +447,6 @@ export default function CatalogPage() {
           >
             <RefreshCw className={`w-3.5 h-3.5 ${msSyncing ? 'animate-spin' : ''}`} />
             {t.catalog.msSync}
-          </button>
-          <button
-            onClick={() => setConfirm({ title: t.catalog.previewConfirmTitle, message: t.catalog.previewConfirmMsg, confirmLabel: t.catalog.preview, onConfirm: () => handleAutoMatch(true) })}
-            disabled={autoMatching}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-medium hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
-            title={t.catalog.previewTooltip}
-          >
-            <Wand2 className="w-3.5 h-3.5" />
-            {t.catalog.preview}
-          </button>
-          <button
-            onClick={() => setConfirm({ title: t.catalog.autoMatchConfirmTitle, message: t.catalog.autoMatchConfirmMsg, confirmLabel: t.catalog.autoMatch, onConfirm: () => handleAutoMatch(false) })}
-            disabled={autoMatching}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-            title={t.catalog.autoMatchTooltip}
-          >
-            {autoMatching ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
-            {t.catalog.autoMatch}
           </button>
         </div>
       </div>
@@ -554,46 +503,6 @@ export default function CatalogPage() {
         <div className="mb-3 p-3 rounded-xl text-sm flex items-center justify-between gap-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/50 text-indigo-800 dark:text-indigo-200">
           <span>{t.catalog.msSync}: {msResult}</span>
           <button onClick={() => setMsResult(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 shrink-0"><X className="w-4 h-4" /></button>
-        </div>
-      )}
-      {autoMatchResult && (
-        <div className={`mb-3 p-3 rounded-xl text-sm flex items-start justify-between gap-4 ${autoMatchResult.dryRun ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200' : 'bg-green-50 dark:bg-green-900/20 border border-green-200'}`}>
-          <div>
-            <p className="font-semibold text-gray-800 dark:text-gray-100">
-              {autoMatchResult.dryRun ? t.catalog.previewResultLabel : t.catalog.autoMatchDoneLabel}
-              {' — '}
-              {autoMatchResult.dryRun
-                ? `${t.catalog.matchablePrefix} ${autoMatchResult.matched}${t.common.items} (${t.catalog.unsaved})`
-                : `${autoMatchResult.saved}${t.common.items} ${t.common.saved}${autoMatchResult.priceApplied > 0 ? ` · ${autoMatchResult.priceApplied}${t.common.items} ${t.catalog.priceAutoApplied}` : ''}`}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              {t.catalog.targetLabel} {autoMatchResult.total}{t.common.items} | {t.catalog.lowScoreLabel} {autoMatchResult.lowScore}{t.common.items} | {t.catalog.noSupplierLabel} {autoMatchResult.noSupplier}{t.common.items}
-            </p>
-            {Object.keys(autoMatchResult.bySup).length > 0 && (
-              <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
-                {Object.entries(autoMatchResult.bySup).sort((a, b) => b[1] - a[1]).map(([s, n]) => `${s}: ${n}`).join(' · ')}
-              </p>
-            )}
-            {/* JVD 카타카나 변환 미리보기 */}
-            {autoMatchResult.preview && autoMatchResult.preview.some(p => p.translated) && (
-              <div className="mt-2 space-y-0.5">
-                <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400">{t.catalog.jvdKatakanaSample}</p>
-                {autoMatchResult.preview.filter(p => p.translated).slice(0, 5).map((p, i) => (
-                  <div key={i} className="text-[10px] text-gray-500 dark:text-gray-400 flex gap-1 flex-wrap">
-                    <span className="text-gray-700 dark:text-gray-200">{p.catName}</span>
-                    <span>→</span>
-                    <span className="text-blue-600 dark:text-blue-400 font-medium">{p.translated}</span>
-                    <span className="text-gray-400">≈</span>
-                    <span className="text-green-600 dark:text-green-400">{p.prodName}</span>
-                    <span className="text-gray-400">({(p.score * 100).toFixed(0)}%)</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <button onClick={() => setAutoMatchResult(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 shrink-0">
-            <X className="w-4 h-4" />
-          </button>
         </div>
       )}
 
