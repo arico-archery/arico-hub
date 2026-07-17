@@ -194,8 +194,8 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
         </div>
       </div>
 
-      {/* A. 핵심 KPI 4 + 스파크라인 */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* A. 핵심 KPI 3 + 스파크라인 (카드 수에 칼럼을 맞춰 빈 칸이 생기지 않게) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {kpis.map(({ label, value, icon: Icon, mom, sub, spark, sparkLabels, sparkFmt, color, href }) => (
           <Link key={label} href={href} className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-100 dark:border-gray-700/60 hover:border-gray-200 dark:hover:border-gray-600 transition-colors group block">
             <div className="flex items-center justify-between gap-2">
@@ -224,7 +224,8 @@ export default function DashboardClient({ initialData }: { initialData: Dashboar
             {t.dashboard.operationStatus}
           </h2>
         </div>
-        <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
+        {/* 타일 5개 — 칼럼을 개수에 맞춰 빈 칸 없이 채운다 */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {ops.map(({ label, value, icon: Icon, cls, href }) => (
             <Link key={label} href={href} className={`rounded-lg p-3 border ${cls} hover:opacity-80 transition-opacity flex flex-col items-center text-center gap-1`}>
               <Icon className="w-4 h-4" />
