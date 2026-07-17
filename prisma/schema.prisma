@@ -142,6 +142,9 @@ model OrderItem {
   costPriceJpy    Float          // cost price in JPY at time of order
   // 조달 상태: needed(미발주) | ordered(발주완료) | received(입고완료)
   procureStatus   String         @default("needed")
+  // 스마레지 매장 재고로 충당한 품목(=발주하지 않음). 자체제작·발주입고와 구분하기 위한 표식.
+  // 같은 재고를 다음 주문이 또 쓰지 않도록 "미발송 충당분"을 계산하는 근거가 된다.
+  stockAllocated  Boolean        @default(false)
   optionMemo      String         @default("")  // 사이즈/컬러/기타 비고 (예: LH, シルバー 280, 赤). MakeShop 주문은 옵션코드(variationCustomCode)
   optionLabel     String         @default("")  // 사람이 읽는 옵션 — 스마레지로 코드 해석(예: レッド, RH/ピンク). 없으면 optionMemo 표시
   shopProductName String         @default("")  // 고객이 실제 주문한 자사몰(MakeShop) 상품명 — 공급사 상품명(일반명)과 달라 변형정보를 담음
@@ -213,7 +216,7 @@ model PurchaseOrderItem {
   productId        Int
   product          Product       @relation(fields: [productId], references: [id])
   quantity         Int           @default(1)             // 발주 수량
-  confirmedQty     Int?                                  // 제조사 확정 수량(재고확인). null=미확인, 0=품절
+  confirmedQty     Int?                                  // 실제 확보된 수량. null=미확정, 0=품절
   receivedQty      Int           @default(0)             // 입고 수량
   unitCostJpy      Float         @default(0)             // 발주 당시 단가(JPY)
   memo             String        @default("")

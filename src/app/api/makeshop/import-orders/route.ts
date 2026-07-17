@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { maxCustomerSeq } from '@/lib/seq'
 import { calcCostJpy } from '@/lib/utils'
 import { resolveOptionLabels, extractOptionCode } from '@/lib/smaregi-option'
+import { availableByCode, allocate } from '@/lib/stock-allocate'
 import {
   getAllOrdersDetailed, fmtOrderDate,
   memberPostal, memberAddress,
@@ -281,6 +282,9 @@ export async function runImport(days: number, win?: { start: string; end: string
     }
 
     let created = 0, skipped = 0, etcCreated = 0, custCreated = 0, custUpdated = 0
+    // 투 트랙 판정용 가용 재고 — 수신 중 여러 주문이 같은 상품을 원하면 순서대로 깎아 나간다
+    const avail = await availableByCode()
+    let stockCovered = 0
     const etcSeen = new Set<string>()
     const custSynced = new Set<string>()   // 이번 실행에서 갱신한 회원(중복 update 방지)
     // 주문번호 시퀀스: 한 번만 조회(주문마다 findFirst 왕복 제거 = 타임아웃 완화)
@@ -318,16 +322,32 @@ export async function runImport(days: number, win?: { start: string; end: string
       // 품목 데이터 (미매칭은 ETC 상품으로).
       // 배송완료·취소 주문은 이미 발주·입고 끝난 것 → 조달상태 received(백오더 제외).
       const baseProcure = (r.orderStatus === 'delivered' || r.orderStatus === 'cancelled') ? 'received' : 'needed'
-      const itemsData: { productId: number; quantity: number; salePriceJpy: number; costPriceJpy: number; optionMemo: string; optionLabel: string; shopProductName: string; procureStatus: string }[] = []
+      const itemsData: { productId: number; quantity: number; salePriceJpy: number; costPriceJpy: number; optionMemo: string; optionLabel: string; shopProductName: string; procureStatus: string; stockAllocated?: boolean }[] = []
       for (const it of r.items) {
         const prod = await resolveProduct(it.productCode, it.productName, it.price)
         if (!it.matched && !etcSeen.has(it.productCode)) { etcSeen.add(it.productCode); etcCreated++ }
         // ARICO = 자체제작·서비스(STRING/핑거슬링/加工費 등) → 공급사 발주 대상 아님 → 백오더 제외
-        const procureStatus = prod.supplierCode === SELF_MADE_SUPPLIER ? 'received' : baseProcure
+        const isSelfMade = prod.supplierCode === SELF_MADE_SUPPLIER
+        const procureStatus = isSelfMade ? 'received' : baseProcure
         const costJpy = Math.round(calcCostJpy(prod, rates))
         // 옵션 라벨: 옵션그룹 선택값(customSelects) 우선, 없으면 옵션코드→스마레지 해석
         const optionLabel = it.customLabel || optLabelMap.get(extractOptionCode(it.option) || '') || ''
-        itemsData.push({ productId: prod.id, quantity: it.amount, salePriceJpy: Math.round(it.price), costPriceJpy: costJpy, optionMemo: it.option, optionLabel, shopProductName: it.productName || '', procureStatus })
+        const base = { productId: prod.id, salePriceJpy: Math.round(it.price), costPriceJpy: costJpy, optionMemo: it.option, optionLabel, shopProductName: it.productName || '' }
+
+        // 투 트랙: 스마레지 매장 재고로 채울 수 있으면 발주하지 않는다.
+        // 이미 백오더 대상이 아닌 것(자체제작·배송완료·취소분)은 건드리지 않는다.
+        if (isSelfMade || baseProcure !== 'needed') {
+          itemsData.push({ ...base, quantity: it.amount, procureStatus })
+          continue
+        }
+        const { fromStock, toOrder } = allocate(avail, it.option, it.amount)
+        // 재고로 가는 몫 — 발주 없이 바로 보낼 수 있다
+        if (fromStock > 0) {
+          itemsData.push({ ...base, quantity: fromStock, procureStatus: 'received', stockAllocated: true })
+          stockCovered += fromStock
+        }
+        // 모자란 몫만 백오더로 (재고가 일부만 있으면 두 줄로 갈라진다)
+        if (toOrder > 0) itemsData.push({ ...base, quantity: toOrder, procureStatus: 'needed' })
       }
       const subtotal = itemsData.reduce((s, it) => s + it.salePriceJpy * it.quantity, 0)
       const totalCost = itemsData.reduce((s, it) => s + it.costPriceJpy * it.quantity, 0)
@@ -390,8 +410,8 @@ export async function runImport(days: number, win?: { start: string; end: string
 
     skipped = rows.filter(r => r.dup).length
     const partial = rows.filter(r => !r.dup && !r.allMatched).length
-    await writeStatus({ state: 'done', days, startedAt, finishedAt: new Date().toISOString(), created, dup: skipped, partial, custCreated, custUpdated, optionFilled, refreshed })
-    return { ok: true, created, skipped, dup: skipped, etcCreated, custCreated, custUpdated, partial, optionFilled, refreshed }
+    await writeStatus({ state: 'done', days, startedAt, finishedAt: new Date().toISOString(), created, dup: skipped, partial, custCreated, custUpdated, optionFilled, refreshed, stockCovered })
+    return { ok: true, created, skipped, dup: skipped, etcCreated, custCreated, custUpdated, partial, optionFilled, refreshed, stockCovered }
   } catch (e) {
     const err = e instanceof MakeshopError ? { error: e.message, detail: e.detail } : { error: String(e) }
     await writeStatus({ state: 'error', days, startedAt, finishedAt: new Date().toISOString(), created: 0, dup: 0, partial: 0, error: String(err.error) }).catch(() => {})
