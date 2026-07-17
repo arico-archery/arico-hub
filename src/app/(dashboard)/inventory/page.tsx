@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Warehouse, RefreshCw, Search, X, AlertTriangle } from 'lucide-react'
+import { Warehouse, RefreshCw, Search, X, AlertTriangle, PackageCheck } from 'lucide-react'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { useT } from '@/lib/i18n'
 import { formatJpy } from '@/lib/utils'
@@ -20,7 +20,8 @@ export default function InventoryPage() {
   const [data, setData] = useState<Resp | null>(null)
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
-  const [lowOnly, setLowOnly] = useState(false)
+  // 재고 필터: 전체 / 재고 있음(>0) / 재고 없음(≤0). 토글 두 개면 둘 다 켜는 모순이 생겨 3택으로 둔다.
+  const [stockFilter, setStockFilter] = useState<'all' | 'in' | 'low'>('all')
   const [page, setPage] = useState(1)
   const [confirm, setConfirm] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -30,14 +31,14 @@ export default function InventoryPage() {
     setLoading(true)
     const p = new URLSearchParams({ page: String(page), limit: '50' })
     if (q) p.set('q', q)
-    if (lowOnly) p.set('lowOnly', '1')
+    if (stockFilter !== 'all') p.set('stock', stockFilter)
     const res = await fetch(`/api/smaregi/inventory?${p}`)
     setData(await res.json())
     setLoading(false)
-  }, [q, lowOnly, page])
+  }, [q, stockFilter, page])
 
   useEffect(() => { load() }, [load])
-  useEffect(() => { setPage(1) }, [q, lowOnly])
+  useEffect(() => { setPage(1) }, [q, stockFilter])
 
   // 스마레지 동기화 — 커서 따라 반복 호출
   const runSync = async () => {
@@ -123,12 +124,31 @@ export default function InventoryPage() {
           />
           {q && <button onClick={() => setQ('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600"><X className="w-3.5 h-3.5" /></button>}
         </div>
-        <button
-          onClick={() => setLowOnly(v => !v)}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${lowOnly ? 'bg-red-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200'}`}
-        >
-          <AlertTriangle className="w-3.5 h-3.5" />{t.inventory.lowOnly}
-        </button>
+        {/* 재고 필터 — 전체 / 재고 있음 / 재고 없음 */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{t.inventory.stockFilter}</span>
+          <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden">
+            {([
+              ['all', t.common.all, ''],
+              ['in', t.inventory.inStockOnly, 'bg-emerald-600'],
+              ['low', t.inventory.lowOnly, 'bg-red-600'],
+            ] as const).map(([v, label, active]) => (
+              <button
+                key={v}
+                onClick={() => setStockFilter(v)}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-r last:border-r-0 border-gray-200 dark:border-gray-600 ${
+                  stockFilter === v
+                    ? `${active || 'bg-slate-700'} text-white`
+                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                }`}
+              >
+                {v === 'low' && <AlertTriangle className="w-3.5 h-3.5" />}
+                {v === 'in' && <PackageCheck className="w-3.5 h-3.5" />}
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* 테이블 */}

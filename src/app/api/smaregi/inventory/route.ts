@@ -7,7 +7,12 @@ export async function GET(req: Request) {
   const q = (searchParams.get('q') ?? '').trim()
   const page = Math.max(1, Number(searchParams.get('page')) || 1)
   const limit = Math.min(100, Math.max(1, Number(searchParams.get('limit')) || 50))
-  const lowOnly = searchParams.get('lowOnly') === '1'   // 재고 부족(≤0)만
+  // 재고 필터: all(전체) | in(있음 >0) | low(없음·부족 ≤0)
+  // lowOnly=1 은 예전 파라미터 — 기존 링크·북마크가 깨지지 않게 함께 받는다.
+  const stockRaw = searchParams.get('stock') ?? (searchParams.get('lowOnly') === '1' ? 'low' : 'all')
+  const stockFilter = stockRaw === 'in' ? { stock: { gt: 0 } }
+    : stockRaw === 'low' ? { stock: { lte: 0 } }
+    : {}
 
   const where = {
     ...(q ? { OR: [
@@ -15,7 +20,7 @@ export async function GET(req: Request) {
       { productCode: { contains: q, mode: 'insensitive' as const } },
       { size: { contains: q, mode: 'insensitive' as const } },
     ] } : {}),
-    ...(lowOnly ? { stock: { lte: 0 } } : {}),
+    ...stockFilter,
   }
 
   const [rows, total, lastSync, stats] = await Promise.all([
