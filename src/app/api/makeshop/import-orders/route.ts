@@ -4,6 +4,7 @@ import { maxCustomerSeq } from '@/lib/seq'
 import { calcCostJpy } from '@/lib/utils'
 import { resolveOptionLabels, extractOptionCode } from '@/lib/smaregi-option'
 import { availableByCode, allocate } from '@/lib/stock-allocate'
+import { fixOptionAxes } from '@/lib/option-label'
 import {
   getAllOrdersDetailed, fmtOrderDate,
   memberPostal, memberAddress,
@@ -59,13 +60,14 @@ type PreviewItem = { productCode: string; productName: string; variationCustomCo
 //  ① variationName(베리에이션/옵션그룹, 예 "カラー : ブラック 左右 : LH")
 //  ② customSelects(커스텀셀렉트, ARICO STRING의 原糸/サービング 등)
 // 둘 다 없으면 옵션코드→스마레지 해석(호출부에서 처리).
+// 자사몰 옵션 그룹 이름이 잘못 지어진 경우(リム의 파운드가 「カラー」로 되어 있음)는 fixOptionAxes로 교정.
 function basketOptionLabel(b: { variationName?: string; customSelects?: { customSelectName: string; selectedItemName: string }[] }): string {
   const v = (b.variationName || '').replace(/\s+/g, ' ').trim()
-  if (v) return v
-  return (b.customSelects || [])
+  if (v) return fixOptionAxes(v)
+  return fixOptionAxes((b.customSelects || [])
     .map(c => `${(c.customSelectName || '').trim()}: ${(c.selectedItemName || '').trim()}`)
     .filter(s => s !== ': ')
-    .join(' / ')
+    .join(' / '))
 }
 
 // MakeShop basket에서 옵션(색/사이즈 등) 추출. 우선 variationCustomCode, 없으면 빈값.
