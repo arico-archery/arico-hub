@@ -209,10 +209,20 @@ export function memberPostal(m?: MakeshopMemberDetail | null): string {
   return z.length === 7 ? `${z.slice(0, 3)}-${z.slice(3)}` : z
 }
 // 회원 주소 = 도도부현/시구정촌 + 상세주소(それ以降の住所)까지 전부 결합. 중복 접두는 제거.
+// MakeShop의 도도부현 표기에는 배송구분이 괄호로 붙는다: 「東京(23区内)」「東京(23区外)」.
+// 고객에게 나가는 청구서에 배송구분이 찍히면 어색하므로 정식 명칭으로 바꾼다.
+export function normalizePrefecture(s: string): string {
+  const t = String(s || '').trim()
+  if (/^東京[(（]/.test(t)) return '東京都'          // 東京(23区内) / 東京(23区外) → 東京都
+  return t.replace(/[(（][^)）]*[)）]/g, '').trim()  // 그 밖의 괄호 주석 제거
+}
+
 export function memberAddress(m?: MakeshopMemberDetail | null): string {
   if (!m) return ''
+  // haddress1 은 주소가 아니라 MakeShop의 도도부현 코드(東京23区内=13, 神奈川=15 …)다.
+  // 예전에는 이걸 주소 뒤에 붙여 「東京(23区内) 江戸川区南葛西 13」처럼 저장됐다 → 쓰지 않는다.
   const acc: string[] = []
-  for (const raw of [m.haddressAddr, m.haddress2, m.haddress1]) {
+  for (const raw of [normalizePrefecture(m.haddressAddr), m.haddress2]) {
     const p = (raw || '').trim()
     if (!p) continue
     if (acc.length) {

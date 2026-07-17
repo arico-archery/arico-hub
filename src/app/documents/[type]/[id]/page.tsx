@@ -171,11 +171,15 @@ export default async function DocumentPage({
   const totalQty = rows.reduce((s, r) => s + r.qty, 0)
   const dueRow = dateRows[1] || null
   const bp = bankProfiles[bankIdx] || {}
-  const bankLine = [
-    bp.bank_name || settings.bank_name, bp.bank_branch || settings.bank_branch,
-    bp.bank_account_type || settings.bank_account_type, bp.bank_account_no || settings.bank_account_no,
-    bp.bank_account_holder || settings.bank_account_holder,
-  ].filter(Boolean).join('  ')
+  // 입금처는 값만 이어붙이면 「GMOあおぞらネット銀行 法人営業部 普通 1890883 カ）…」처럼
+  // 어디까지가 지점이고 어디부터 계좌번호인지 읽히지 않는다 → 항목마다 라벨을 붙여 띄운다.
+  const bankFields = [
+    { label: T.bankName, value: bp.bank_name || settings.bank_name },
+    { label: T.bankBranch, value: bp.bank_branch || settings.bank_branch },
+    { label: T.bankAccountType, value: bp.bank_account_type || settings.bank_account_type },
+    { label: T.bankAccountNo, value: bp.bank_account_no || settings.bank_account_no },
+    { label: T.bankAccountHolder, value: bp.bank_account_holder || settings.bank_account_holder },
+  ].filter(f => f.value)
   const bankNote = bp.bank_note || settings.bank_note || ''
 
   const cell = 'border border-gray-400 px-2 py-1.5'
@@ -342,14 +346,22 @@ export default async function DocumentPage({
         </div>
 
         {/* 振込先 (청구서만) */}
-        {showBank && bankLine && (
+        {showBank && bankFields.length > 0 && (
           <div className="border border-gray-300 rounded p-3 mb-3 text-[12px]">
-            <p className="font-semibold mb-1">
+            <p className="font-semibold mb-1.5">
               {T.bankTitle}
               <span className="font-normal text-gray-500 ml-3">{T.transferFeeNote}</span>
             </p>
-            <p className="text-gray-800">{bankLine}</p>
-            {bankNote && <p className="text-gray-500 text-[11px] mt-0.5">{bankNote}</p>}
+            {/* 항목별 라벨 + 값. 좁으면 줄바꿈되지만 라벨이 있어 어디까지가 무엇인지 읽힌다. */}
+            <div className="flex flex-wrap gap-x-6 gap-y-1">
+              {bankFields.map(f => (
+                <span key={f.label} className="whitespace-nowrap">
+                  <span className="text-gray-500 mr-1.5">{f.label}</span>
+                  <span className="text-gray-900 font-medium">{f.value}</span>
+                </span>
+              ))}
+            </div>
+            {bankNote && <p className="text-gray-500 text-[11px] mt-1">{bankNote}</p>}
           </div>
         )}
 
