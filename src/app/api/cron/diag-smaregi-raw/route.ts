@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import crypto from 'node:crypto'
-import { smaregiGet, smaregiConfigured, SmaregiError } from '@/lib/smaregi'
+import { smaregiGet, smaregiConfigured } from '@/lib/smaregi'
 
 export const maxDuration = 60
 
 // 스마레지 원본 재고를 그대로 확인하는 일회성 진단(운영자용). HMAC 보호. 읽기 전용.
-// ?productId=5137 — 음수 재고가 스마레지가 주는 값인지, 우리 동기화 탓인지 가리기 위함.
+// 음수 재고가 스마레지가 주는 값인지, 우리 동기화 탓인지 가리기 위함.
+// 파라미터 표기를 몰라서 후보를 순서대로 시도하고, 통한 것을 알려준다.
 export async function GET(req: Request) {
   const secret = process.env.AUTH_SECRET || ''
   if (!secret) return NextResponse.json({ error: 'server_not_configured' }, { status: 500 })
@@ -16,17 +17,31 @@ export async function GET(req: Request) {
   if (!ok) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   if (!smaregiConfigured()) return NextResponse.json({ ok: false, error: 'not_configured' }, { status: 503 })
 
-  const productId = url.searchParams.get('productId') || ''
-  if (!productId) return NextResponse.json({ ok: false, error: 'productId 필요' }, { status: 400 })
+  const pid = url.searchParams.get('productId') || '5137'
+  const tries: Record<string, unknown> = {}
 
-  try {
-    // 해당 상품의 매장별 재고 원본
-    const stock = await smaregiGet<unknown[]>('/pos/stock', { product_id: productId, limit: 50 })
-    // 상품 정보도 함께
-    const prod = await smaregiGet<unknown[]>('/pos/products', { product_id: productId, limit: 5 })
-    return NextResponse.json({ ok: true, productId, 재고원본: stock, 상품원본: prod })
-  } catch (e) {
-    const err = e instanceof SmaregiError ? { error: e.message } : { error: String(e) }
-    return NextResponse.json({ ok: false, ...err }, { status: 502 })
+  const attempt = async (label: string, params: Record<string, string | number>) => {
+    try {
+      const r = await smaregiGet<unknown[]>('/pos/stock', params)
+      tries[label] = { ok: true, count: Array.isArray(r) ? r.length : 0, sample: Array.isArray(r) ? r.slice(0, 4) : r }
+    } catch (e) {
+      tries[label] = { ok: false, error: String(e).slice(0, 80) }
+    }
   }
+
+  await attempt('product_id', { product_id: pid, limit: 20 })
+  await attempt('productId', { productId: pid, limit: 20 })
+  await attempt('product_id-like', { 'product_id-like': pid, limit: 20 })
+
+  // 필터가 전부 안 되면: 필터 없이 페이지를 훑어 해당 productId를 찾는다
+  let found: unknown = null
+  if (!Object.values(tries).some(t => (t as { ok: boolean }).ok)) {
+    for (let page = 1; page <= 60 && !found; page++) {
+      const rows = await smaregiGet<{ productId?: string }[]>('/pos/stock', { limit: 1000, page })
+      const hit = rows.filter(r => String(r.productId) === pid)
+      if (hit.length) found = { page, rows: hit }
+      if (rows.length < 1000) break
+    }
+  }
+  return NextResponse.json({ ok: true, productId: pid, tries, foundByScan: found })
 }
