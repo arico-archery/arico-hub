@@ -17,7 +17,10 @@ async function buildAnalytics(rangeParam: string) {
     startFrom = new Date(now.getFullYear(), 0, 1)
     monthCount = now.getMonth() + 1
   } else if (rangeParam === 'all') {
-    monthCount = 24
+    // 가장 오래된 주문이 있는 달부터 — 24개월 고정이면 주문이 없는 달까지 빈 막대로 붙는다.
+    const first = await prisma.order.findFirst({ orderBy: { orderDate: 'asc' }, select: { orderDate: true } })
+    const d = first?.orderDate ?? now
+    monthCount = Math.min(60, Math.max(1, (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth()) + 1))
   }
 
   const months = Array.from({ length: monthCount }, (_, i) => {

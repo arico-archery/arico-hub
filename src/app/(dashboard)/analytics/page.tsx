@@ -36,7 +36,9 @@ type AnalyticsData = {
   topCustomers: TopCustomer[]
 }
 
-const RANGE_KEYS = ['6m', '12m', 'ytd', 'all'] as const
+// 올해가 기본 — 자사몰 주문이 2026-01부터라 '올해'가 곧 우리가 가진 전부이고,
+// 1월부터 봐야 연간 흐름이 읽힌다. (예전 기본 '최근 6개월'은 1월이 잘려 보였다)
+const RANGE_KEYS = ['ytd', '6m', '12m', 'all'] as const
 type Range = typeof RANGE_KEYS[number]
 const HEAD = 5   // 목록 기본 표시 개수 (나머지는 '더 보기')
 
@@ -55,7 +57,7 @@ function MoreToggle({ total, expanded, onToggle, moreLabel, lessLabel }: {
 
 export default function AnalyticsPage() {
   const t = useT()
-  const [range, setRange] = useState<Range>('6m')
+  const [range, setRange] = useState<Range>('ytd')
   const [data, setData] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})   // 섹션별 '더 보기' 상태
