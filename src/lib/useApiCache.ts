@@ -42,6 +42,10 @@ export function useApiCache<T = unknown>(url: string | null, opts: Options = {})
   const [error, setError] = useState<unknown>(null)
   const [isLoading, setIsLoading] = useState<boolean>(() => !!url && !cache.has(url))
   const mounted = useRef(true)
+  // 지금 화면이 기다리는 URL. 응답이 늦게 온 옛 요청이 화면을 덮어쓰지 못하게 막는 표식.
+  // (예: 검색어 없이 한 번 → 검색어로 또 한 번 → 앞의 응답이 나중에 도착하면 검색이 풀려 보였다)
+  const currentUrl = useRef(url)
+  currentUrl.current = url
 
   useEffect(() => {
     mounted.current = true
@@ -62,16 +66,17 @@ export function useApiCache<T = unknown>(url: string | null, opts: Options = {})
       if (!force && cached !== undefined && Date.now() - last < dedupeMs) return
       try {
         const fresh = (await fetchJson(url)) as T
-        cache.set(url, fresh)
+        cache.set(url, fresh)          // 캐시에는 남긴다 — 그 URL로 돌아오면 즉시 표시
         lastFetched.set(url, Date.now())
-        if (mounted.current) {
+        // 화면 반영은 "지금 보고 있는 URL"의 응답만. 늦게 온 옛 요청은 버린다.
+        if (mounted.current && currentUrl.current === url) {
           setData(fresh)
           setError(null)
         }
       } catch (e) {
-        if (mounted.current) setError(e)
+        if (mounted.current && currentUrl.current === url) setError(e)
       } finally {
-        if (mounted.current) setIsLoading(false)
+        if (mounted.current && currentUrl.current === url) setIsLoading(false)
       }
     },
     [url, dedupeMs],
