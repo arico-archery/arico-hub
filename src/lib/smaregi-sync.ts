@@ -51,7 +51,9 @@ export async function syncStockPage(page: number): Promise<{ count: number; done
   const byId = new Map<string, { total: number; tokyo: number; aichi: number }>()
   for (const s of stock) {
     const pid = String(s.productId)
-    const amt = Math.round(Number(s.stockAmount) || 0)
+    // 取り置き(layaway)는 이미 손님에게 예약된 몫이라 쓸 수 없다 → 가용 재고에서 뺀다.
+    // 예: 도쿄 재고 3 · 取り置き 2 → 실제로 쓸 수 있는 건 1.
+    const amt = Math.round(Number(s.stockAmount) || 0) - Math.round(Number(s.layawayStockAmount) || 0)
     const sid = String(s.storeId ?? '')
     const cur = byId.get(pid) || { total: 0, tokyo: 0, aichi: 0 }
     cur.total += amt
