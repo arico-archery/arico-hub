@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { formatJpy } from '@/lib/utils'
 import { DOC_TEXT, DOC_LANGS, DocLang, DocType, fmtDocDate, fmtDocDateShort, fmtDocDatePadded, inclusiveTax, cleanDocText, cleanDocOption } from '@/lib/documents'
 import DocToolbar from './DocToolbar'
+import Logo, { ARICO_GREEN } from '@/components/Logo'
 
 async function getSettings(): Promise<Record<string, string>> {
   try {
@@ -182,8 +183,11 @@ export default async function DocumentPage({
   ].filter(f => f.value)
   const bankNote = bp.bank_note || settings.bank_note || ''
 
-  const cell = 'border border-gray-400 px-2 py-1.5'
-  const th = `${cell} bg-gray-100 font-semibold`
+  const cell = 'border border-gray-300 px-2 py-1.5'
+  // 표 머리는 브랜드 초록 톤. 인쇄에서 배경색이 날아가지 않게 print-color-adjust 를 켠다.
+  const th = `${cell} bg-[#eaf3ee] text-[#2f7d55] font-semibold [print-color-adjust:exact] [-webkit-print-color-adjust:exact]`
+  // 품목 줄 교대 음영 — 줄이 많아도 눈이 가로로 따라간다.
+  const zebra = 'even:bg-gray-50 [print-color-adjust:exact] [-webkit-print-color-adjust:exact]'
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-slate-900 p-6 print:bg-white print:p-0">
@@ -193,14 +197,19 @@ export default async function DocumentPage({
 
       {/* print-page: 인쇄 시 문서 자체가 페이지 여백을 갖는다(@page margin:0 → 브라우저 머리글·바닥글 제거) */}
       <div className="print-page max-w-[820px] mx-auto bg-white text-gray-900 shadow-lg rounded-md print:shadow-none print:rounded-none p-8 print:p-6 text-[13px] leading-relaxed" id="document">
-        {/* 제목 */}
-        <h1 className="text-center text-2xl font-bold tracking-[0.4em] mb-6">{T.title[docType]}</h1>
+        {/* 헤더: 로고(좌) + 문서명(가운데). 오른쪽 빈 칸은 제목을 지면 가운데에 두기 위한 균형추 —
+            제목이 가운데 오는 건 일본 청구서 관행이라 로고를 넣어도 유지한다. */}
+        <div className="flex items-center justify-between gap-4 border-b-[3px] mb-4 pb-2.5" style={{ borderColor: ARICO_GREEN }}>
+          <div className="w-[110px] shrink-0"><Logo size={22} /></div>
+          <h1 className="text-2xl font-bold tracking-[0.4em] leading-none" style={{ color: ARICO_GREEN }}>{T.title[docType]}</h1>
+          <div className="w-[110px] shrink-0" aria-hidden="true" />
+        </div>
 
         {/* 상단: 수신(좌) + 문서정보·발행처(우) */}
         <div className="flex justify-between gap-8 mb-4">
           <div className="flex-1 min-w-0 pt-1">
             {recipientOrg && <p className="text-[12px] text-gray-600 leading-tight">{recipientOrg}</p>}
-            <p className="text-lg font-bold border-b-2 border-gray-800 pb-1 inline-block">{recipientName} {recipientHonorific}</p>
+            <p className="text-lg font-bold border-b-2 pb-1 inline-block" style={{ borderColor: ARICO_GREEN }}>{recipientName} {recipientHonorific}</p>
             <div className="mt-2 space-y-0.5 text-gray-700 text-[12px]">
               {recipientLines.map((l, i) => <p key={i}>{l}</p>)}
             </div>
@@ -243,7 +252,8 @@ export default async function DocumentPage({
             )}
             <tr>
               <th className={`${th} text-left`}>{totalInclLabel}</th>
-              <td className={`${cell} text-right font-bold text-base`}>{formatJpy(grandTotalIncl)} {yen}</td>
+              {/* 청구서에서 제일 먼저 찾는 숫자 — 브랜드색으로 크게 */}
+              <td className={`${cell} text-right font-bold text-lg tabular-nums`} style={{ color: ARICO_GREEN }}>{formatJpy(grandTotalIncl)} {yen}</td>
             </tr>
           </tbody>
         </table>
@@ -262,7 +272,7 @@ export default async function DocumentPage({
             </thead>
             <tbody>
               {rows.map((r, i) => (
-                <tr key={i}>
+                <tr key={i} className={zebra}>
                   <td className={`${cell} align-top font-mono text-[11px] whitespace-nowrap`}>{r.code}</td>
                   <td className={`${cell} align-top`}>
                     <p className="font-medium">{r.name}</p>
@@ -290,7 +300,7 @@ export default async function DocumentPage({
           </thead>
           <tbody>
             {rows.map((r, i) => (
-              <tr key={i}>
+              <tr key={i} className={zebra}>
                 <td className={`${cell} align-top text-center whitespace-nowrap`}>{r.date}</td>
                 <td className={`${cell} align-top`}>
                   <p className="font-medium">{r.name}</p>
@@ -311,9 +321,9 @@ export default async function DocumentPage({
         <div className="flex justify-between items-start mt-2 mb-5">
           <p className="text-[11px] text-gray-500 pt-1">{T.reducedNote}　　{T.totalQty}: {totalQty}</p>
           <div className="w-[320px] text-[12px]">
-            <div className="flex justify-between border-y-2 border-gray-800 py-1.5">
+            <div className="flex justify-between border-y-2 py-1.5" style={{ borderColor: ARICO_GREEN }}>
               <span className="font-semibold">{T.total}</span>
-              <span className="font-bold text-base tabular-nums">{formatJpy(grandTotalIncl)} {yen}</span>
+              <span className="font-bold text-base tabular-nums" style={{ color: ARICO_GREEN }}>{formatJpy(grandTotalIncl)} {yen}</span>
             </div>
             {taxGroups.map((g, i) => (
               <p key={i} className="text-gray-600 text-[11px] mt-1.5 text-right">
@@ -347,8 +357,8 @@ export default async function DocumentPage({
 
         {/* 振込先 (청구서만) */}
         {showBank && bankFields.length > 0 && (
-          <div className="border border-gray-300 rounded p-3 mb-3 text-[12px]">
-            <p className="font-semibold mb-1.5">
+          <div className="rounded p-3 mb-3 text-[12px] bg-[#f6faf8] border border-[#cfe3d8] [print-color-adjust:exact] [-webkit-print-color-adjust:exact]">
+            <p className="font-semibold mb-1.5" style={{ color: ARICO_GREEN }}>
               {T.bankTitle}
               <span className="font-normal text-gray-500 ml-3">{T.transferFeeNote}</span>
             </p>
