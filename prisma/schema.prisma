@@ -10,10 +10,10 @@ datasource db {
 
 model Supplier {
   id          Int       @id @default(autoincrement())
-  code        String    @unique // JVD, MK, FIVICS, SIBUYA, KOREA, ANGEL
+  code        String    @unique // JVD, MK, FIVICS, SHIBUYA, KOREA, ANGEL
   name        String
   currency    String    // USD, JPY, EUR
-  priceType   String    // COST, RETAIL (SIBUYA uses RETAIL as cost)
+  priceType   String    // COST, RETAIL (SHIBUYA uses RETAIL as cost)
   taxRate     Float     @default(0)
   discount    Float     @default(0) // ANGEL 掛率 (0.6 or 0.7)
   color       String    @default("#3b82f6")
@@ -45,7 +45,7 @@ model Product {
   jvdMatchCode    String    @default("") // matched ARICO product code
   optionSize      String    @default("") // サイズ e.g., LH, RH, #1, 30-40#
   optionColor     String    @default("") // カラー e.g., シルバー, ブラック
-  shopProductId   String    @default("") // 仕入先ショップの商品ID (SIBUYA 商品ID等)
+  shopProductId   String    @default("") // 仕入先ショップの商品ID (SHIBUYA 商品ID等)
   barcode         String    @default("") // JAN 바코드 — Smaregi 재고 연결 키 (SKU 정체성)
   scrapedAt       DateTime?
   createdAt       DateTime  @default(now())

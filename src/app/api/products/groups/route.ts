@@ -41,7 +41,7 @@ async function buildGroups(supplier: string, category: string, brand: string, q:
   const groups: GroupRow[] = []
   for (const [gc, vs] of map) {
     const sales = vs.map(v => v.salePriceJpy).filter(p => p > 0)
-    const base = vs[0].supplierCode === 'SIBUYA'
+    const base = vs[0].supplierCode === 'SHIBUYA'
       ? sibuyaBaseName(vs[0].name, vs[0].optionSize, vs[0].optionColor)
       : (commonBaseName(vs.map(v => v.name)) || vs[0].name)
     groups.push({

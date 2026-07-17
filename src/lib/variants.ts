@@ -60,7 +60,7 @@ export function parseOption(optStr: string): VariantOption {
   return o
 }
 
-// SIBUYA 베이스명 = 이름에서 옵션값(사이즈/색상)을 제거한 것
+// SHIBUYA 베이스명 = 이름에서 옵션값(사이즈/색상)을 제거한 것
 export function sibuyaBaseName(name: string, size: string, color: string): string {
   let s = name || ''
   if (size) s = s.split(size).join('')
@@ -68,7 +68,7 @@ export function sibuyaBaseName(name: string, size: string, color: string): strin
   return s.replace(/\s+/g, ' ').trim()
 }
 
-// SIBUYA는 옵션이 필드(optionSize/optionColor)로 분리돼 있다. 필드값을 축으로 변환.
+// SHIBUYA는 옵션이 필드(optionSize/optionColor)로 분리돼 있다. 필드값을 축으로 변환.
 // optionSize는 방향(LH/RH)·사이즈(S/M/L)일 때도, "/50-60#/32.0"처럼 파운드+길이 묶음일 때도,
 // 색상·스파인·규격 등 자유값일 때도 있다 → 인식되는 건 분리하고 나머지는 통째로 '옵션' 축에 보존.
 export function parseSibuyaOption(size: string, color: string): VariantOption {
@@ -91,10 +91,10 @@ export function parseSibuyaOption(size: string, color: string): VariantOption {
   return o
 }
 
-// 공급사별 변형 그룹 키. JVD=코드접두부, SIBUYA=베이스명, 그 외=자기 코드(그룹핑 안 함).
+// 공급사별 변형 그룹 키. JVD=코드접두부, SHIBUYA=베이스명, 그 외=자기 코드(그룹핑 안 함).
 export function groupKeyOf(p: { supplierCode: string; productCode: string; name: string; optionSize: string; optionColor: string }): string {
   if (p.supplierCode === 'JVD') return groupCodeOf('JVD', p.productCode)
-  if (p.supplierCode === 'SIBUYA') return 'SBY:' + sibuyaBaseName(p.name, p.optionSize, p.optionColor)
+  if (p.supplierCode === 'SHIBUYA') return 'SBY:' + sibuyaBaseName(p.name, p.optionSize, p.optionColor)
   return p.productCode
 }
 
@@ -114,7 +114,7 @@ export function buildVariantGroup(rows: RawVariant[]): VariantGroup {
   return assembleGroup(rows, base, r => parseOption(optionStrOf(r.name, base)))
 }
 
-// SIBUYA: 옵션 필드(optionSize/optionColor) 기반 그룹 구조화
+// SHIBUYA: 옵션 필드(optionSize/optionColor) 기반 그룹 구조화
 export function buildSibuyaGroup(rows: RawVariant[]): VariantGroup {
   const base = sibuyaBaseName(rows[0].name, rows[0].optionSize, rows[0].optionColor)
   return assembleGroup(rows, base, r => parseSibuyaOption(r.optionSize, r.optionColor))

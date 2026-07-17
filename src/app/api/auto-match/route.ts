@@ -17,7 +17,8 @@ const BRAND_TO_SUPPLIER: Record<string, string> = {
   'ANGEL': 'ANGEL',
   'WJ SPORTS': 'WJ', 'WJ SPORT': 'WJ', 'WJ': 'WJ', 'WNS': 'WJ',
   'KOREA ARCHERY': 'KOREA', 'KOREA ARCHERY JET': 'KOREA', 'KOREA SPORTS': 'KOREA', 'KOREA': 'KOREA',
-  'SHIBUYA': 'SIBUYA', 'SIBUYA': 'SIBUYA', 'SHIBUYA ARCHERY': 'SIBUYA',
+  // 브랜드 표기는 SHIBUYA/SIBUYA 둘 다 들어온다 → 공급사 코드 SHIBUYA로 모은다
+  'SHIBUYA': 'SHIBUYA', 'SIBUYA': 'SHIBUYA', 'SHIBUYA ARCHERY': 'SHIBUYA',
   'HOYT': 'JVD', 'WIN&WIN': 'JVD', 'WIAWIS': 'JVD', 'EASTON': 'JVD',
   'BEITER': 'JVD', 'AAE': 'JVD', 'CARTEL': 'JVD', 'AXCEL': 'JVD',
   'BLACK SHEEP': 'JVD', 'BLACKSHEEP': 'JVD', 'AVALON': 'JVD',
@@ -40,7 +41,7 @@ const NAME_KEYWORDS: [string, string][] = [
   ['BEITER', 'JVD'], ['AAE ', 'JVD'], ['CARTEL', 'JVD'], ['AXCEL', 'JVD'],
   ['PSE', 'JVD'], ['MATHEWS', 'JVD'], ['GOLD TIP', 'JVD'], ['DOINKER', 'JVD'],
   ['FIVICS', 'FIVICS'], ['ZEILO', 'FIVICS'], ['TENPRO', 'FIVICS'], ['TITAN ', 'FIVICS'],
-  ['SHIBUYA', 'SIBUYA'], ['SIBUYA', 'SIBUYA'],
+  ['SHIBUYA', 'SHIBUYA'], ['SIBUYA', 'SHIBUYA'],
   ['KOREA ARCHERY', 'KOREA'], ['KOREA SPORTS', 'KOREA'],
   ['MK KOREA', 'MK'], ['MK ZX', 'MK'], ['MK XG', 'MK'], ['MK FORGED', 'MK'],
   ['ANGEL', 'ANGEL'],
@@ -335,15 +336,15 @@ function detectSupplier(brand: string, name: string): string {
 }
 
 // 매칭 시도 공급사 우선순위.
-// 주 공급사(JVD 등)를 먼저 시도하고, threshold 미달이면 SIBUYA로 fallback.
+// 주 공급사(JVD 등)를 먼저 시도하고, threshold 미달이면 SHIBUYA로 fallback.
 //   - 카탈로그명은 일본어, JVD명은 영어라 번역매칭이 약함.
-//   - SIBUYA는 일본어 종합유통(HOYT/EASTON/BEITER 등 타브랜드도 취급)이라
+//   - SHIBUYA는 일본어 종합유통(HOYT/EASTON/BEITER 등 타브랜드도 취급)이라
 //     일본어끼리 직접 비교가 더 정확함.
 //   - 단 "타브랜드는 JVD 우선" 규칙 — JVD가 threshold를 넘으면 그대로 JVD 채택.
 function detectSuppliers(brand: string, name: string): string[] {
   const primary = detectSupplier(brand, name)
-  if (primary === 'SIBUYA') return ['SIBUYA']
-  return [primary, 'SIBUYA']
+  if (primary === 'SHIBUYA') return ['SHIBUYA']
+  return [primary, 'SHIBUYA']
 }
 
 type Product = { id: number; supplierCode: string; productCode: string; name: string; brand: string; costPrice: number; pp: PP }
@@ -402,7 +403,7 @@ export async function POST(req: Request) {
   let noSupplier = 0
 
   for (const item of catalogItems) {
-    // 주 공급사 우선, 미달 시 SIBUYA fallback (JVD 우선 규칙 유지)
+    // 주 공급사 우선, 미달 시 SHIBUYA fallback (JVD 우선 규칙 유지)
     let supList = detectSuppliers(item.brand, item.name)
     if (filterSup) {
       if (!supList.includes(filterSup)) continue
@@ -424,8 +425,8 @@ export async function POST(req: Request) {
 
       const isJvd = sup === 'JVD'
 
-      // SIBUYA는 SBY- 쇼핑몰 상품 우선
-      if (sup === 'SIBUYA') {
+      // SHIBUYA는 SBY- 쇼핑몰 상품 우선
+      if (sup === 'SHIBUYA') {
         const shopProds = candidates.filter(p => p.productCode.startsWith('SBY-'))
         if (shopProds.length) candidates = shopProds
       }
@@ -453,7 +454,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // 중복 매칭(JVD ∩ SIBUYA 등) 시 원가가 더 싼 공급처 선택.
+    // 중복 매칭(JVD ∩ SHIBUYA 등) 시 원가가 더 싼 공급처 선택.
     // 원가 동점이거나 한쪽 원가를 못 구하면 supList 순서(JVD 우선) 유지.
     let chosen: typeof hits[number] | null = null
     for (const h of hits) {

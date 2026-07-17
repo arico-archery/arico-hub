@@ -184,7 +184,7 @@ export default function ExchangeRatesPage() {
             <span>{t.exchangeRates.applyDescJvdMkFivics}</span>
           </div>
           <div className="flex gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-            <span className="font-medium text-gray-800 dark:text-gray-200 w-28 flex-shrink-0">SIBUYA</span>
+            <span className="font-medium text-gray-800 dark:text-gray-200 w-28 flex-shrink-0">SHIBUYA</span>
             <span>{t.exchangeRates.applyDescSibuya}</span>
           </div>
           <div className="flex gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import * as cheerio from 'cheerio'
 
-// SIBUYA(渋谷アーチェリー) 동기화 — crawl_sibuya.py 로직의 Node 포팅.
+// SHIBUYA(渋谷アーチェリー) 동기화 — crawl_sibuya.py 로직의 Node 포팅.
 // 타임아웃 방지를 위해 클라이언트가 단계/배치로 호출:
 //   GET  ?phase=list&page=N      → 목록 1페이지 파싱 { items, maxPage }
 //   POST ?phase=detail {items}   → 상세페이지에서 希望小売価格 추출 후 upsert { imported, skipped }
@@ -111,13 +111,13 @@ export async function POST(req: Request) {
     if (!cost) return 'skip'
 
     await prisma.product.upsert({
-      where: { supplierCode_productCode: { supplierCode: 'SIBUYA', productCode: it.code } },
+      where: { supplierCode_productCode: { supplierCode: 'SHIBUYA', productCode: it.code } },
       update: {
         name: it.name, brand: detectBrand(it.name, breadcrumbs), category,
         costPrice: cost, msrp: cost, availability, url: it.url, imageUrl1: it.image, scrapedAt: new Date(),
       },
       create: {
-        supplierCode: 'SIBUYA', productCode: it.code, name: it.name,
+        supplierCode: 'SHIBUYA', productCode: it.code, name: it.name,
         brand: detectBrand(it.name, breadcrumbs), category,
         costPrice: cost, msrp: cost, availability, url: it.url, imageUrl1: it.image, scrapedAt: new Date(),
       },

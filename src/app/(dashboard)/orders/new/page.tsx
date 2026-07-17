@@ -225,7 +225,7 @@ export default function NewOrderPage() {
       .then(r => r.json())
       .then(d => {
         if (!Array.isArray(d.variants) || d.variants.length < 2) return
-        // JVD: 옵션 축 드롭다운. 그 외(SIBUYA 등): 단일 변형 드롭다운.
+        // JVD: 옵션 축 드롭다운. 그 외(SHIBUYA 등): 단일 변형 드롭다운.
         if (Array.isArray(d.axes) && d.axes.length > 0) {
           // 신규 추가 시 특정 색을 미리 선택하지 않는다(매칭 변형이 임의 색일 수 있음 — 예: ATF-DX가 LH/Burgandy Red로 매칭).
           // 값이 하나뿐인 축만 자동 선택하고, 여러 값인 축(방향/색상)은 사용자가 직접 고르게 한다.

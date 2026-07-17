@@ -63,7 +63,7 @@ export default function NewPurchaseOrderPage() {
     loadVariantsFor(p.id)
   }
 
-  // 같은 그룹의 옵션 변형(JVD 코드접두부 / SIBUYA 베이스명)을 불러와 라인에 부착
+  // 같은 그룹의 옵션 변형(JVD 코드접두부 / SHIBUYA 베이스명)을 불러와 라인에 부착
   const loadVariantsFor = (productId: number) => {
     fetch(`/api/products/variants?productId=${productId}`)
       .then(r => r.json())

@@ -29,7 +29,7 @@ type SupplierProduct = {
   id: number; name: string; brand: string; productCode: string
   supplierCode: string; costPrice: number; salePriceJpy: number
   supplier: { currency: string }
-  group?: { base: string; count: number } | null   // 변형 그룹(JVD 코드접두부/SIBUYA 베이스명) — 있으면 그룹으로 표시
+  group?: { base: string; count: number } | null   // 변형 그룹(JVD 코드접두부/SHIBUYA 베이스명) — 있으면 그룹으로 표시
 }
 
 // 매칭 표시: 변형 그룹이면 특정 변형명 대신 그룹 베이스명(+변형수)으로 보여준다

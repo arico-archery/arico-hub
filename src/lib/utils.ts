@@ -46,8 +46,8 @@ export function profitBgColor(margin: number): string {
 
 // ── 공급처별 원가 계산 (JPY 환산) ──────────────────────────────
 // 규칙:
-//   SIBUYA 공급처  (costPrice = 希望小売価格 税込)
-//     └ SIBUYA/SHIBUYA 브랜드  → 希望小売価格(税込) × 0.62
+//   SHIBUYA 공급처  (costPrice = 希望小売価格 税込)
+//     └ SHIBUYA 자체 브랜드  → 希望小売価格(税込) × 0.62
 //     └ 타 브랜드(HOYT, EASTON 등) → 希望小売価格(税込) × 0.65
 //   외화 공급처 (JVD=USD, MK=USD, FIVICS=USD)
 //     └ 원가 × 환율(→JPY) × 1.1  (엔화 환산 후 운송비+관세 10% 가산)
@@ -74,9 +74,11 @@ export function calcCostJpy(
   const rateToJpy = rates.find(r => r.currency === p.supplier.currency)?.rateToJpy ?? 1
   let price = p.costPrice
 
-  if (p.supplierCode === 'SIBUYA') {
-    const isSibuyaBrand = /SIBUYA|SHIBUYA/i.test(p.brand)
-    price = price * (isSibuyaBrand ? 0.62 : 0.65)               // 希望小売価格(税込) × 掛率
+  // 'SIBUYA'는 옛 코드 — SHIBUYA로 이름을 바로잡는 중이라 DB 이관이 끝날 때까지 함께 인정한다.
+  // (인정하지 않으면 이관 도중 掛率 분기를 타지 못해 원가가 틀리게 계산된다) 이관 후 제거.
+  if (p.supplierCode === 'SHIBUYA' || p.supplierCode === 'SIBUYA') {
+    const isShibuyaBrand = /SHIBUYA|SIBUYA/i.test(p.brand)
+    price = price * (isShibuyaBrand ? 0.62 : 0.65)              // 希望小売価格(税込) × 掛率
   } else if (p.supplierCode === 'ANGEL') {
     // 税抜 가격 그대로 저장된 상태 — 품목명으로 掛率 결정
     const is70 = ANGEL_70_PATTERN.test(p.name ?? '')
@@ -101,13 +103,16 @@ export const SUPPLIER_COLORS: Record<string, string> = {
   JVD: '#6366f1',
   MK: '#8b5cf6',
   FIVICS: '#3b82f6',
-  SIBUYA: '#0ea5e9',
+  SHIBUYA: '#0ea5e9',
   KOREA: '#10b981',
   ANGEL: '#f59e0b',
   WJ: '#f97316',
   KOWA: '#14b8a6',  // KOWA 광학
   ETC: '#64748b',  // 기타 브랜드 (수동 입력)
+  // 옛 코드 SIBUYA → SHIBUYA 로 이름을 바로잡는 중. DB 이관이 끝날 때까지 색을 잃지 않도록 남겨둔다.
+  // 이관 확인 후 이 줄은 지운다.
+  SIBUYA: '#0ea5e9',
 }
 
-export const SUPPLIER_LIST = ['ARICO', 'JVD', 'MK', 'FIVICS', 'SIBUYA', 'KOREA', 'ANGEL', 'WJ', 'KOWA', 'ETC'] as const
+export const SUPPLIER_LIST = ['ARICO', 'JVD', 'MK', 'FIVICS', 'SHIBUYA', 'KOREA', 'ANGEL', 'WJ', 'KOWA', 'ETC'] as const
 export type SupplierCode = typeof SUPPLIER_LIST[number]

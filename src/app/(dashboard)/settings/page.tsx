@@ -50,10 +50,10 @@ const SUPPLIERS: SupplierTemplate[] = [
     templateExample: 'FV-SKADI-TX-P,SKADI-TX 25" Painted,FIVICS,Riser,525.00,1100.00',
   },
   {
-    code: 'SIBUYA', name: 'Shibuya', currency: 'JPY',
+    code: 'SHIBUYA', name: 'Shibuya', currency: 'JPY',
     descKey: 'descSibuya', fileHint: 'CSV',
     templateHeaders: 'product_code,name,brand,category,price_jpy,url,image_url_1',
-    templateExample: 'SB-001,SIBUYA NOVA Sight,SIBUYA,Sight,68000,https://sibuya.../,',
+    templateExample: 'SB-001,SHIBUYA NOVA Sight,SHIBUYA,Sight,68000,https://sibuya.../,',
   },
   {
     code: 'KOREA', name: 'Korea Archery', currency: 'JPY',
@@ -99,7 +99,7 @@ export default function SettingsPage() {
   const [rateInput, setRateInput] = useState('')
   const [rateSaving, setRateSaving] = useState(false)
 
-  // SIBUYA 자동 동기화 (크롤링)
+  // SHIBUYA 자동 동기화 (크롤링)
   const [syncConfirm, setSyncConfirm] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncProg, setSyncProg] = useState<{ phase: string; page: number; maxPage: number; done: number; total: number; imported: number }>({ phase: '', page: 0, maxPage: 0, done: 0, total: 0, imported: 0 })
@@ -229,7 +229,7 @@ export default function SettingsPage() {
     setImporting(false)
   }
 
-  // SIBUYA 크롤링 동기화 — 클라이언트 주도 배치 (타임아웃 방지)
+  // SHIBUYA 크롤링 동기화 — 클라이언트 주도 배치 (타임아웃 방지)
   const runSibuyaSync = async () => {
     setSyncConfirm(false)
     setSyncing(true)
@@ -272,7 +272,7 @@ export default function SettingsPage() {
       setSyncResult({ total: items.length, imported })
       loadStats()
     } catch (e) {
-      setError('SIBUYA 동기화 오류: ' + String(e))
+      setError('SHIBUYA 동기화 오류: ' + String(e))
     }
     setSyncing(false)
   }
@@ -507,8 +507,8 @@ export default function SettingsPage() {
             {importing ? t.settings.importing : t.settings.importStart}
           </button>
 
-          {/* SIBUYA 전용 — 자동 크롤링 동기화 (확인 후 실행) */}
-          {selectedSupplier === 'SIBUYA' && (
+          {/* SHIBUYA 전용 — 자동 크롤링 동기화 (확인 후 실행) */}
+          {selectedSupplier === 'SHIBUYA' && (
             <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
               <p className="text-[11px] text-gray-400 dark:text-gray-500 text-center mb-2">— {t.settings.sibuyaSyncOr} —</p>
               <button

@@ -11,7 +11,7 @@ const VARIANT_SELECT = {
 // GET /api/products/variants?productId=123
 // 같은 베이스 제품의 옵션 변형 목록을 반환.
 // - JVD: 상품코드 접두부(- 앞)로 그룹 + 옵션 축 파싱 → { base, axes, variants }
-// - SIBUYA(SBY-): 베이스명으로 그룹 + 옵션필드(사이즈/색상) 축 → { base, axes, variants }
+// - SHIBUYA(SBY-): 베이스명으로 그룹 + 옵션필드(사이즈/색상) 축 → { base, axes, variants }
 // - 그 외/변형 없음: 빈 배열 → 클라이언트는 자유입력
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -37,12 +37,12 @@ export async function GET(req: Request) {
     return NextResponse.json({ base: group.base, axes: group.axes, variants: group.variants })
   }
 
-  // SIBUYA: SBY- 세트(옵션필드 보유)를 베이스명으로 그룹
-  if (target.supplierCode === 'SIBUYA' && target.productCode.startsWith('SBY-')) {
+  // SHIBUYA: SBY- 세트(옵션필드 보유)를 베이스명으로 그룹
+  if (target.supplierCode === 'SHIBUYA' && target.productCode.startsWith('SBY-')) {
     const base = sibuyaBaseName(target.name, target.optionSize, target.optionColor)
     const namePrefix = (target.name || '').trim().split(/\s+/)[0] || ''
     const candidates = await prisma.product.findMany({
-      where: { supplierCode: 'SIBUYA', productCode: { startsWith: 'SBY-' }, name: { startsWith: namePrefix, mode: 'insensitive' } },
+      where: { supplierCode: 'SHIBUYA', productCode: { startsWith: 'SBY-' }, name: { startsWith: namePrefix, mode: 'insensitive' } },
       select: VARIANT_SELECT,
     })
     const rows = candidates.filter(c => sibuyaBaseName(c.name, c.optionSize, c.optionColor) === base)
