@@ -23,17 +23,26 @@ export async function GET(req: Request) {
   if (!makeshopConfigured()) return NextResponse.json({ ok: false, error: 'not_configured' }, { status: 503 })
 
   const days = Math.min(365, Math.max(1, Number(url.searchParams.get('days')) || 90))
+  // 명시 구간(from/to = YYYYMMDD) — 월 단위로 나눠 확인할 때.
+  const from = url.searchParams.get('from'); const to = url.searchParams.get('to')
+  const win = (from && /^\d{8}$/.test(from) && to && /^\d{8}$/.test(to)) ? { start: `${from}000000`, end: `${to}235959` } : undefined
   try {
-    const { rows } = await buildPreview(days)
+    const { rows } = await buildPreview(days, win)
     const { refreshed, changes } = await refreshExisting(rows, true)   // dryRun
     const dup = rows.filter(r => r.dup).length
+    // 품목이 0인 행 = レンタルリム 등 제외품목만 담긴 주문. 신규에서 빠지므로 따로 보고한다
+    // (안 그러면 total 과 신규+중복 이 안 맞아 "빠뜨린 것"처럼 보인다).
+    const empty = rows.filter(r => !r.dup && r.items.length === 0)
     return NextResponse.json({
-      ok: true, days,
+      ok: true, days, window: win ?? null,
       total: rows.length,
       newOrders: rows.filter(r => !r.dup && r.items.length > 0).length,
       alreadyImported: dup,
       wouldRefresh: refreshed,
       wouldStaySame: dup - refreshed,
+      skippedNoItems: empty.length,
+      skippedSample: empty.slice(0, 10).map(r => ({ no: r.displayOrderNumber, date: r.orderDate })),
+      newSample: rows.filter(r => !r.dup && r.items.length > 0).slice(0, 20).map(r => ({ no: r.displayOrderNumber, date: r.orderDate })),
       changes,
     })
   } catch (e) {
