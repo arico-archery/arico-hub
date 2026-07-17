@@ -50,7 +50,7 @@ const SUPPLIERS: SupplierTemplate[] = [
     templateExample: 'FV-SKADI-TX-P,SKADI-TX 25" Painted,FIVICS,Riser,525.00,1100.00',
   },
   {
-    code: 'SHIBUYA', name: 'Shibuya', currency: 'JPY',
+    code: 'SHIBUYA', name: 'SHIBUYA', currency: 'JPY',
     descKey: 'descSibuya', fileHint: 'CSV',
     templateHeaders: 'product_code,name,brand,category,price_jpy,url,image_url_1',
     templateExample: 'SB-001,SHIBUYA NOVA Sight,SHIBUYA,Sight,68000,https://sibuya.../,',

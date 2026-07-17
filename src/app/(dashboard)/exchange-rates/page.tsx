@@ -15,7 +15,7 @@ const CURRENCY_FLAGS: Record<string, { flag: string; color: string }> = {
 
 const SUPPLIERS_BY_CURRENCY: Record<string, string[]> = {
   USD: ['JVD', 'MK Korea', 'FIVICS'],
-  JPY: ['Shibuya', 'Korea Archery', 'Angel'],
+  JPY: ['SHIBUYA', 'Korea Archery', 'Angel'],
   EUR: [],
 }
 

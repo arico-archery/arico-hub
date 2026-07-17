@@ -9,7 +9,7 @@ async function main() {
     { code: 'MK', name: 'MK Korea', currency: 'USD', priceType: 'COST', taxRate: 0, discount: 0, color: '#8b5cf6' },
     { code: 'FIVICS', name: 'FIVICS', currency: 'USD', priceType: 'COST', taxRate: 0, discount: 0, color: '#3b82f6' },
     // SHIBUYA: discount는 calcCostJpy에서 브랜드별 처리 (SHIBUYA=62%, 타브랜드=65%)
-    { code: 'SHIBUYA', name: 'Shibuya', currency: 'JPY', priceType: 'RETAIL', taxRate: 0.1, discount: 0, color: '#0ea5e9' },
+    { code: 'SHIBUYA', name: 'SHIBUYA', currency: 'JPY', priceType: 'RETAIL', taxRate: 0.1, discount: 0, color: '#0ea5e9' },
     { code: 'KOREA', name: 'Korea Archery', currency: 'JPY', priceType: 'COST', taxRate: 0.1, discount: 0, color: '#10b981' },
     { code: 'ANGEL', name: 'Angel', currency: 'JPY', priceType: 'COST', taxRate: 0, discount: 0.6, color: '#f59e0b' },
     { code: 'WJ', name: 'WJ Sports', currency: 'JPY', priceType: 'COST', taxRate: 0, discount: 0, color: '#f97316' },
@@ -61,7 +61,7 @@ async function main() {
     { supplierCode: 'JVD', productCode: 'HOYT-FORMULA-RES', name: 'Hoyt Formula Res Riser', brand: 'HOYT', category: 'bows', costPrice: 1200, msrp: 1800, unit: '1' },
     { supplierCode: 'MK', productCode: 'MK-ARCHERY-HX', name: 'MK Korea HX Handle', brand: 'MK', category: 'bows', costPrice: 450, msrp: 680, unit: '1' },
     { supplierCode: 'FIVICS', productCode: 'FIV-SIGHT-DX', name: 'FIVICS Titan DX Sight', brand: 'FIVICS', category: 'sights', costPrice: 320, msrp: 520, unit: '1' },
-    { supplierCode: 'SHIBUYA', productCode: 'SHB-ULTIMA-RC1', name: 'Shibuya Ultima RC DX Sight', brand: 'SHIBUYA', category: 'sights', costPrice: 68000, msrp: 68000, unit: '1' },
+    { supplierCode: 'SHIBUYA', productCode: 'SHB-ULTIMA-RC1', name: 'SHIBUYA Ultima RC DX Sight', brand: 'SHIBUYA', category: 'sights', costPrice: 68000, msrp: 68000, unit: '1' },
     { supplierCode: 'ANGEL', productCode: 'ANG-QUIVER-001', name: 'Angel Hip Quiver Premium', brand: 'ANGEL', category: 'accessories', costPrice: 8000, msrp: 12000, unit: '1' },
   ]
 

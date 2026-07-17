@@ -70,7 +70,7 @@ const SECTIONS: Section[] = [
           [{ ko: 'JVD', ja: 'JVD' }, { ko: 'JVD Archery', ja: 'JVD Archery' }, { ko: 'USD', ja: 'USD' }, { ko: '상품 수 최다', ja: '商品数が最多' }],
           [{ ko: 'MK', ja: 'MK' }, { ko: 'MK Korea', ja: 'MK Korea' }, { ko: 'USD', ja: 'USD' }, { ko: '볼륨 할인 있음', ja: 'ボリューム割引あり' }],
           [{ ko: 'FIVICS', ja: 'FIVICS' }, { ko: 'Fivics', ja: 'Fivics' }, { ko: 'USD', ja: 'USD' }, { ko: '중국·한국 생산 분리', ja: '中国・韓国の生産地で分割' }],
-          [{ ko: 'SHIBUYA', ja: 'SHIBUYA' }, { ko: 'Shibuya Online', ja: 'Shibuya Online' }, { ko: 'JPY', ja: 'JPY' }, { ko: '자동 크롤링 지원', ja: '自動クロール対応' }],
+          [{ ko: 'SHIBUYA', ja: 'SHIBUYA' }, { ko: 'SHIBUYA', ja: 'SHIBUYA' }, { ko: 'JPY', ja: 'JPY' }, { ko: '자동 크롤링 지원', ja: '自動クロール対応' }],
           [{ ko: 'KOREA', ja: 'KOREA' }, { ko: 'Korea Archery', ja: 'Korea Archery' }, { ko: 'JPY', ja: 'JPY' }, { ko: '税込 가격', ja: '税込価格' }],
           [{ ko: 'ANGEL', ja: 'ANGEL' }, { ko: 'Angel Archery', ja: 'Angel Archery' }, { ko: 'JPY', ja: 'JPY' }, { ko: '税抜 가격', ja: '税抜価格' }],
           [{ ko: 'WJ', ja: 'WJ' }, { ko: 'WJ Sports', ja: 'WJ Sports' }, { ko: 'JPY', ja: 'JPY' }, { ko: '', ja: '' }],
