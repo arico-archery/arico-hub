@@ -124,14 +124,21 @@ table, pre {
 }
 
 @media print {
+  /* 여백을 0으로 두는 이유: 브라우저는 페이지 여백에 날짜·제목·URL·쪽번호를 자동으로 찍는다.
+     여백이 없으면 찍을 자리가 없어 사라진다(사용자가 인쇄 설정을 만질 필요 없음).
+     대신 그만큼을 문서 자체 여백(.print-page)으로 옮겨 인쇄 결과는 그대로 유지한다. */
   @page {
     size: A4;
-    margin: 15mm 15mm 20mm 15mm;
+    margin: 0;
   }
   body {
     background: white;
     font-size: 12px;
     color: black;
+  }
+  /* 인쇄용 문서 여백 — 위 @page에서 뺀 만큼을 여기서 준다 */
+  .print-page {
+    padding: 15mm 15mm 20mm 15mm !important;
   }
   .print\:hidden {
     display: none !important;

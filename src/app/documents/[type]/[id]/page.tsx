@@ -187,7 +187,8 @@ export default async function DocumentPage({
         issuers={companyProfiles.map((p, i) => p.label || `프로필 ${i + 1}`)} issuerIdx={issuerIdx}
         banks={docType === 'invoice' ? bankProfiles.map((p, i) => p.label || `계좌 ${i + 1}`) : []} bankIdx={bankIdx} />
 
-      <div className="max-w-[820px] mx-auto bg-white text-gray-900 shadow-lg rounded-md print:shadow-none print:rounded-none p-8 print:p-6 text-[13px] leading-relaxed" id="document">
+      {/* print-page: 인쇄 시 문서 자체가 페이지 여백을 갖는다(@page margin:0 → 브라우저 머리글·바닥글 제거) */}
+      <div className="print-page max-w-[820px] mx-auto bg-white text-gray-900 shadow-lg rounded-md print:shadow-none print:rounded-none p-8 print:p-6 text-[13px] leading-relaxed" id="document">
         {/* 제목 */}
         <h1 className="text-center text-2xl font-bold tracking-[0.4em] mb-6">{T.title[docType]}</h1>
 
