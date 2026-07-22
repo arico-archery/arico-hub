@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Search, Plus, Trash2, ArrowLeft, ShoppingCart, Filter, Tag, Link2, RefreshCw, FileText, Image as ImageIcon, Clock, X } from 'lucide-react'
 import { formatJpy, formatNumber, calcProfitRate, calcCostJpy, calcDiscount, SUPPLIER_COLORS, SUPPLIER_LIST } from '@/lib/utils'
@@ -186,8 +186,14 @@ export default function NewOrderPage() {
     })
   }, [])
 
+  // 검색 순서 가드 — 이전에 던진 느린 검색 응답이 나중 검색 결과를 덮어쓰는 것을 막는다.
+  // (예: 다른 검색어의 응답이 늦게 도착해 「ARICO」 검색 결과를 지워버리던 문제)
+  const productSeq = useRef(0)
+  const catalogSeq = useRef(0)
+
   // 공급사 상품 검색
   const searchProducts = useCallback(async (q: string, supplierCode: string) => {
+    const seq = ++productSeq.current
     if (q.length < 1 && !supplierCode) { setSearchResults([]); return }
     const params = new URLSearchParams({ limit: '30', hideVariantParent: '1' })
     if (q) params.set('q', q)
@@ -196,16 +202,17 @@ export default function NewOrderPage() {
     else params.set('balanced', '1')
     const res = await fetch(`/api/products?${params}`)
     const data = await res.json()
-    setSearchResults(data.products)
+    if (seq === productSeq.current) setSearchResults(data.products)   // 최신 검색만 반영
   }, [])
 
   // ARICO 카탈로그 검색
   const searchCatalog = useCallback(async (q: string) => {
+    const seq = ++catalogSeq.current
     if (q.length < 2) { setCatalogResults([]); return }
     const params = new URLSearchParams({ q, limit: '12' })
     const res = await fetch(`/api/arico-catalog?${params}`)
     const data = await res.json()
-    setCatalogResults(data.rows as CatalogItem[])
+    if (seq === catalogSeq.current) setCatalogResults(data.rows as CatalogItem[])   // 최신 검색만 반영
   }, [])
 
   useEffect(() => {
