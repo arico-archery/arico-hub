@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, Trash2, ArrowLeft, ShoppingCart, Filter, Tag, Link2, RefreshCw, FileText, Image as ImageIcon, Clock, X } from 'lucide-react'
+import { Search, Plus, Trash2, ArrowLeft, ShoppingCart, Filter, Tag, Link2, RefreshCw, FileText, Image as ImageIcon, Clock, X, Boxes } from 'lucide-react'
 import { formatJpy, formatNumber, calcProfitRate, calcCostJpy, calcDiscount, SUPPLIER_COLORS, SUPPLIER_LIST } from '@/lib/utils'
 import SupplierBadge from '@/components/SupplierBadge'
 import ProfitBar from '@/components/ProfitBar'
@@ -33,6 +33,12 @@ type CatalogItem = {
   options?: string   // ARICO 자사몰 옵션 JSON: [{label, values:[...]}]
   imageUrl1?: string // ARICO 자사몰 대표 이미지
 }
+// 스마레지 재고 항목 (매장 실물 재고). 주문에 담을 때 ETC Product 로 변환해 라인에 넣는다.
+type SmaregiItem = {
+  productId: string; productCode: string; name: string; category: string
+  price: number; cost: number; stock: number; stockTokyo: number; stockAichi: number
+  size: string; color: string
+}
 type Customer = { id: number; name: string; company: string; code: string; discountRate?: number; discountAmount?: number; _count?: { orders: number } }
 const RECENT_CUSTOMERS_KEY = 'arico_recent_customers'
 type ExchangeRate = { currency: string; rateToJpy: number }
@@ -46,6 +52,10 @@ type OrderLine = {
   variantAxes?: VariantAxis[]                  // JVD 옵션 축 (방향/파운드/길이/색상…)
   variantList?: JvdVariant[]                   // JVD 변형 전체 (축 선택 → 해결용)
   variantAxisSel?: Record<string, string>      // 선택된 축 {label: value}
+  // 스마레지 재고에서 담은 라인 — 발주하지 않고 재고로 충당한다.
+  fromStock?: boolean
+  stockLabel?: string   // 사람이 읽는 옵션·이름 (optionMemo 에는 코드가 들어가므로 표시는 이걸로)
+  stockQty?: number     // 담을 당시 가용 재고(참고용)
 }
 
 // 카탈로그 상품 썸네일 (이미지 없거나 로딩 실패 시 플레이스홀더)
@@ -116,8 +126,9 @@ export default function NewOrderPage() {
   const [rates, setRates] = useState<ExchangeRate[]>([])
   const [lines, setLines] = useState<OrderLine[]>([])
 
-  // 검색 모드: catalog(ARICO 카탈로그) | supplier(공급사 상품)
-  const [searchMode, setSearchMode] = useState<'catalog' | 'supplier'>('catalog')
+  // 검색 모드: catalog(ARICO 카탈로그) | supplier(공급사 상품) | smaregi(스마레지 재고)
+  const [searchMode, setSearchMode] = useState<'catalog' | 'supplier' | 'smaregi'>('catalog')
+  const [smaregiResults, setSmaregiResults] = useState<SmaregiItem[]>([])
   const [productSearch, setProductSearch] = useState('')
   const [productSupplierFilter, setProductSupplierFilter] = useState('')
   const [searchResults, setSearchResults] = useState<Product[]>([])
@@ -190,6 +201,7 @@ export default function NewOrderPage() {
   // (예: 다른 검색어의 응답이 늦게 도착해 「ARICO」 검색 결과를 지워버리던 문제)
   const productSeq = useRef(0)
   const catalogSeq = useRef(0)
+  const smaregiSeq = useRef(0)
 
   // 공급사 상품 검색
   const searchProducts = useCallback(async (q: string, supplierCode: string) => {
@@ -215,16 +227,25 @@ export default function NewOrderPage() {
     if (seq === catalogSeq.current) setCatalogResults(data.rows as CatalogItem[])   // 최신 검색만 반영
   }, [])
 
+  // 스마레지 재고 검색 — 기본 '재고 있음(in)'만. 코드를 optionMemo 에 넣어 담기 때문에
+  // 기존 MakeShop 주문과 동일하게 재고충당·라벨해석 machinery 가 그대로 동작한다.
+  const searchSmaregi = useCallback(async (q: string) => {
+    const seq = ++smaregiSeq.current
+    if (q.length < 2) { setSmaregiResults([]); return }
+    const params = new URLSearchParams({ q, stock: 'in', limit: '15' })
+    const res = await fetch(`/api/smaregi/inventory?${params}`)
+    const data = await res.json()
+    if (seq === smaregiSeq.current) setSmaregiResults((data.rows ?? []) as SmaregiItem[])   // 최신 검색만 반영
+  }, [])
+
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchMode === 'catalog') {
-        searchCatalog(productSearch)
-      } else {
-        searchProducts(productSearch, productSupplierFilter)
-      }
+      if (searchMode === 'catalog') searchCatalog(productSearch)
+      else if (searchMode === 'smaregi') searchSmaregi(productSearch)
+      else searchProducts(productSearch, productSupplierFilter)
     }, 300)
     return () => clearTimeout(timer)
-  }, [productSearch, productSupplierFilter, searchMode, searchProducts, searchCatalog])
+  }, [productSearch, productSupplierFilter, searchMode, searchProducts, searchCatalog, searchSmaregi])
 
   // 같은 베이스 제품의 옵션 변형을 불러와 해당 라인에 부착 (옵션 드롭다운용)
   const loadVariantsFor = (productId: number) => {
@@ -391,6 +412,35 @@ export default function NewOrderPage() {
     loadVariantsFor(p.id)
   }
 
+  // 스마레지 재고 품목을 주문에 담기 — ETC Product 로 변환 후 라인 추가.
+  // 원가·판매가는 스마레지 값 그대로, optionMemo 엔 코드(재고충당 추적용), 표시는 stockLabel.
+  const addSmaregiItem = async (sm: SmaregiItem) => {
+    let product: Product
+    try {
+      const res = await fetch('/api/smaregi/to-product', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: sm.productId }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.product) { alert(t.orders.smaregiAddError); return }
+      product = data.product as Product
+    } catch { alert(t.orders.smaregiAddError); return }
+
+    const label = [sm.size, sm.color].filter(Boolean).join(' / ') || sm.name
+    // 같은 스마레지 코드가 이미 있으면 수량만 증가
+    const existing = lines.findIndex(l => l.fromStock && l.optionMemo === sm.productCode)
+    if (existing >= 0) {
+      setLines(prev => prev.map((l, i) => i === existing ? { ...l, quantity: l.quantity + 1 } : l))
+    } else {
+      setLines(prev => [...prev, {
+        product, quantity: 1, salePriceJpy: sm.price, costPriceJpy: sm.cost,
+        optionMemo: sm.productCode, fromStock: true, stockLabel: label, stockQty: sm.stock,
+      }])
+    }
+    setProductSearch('')
+    setSmaregiResults([])
+  }
+
   // 카탈로그에 연결할 공급사 상품을 고르는 모드로 전환
   // (미매칭 연결 + 이미 매칭된 상품의 공급사 변경 공용)
   const startLinkSupplier = (item: CatalogItem) => {
@@ -444,11 +494,12 @@ export default function NewOrderPage() {
     loadVariantsFor(mp.id)
   }
 
-  const switchMode = (mode: 'catalog' | 'supplier') => {
+  const switchMode = (mode: 'catalog' | 'supplier' | 'smaregi') => {
     setSearchMode(mode)
     setProductSearch('')
     setSearchResults([])
     setCatalogResults([])
+    setSmaregiResults([])
   }
 
   const updateLine = (idx: number, field: 'quantity' | 'salePriceJpy', val: number) => {
@@ -502,6 +553,8 @@ export default function NewOrderPage() {
         costPriceJpy: l.costPriceJpy,
         optionMemo:   l.optionMemo,
         catalogId:    l.catalogId ?? null,
+        // 스마레지 재고 품목: 발주 안 하고 재고 충당(입고완료) + 읽는 라벨 저장
+        ...(l.fromStock ? { optionLabel: l.stockLabel ?? '', procureStatus: 'received', stockAllocated: true } : {}),
       })),
     }
     // 편집 모드면 PATCH(품목 교체), 신규면 POST
@@ -678,6 +731,17 @@ export default function NewOrderPage() {
                 <Filter className="w-3 h-3" />
                 {t.orders.newSearchModeSupplier}
               </button>
+              <button
+                onClick={() => switchMode('smaregi')}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  searchMode === 'smaregi'
+                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                }`}
+              >
+                <Boxes className="w-3 h-3" />
+                {t.orders.newSearchModeStock}
+              </button>
             </div>
 
             {/* 공급사 필터 (supplier 모드에서만) */}
@@ -717,7 +781,7 @@ export default function NewOrderPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 className="w-full pl-9 pr-9 py-2.5 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder={searchMode === 'catalog' ? t.orders.newCatalogSearch : t.orders.newProductSearch}
+                placeholder={searchMode === 'catalog' ? t.orders.newCatalogSearch : searchMode === 'smaregi' ? t.orders.newStockSearch : t.orders.newProductSearch}
                 value={productSearch}
                 onChange={e => setProductSearch(e.target.value)}
               />
@@ -809,6 +873,39 @@ export default function NewOrderPage() {
                   })}
                 </div>
               )}
+
+              {/* 스마레지 재고 검색 결과 — 재고 있는 실물만. 담으면 발주 없이 재고로 나간다. */}
+              {searchMode === 'smaregi' && smaregiResults.length > 0 && (
+                <div className="absolute top-full mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-10 max-h-72 overflow-y-auto">
+                  {smaregiResults.map(sm => (
+                    <button
+                      key={sm.productId}
+                      onClick={() => addSmaregiItem(sm)}
+                      className="w-full text-left px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center gap-3 border-b border-gray-50 dark:border-gray-700 last:border-0"
+                    >
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold text-white flex-shrink-0 bg-emerald-600 w-16 justify-center">
+                        <Boxes className="w-3 h-3" />{sm.stock}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{sm.name}</p>
+                        <p className="text-xs text-gray-400 truncate">
+                          {sm.category}
+                          {(sm.stockTokyo > 0 || sm.stockAichi > 0) && (
+                            <span className="ml-1 text-emerald-600 dark:text-emerald-400">
+                              · {t.orders.stockTokyo} {sm.stockTokyo} / {t.orders.stockAichi} {sm.stockAichi}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{formatJpy(sm.price)}</p>
+                        <p className="text-xs text-gray-400">{sm.cost > 0 ? `${t.orders.newCostLabel} ${formatJpy(sm.cost)}` : t.orders.stockNoCost}</p>
+                      </div>
+                      <Plus className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -851,7 +948,14 @@ export default function NewOrderPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          {line.catalogOptions && line.catalogOptions.length > 0 ? (
+                          {line.fromStock ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
+                                <Boxes className="w-3 h-3" />{t.orders.stockShipBadge}
+                              </span>
+                              {line.stockLabel && <span className="text-xs text-gray-600 dark:text-gray-300">{line.stockLabel}</span>}
+                            </div>
+                          ) : line.catalogOptions && line.catalogOptions.length > 0 ? (
                             <div className="space-y-1">
                               {line.catalogOptions.map(opt => (
                                 <select

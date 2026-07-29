@@ -142,6 +142,8 @@ export async function POST(req: Request) {
   type OrderItemInput = {
     productId: number; quantity: number; salePriceJpy: number
     costPriceJpy: number; optionMemo?: string; catalogId?: number | null
+    // 스마레지 재고에서 담은 품목: 사람이 읽는 옵션 라벨 + 재고충당 표식(발주 안 함).
+    optionLabel?: string; procureStatus?: string; stockAllocated?: boolean
   }
   let subtotalJpy = 0
   let totalCostJpy = 0
@@ -154,6 +156,10 @@ export async function POST(req: Request) {
       salePriceJpy: item.salePriceJpy,
       costPriceJpy: item.costPriceJpy,
       optionMemo: item.optionMemo ?? '',
+      // 스마레지 재고 품목: 발주하지 않고 재고로 충당(입고완료 표식) + 읽는 라벨 저장
+      optionLabel: item.optionLabel ?? '',
+      procureStatus: item.procureStatus === 'received' ? 'received' : 'needed',
+      stockAllocated: item.stockAllocated === true,
     }
   })
 
