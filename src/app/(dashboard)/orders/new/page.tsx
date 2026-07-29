@@ -136,6 +136,12 @@ export default function NewOrderPage() {
   // 미매칭 카탈로그에 연결할 공급사 상품을 고르는 중인 대상 (주문 시 매칭 반영)
   const [pendingCatalog, setPendingCatalog] = useState<CatalogItem | null>(null)
 
+  // 주문일 — 기본 오늘. 청구서 주문은 거래일과 입력일이 다를 수 있어 지정 가능(과거분 입력 포함).
+  const [orderDate, setOrderDate] = useState(() => {
+    const d = new Date()
+    const p = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+  })
   // 기본 입금기일 = 오늘 +2주 (신규 등록 시. 편집 모드는 기존 값으로 덮어씀, 사용자 변경 가능)
   const [dueDate, setDueDate] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() + 14)
@@ -179,6 +185,7 @@ export default function NewOrderPage() {
       if (!order || order.error) return
       setSelectedCustomer({ id: order.customer.id, name: order.customer.name, company: order.customer.company, code: order.customer.code })
       setDueDate(order.dueDate ? String(order.dueDate).slice(0, 10) : '')
+      if (order.orderDate) setOrderDate(String(order.orderDate).slice(0, 10))
       setMemo(order.memo ?? '')
       setDiscountRate(order.discountRate ?? 0)
       setDiscountAmount(order.discountAmount ?? 0)
@@ -542,6 +549,7 @@ export default function NewOrderPage() {
     const payload = {
       customerId: selectedCustomer?.id ?? null,
       internal: stockMode,
+      orderDate: orderDate || null,
       dueDate: dueDate || null,
       memo,
       discountRate,
@@ -1156,6 +1164,14 @@ export default function NewOrderPage() {
             </div>
 
             <div className="space-y-3 mb-4">
+              <div>
+                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">{t.orders.newOrderDate}</label>
+                <DateInput
+                  value={orderDate}
+                  onChange={setOrderDate}
+                  className="py-0.5"
+                />
+              </div>
               <div>
                 <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">{t.orders.newDueDate}</label>
                 <DateInput

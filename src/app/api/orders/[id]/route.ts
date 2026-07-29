@@ -53,6 +53,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(body.trackingNo        !== undefined && { trackingNo: body.trackingNo }),
       ...(body.memo              !== undefined && { memo: body.memo }),
       ...(body.dueDate           !== undefined && { dueDate: body.dueDate ? new Date(body.dueDate) : null }),
+      // 주문일 수정(편집 모드) — 빈 값은 무시(주문일은 항상 있어야 한다)
+      ...(typeof body.orderDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.orderDate) && { orderDate: new Date(body.orderDate) }),
       ...(body.delayNotifyDate   !== undefined && { delayNotifyDate: body.delayNotifyDate ? new Date(body.delayNotifyDate) : null }),
       // 배송완료 → completedAt 자동 기록
       ...(body.status === 'delivered' && { deliveryDate: new Date(), completedAt: new Date() }),

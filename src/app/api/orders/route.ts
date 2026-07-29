@@ -134,9 +134,11 @@ export async function POST(req: Request) {
     customerId = self.id
   }
 
-  // 주문번호: ORD-YYYYMMDD-NNNN. 현존 최대 일련번호 기준 + 충돌 시 재시도(동시성·삭제 안전)
-  const today = new Date()
-  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '')
+  // 주문일: 지정하면 그 날짜(청구서 주문은 거래일과 입력일이 다를 수 있다), 없으면 오늘.
+  // 주문번호의 날짜부도 주문일을 따른다 — MakeShop 수신(ORD-주문일-순번)과 같은 규칙.
+  const orderDateStr = typeof body.orderDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.orderDate) ? body.orderDate : null
+  const orderDate = orderDateStr ? new Date(orderDateStr) : new Date()
+  const dateStr = (orderDateStr ?? new Date().toISOString().slice(0, 10)).replace(/-/g, '')
 
   // Calculate totals
   type OrderItemInput = {
@@ -186,6 +188,7 @@ export async function POST(req: Request) {
     (orderNo) => prisma.order.create({
       data: {
         orderNo,
+        orderDate,
         customerId: Number(customerId),
         internal,
         // 자사재고 주문은 청구 대상이 아님 → 미수금 방지 위해 입금완료로 표시
