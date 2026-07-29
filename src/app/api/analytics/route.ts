@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { unstable_cache } from 'next/cache'
 import { prisma } from '@/lib/prisma'
+import { channelWhere } from '@/lib/order-channel'
 
 // 수익 분석 집계 — 60초 캐시(무거운 groupBy/스캔 반복 방지)
 async function buildAnalytics(rangeParam: string) {
@@ -42,18 +43,24 @@ async function buildAnalytics(rangeParam: string) {
   // 월별 데이터
   const monthlyData = await Promise.all(
     months.map(async m => {
-      const agg = await prisma.order.aggregate({
-        where: { orderDate: { gte: m.start, lt: m.end }, ...SALES_EXCLUDE },
-        _sum: { totalAmountJpy: true, totalCostJpy: true },
-        _count: true,
-      })
+      const mWhere = { orderDate: { gte: m.start, lt: m.end }, ...SALES_EXCLUDE }
+      // 청구서(오프라인) 매출을 따로 뽑는다 — 매출의 절반이라 합계만 보면 자사몰 흐름이 묻힌다.
+      const [agg, invoiceAgg] = await Promise.all([
+        prisma.order.aggregate({ where: mWhere, _sum: { totalAmountJpy: true, totalCostJpy: true }, _count: true }),
+        prisma.order.aggregate({ where: { ...mWhere, ...channelWhere('invoice') }, _sum: { totalAmountJpy: true }, _count: true }),
+      ])
+      const sales = agg._sum.totalAmountJpy ?? 0
+      const invoiceSales = invoiceAgg._sum.totalAmountJpy ?? 0
       return {
         label: `${m.year}.${String(m.month).padStart(2, '0')}`,
         month: m.month,
         year: m.year,
-        sales: agg._sum.totalAmountJpy ?? 0,
+        sales,
         cost: agg._sum.totalCostJpy ?? 0,
         count: agg._count,
+        invoiceSales,                       // 청구서
+        onlineSales: sales - invoiceSales,  // 자사몰 + 수기
+        invoiceCount: invoiceAgg._count,
       }
     })
   )
