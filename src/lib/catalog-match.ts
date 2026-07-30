@@ -34,22 +34,28 @@ const OPTION_TAIL = new RegExp(
 
 /**
  * 원가가 판매가에 비추어 말이 되는지 — 카탈로그 오매칭·단위 불일치를 걸러낸다.
- * 마진 70% 이상이면 원가 과소(오매칭 의심), 음수면 원가 과대(수량·단위 불일치).
+ * 마진 70% 이상 = 원가 과소(오매칭 의심). 원가가 판매가의 1.2배 초과 = 원가 과대(수량·단위 불일치).
+ * 약간의 역마진(¥5,760 원가를 ¥5,729 에 판매)은 실제로 있어서 막지 않는다 —
+ * 걸러야 할 것은 「1枚 판매 ¥52 vs 50枚 원가 ¥1,645」 같은 자릿수 차이다.
  */
 export function isCostSane(costJpy: number, salePriceJpy: number): boolean {
   if (costJpy <= 0) return false
   if (salePriceJpy <= 0) return true            // 판매가가 없으면 판단 근거가 없다 → 통과
   const margin = (salePriceJpy - costJpy) / salePriceJpy * 100
-  return margin >= 0 && margin < 70
+  return margin < 70 && costJpy <= salePriceJpy * 1.2
 }
 
 /** 옵션 꼬리를 떼고 표기 흔들림(태그·공백)을 지운 비교용 이름. */
 export function baseName(s: string | null | undefined): string {
-  return String(s || '')
-    .replace(/【[^】]*】/g, '')   // 【取寄せ商品】 같은 판매 태그
-    .replace(OPTION_TAIL, ' ')
-    .replace(/[\s　]+/g, '')
-    .toLowerCase()
+  let t = String(s || '').replace(/【[^】]*】/g, '')   // 【取寄せ商品】 같은 판매 태그
+  // 옵션이 연달아 붙으면(「RH L」) 첫 매칭이 사이 공백을 소비해 다음 옵션이 안 지워진다
+  // (실측: 「SAKER 1 タブ RH L」의 L 이 남아 매칭 실패) → 변화가 없을 때까지 반복한다.
+  for (let i = 0; i < 5; i++) {
+    const next = t.replace(OPTION_TAIL, ' ')
+    if (next === t) break
+    t = next
+  }
+  return t.replace(/[\s　]+/g, '').toLowerCase()
 }
 
 export type CatalogMatch = {
