@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { matchByCatalog } from '@/lib/catalog-match'
+import { matchByCatalog, isCostSane } from '@/lib/catalog-match'
 
 // POST /api/smaregi/to-product — 스마레지 재고 항목을 주문 라인으로 쓸 수 있게 Product 로 변환.
 //
@@ -33,7 +33,11 @@ export async function POST(req: Request) {
     const supplierCode = m?.supplierCode ?? 'ETC'
     // ⚠️ costPrice 는 공급사 통화 단위다(JVD/MK/FIVICS=USD). 카탈로그에서 찾았으면 그 원본 값을,
     // 못 찾았으면 스마레지 원가(JPY)를 ETC 에 넣는다. 섞으면 $24,244 로 오해석돼 폭발한다.
-    const costPrice = m ? m.costPrice : sm.cost
+    //
+    // 원가는 판매가와 비교해 말이 되는지 확인한 뒤에만 쓴다. 이름으로 이었기 때문에
+    // 「1枚」이 「50枚入」 카탈로그에 붙는 일이 있다(실측: 판매¥52 vs 원가¥1,645).
+    // 어긋나면 공급사만 반영하고 원가는 비워 둔다 — 틀린 원가보다 빈 원가가 낫다.
+    const costPrice = m && isCostSane(m.costJpy, sm.price) ? m.costPrice : (m ? 0 : sm.cost)
     product = await prisma.product.create({
       data: {
         supplierCode,
