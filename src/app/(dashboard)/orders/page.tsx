@@ -13,6 +13,7 @@ import SupplierBadge from '@/components/SupplierBadge'
 import DateInput from '@/components/DateInput'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { useT, useI18n } from '@/lib/i18n'
+import { channelOf, CHANNEL_COLORS } from '@/lib/order-channel'
 
 const PAGE_SIZE = 30
 
@@ -32,6 +33,7 @@ type Order = {
   subtotalJpy: number; discountRate: number; discountAmount: number
   dueDate?: string; delayNotifyDate?: string; shippingDate?: string
   deliveryDate?: string; completedAt?: string; trackingNo: string; memo: string; internal?: boolean
+  externalOrderNo?: string
   customer: { id: number; name: string; company: string }
   items: {
     id: number; quantity: number; salePriceJpy: number; costPriceJpy: number
@@ -123,6 +125,7 @@ export default function OrdersPage() {
   const [tab, setTab]         = useState<'active' | 'ready' | 'done'>('active')   // 진행중 / 배송대기 / 완료
   const [statusFilter, setStatusFilter]   = useState('')
   const [payFilter, setPayFilter]         = useState('')
+  const [channelFilter, setChannelFilter] = useState('')   // '' | online | invoice | manual
   const [searchQ, setSearchQ]             = useState('')
   const [donePeriod, setDonePeriod]       = useState<'month' | '3m' | '6m' | 'year' | 'all'>('3m')   // 완료 탭 기본 최근 3개월
   const [page, setPage]       = useState(1)
@@ -149,6 +152,7 @@ export default function OrdersPage() {
     const params = new URLSearchParams()
     if (statusFilter) params.set('status', statusFilter)
     if (payFilter)    params.set('paymentStatus', payFilter)
+    if (channelFilter) params.set('channel', channelFilter)
     if (searchQ)      params.set('q', searchQ)
     params.set('completed', tab === 'done' ? '1' : '0')
     if (tab === 'ready') params.set('readyToShip', '1')
@@ -157,7 +161,7 @@ export default function OrdersPage() {
     params.set('limit', String(PAGE_SIZE))
     params.set('page',  String(page))
     return `/api/orders?${params}`
-  }, [statusFilter, payFilter, searchQ, tab, page, donePeriod])
+  }, [statusFilter, payFilter, channelFilter, searchQ, tab, page, donePeriod])
   const { data: ordersData, isLoading: loading, refresh } = useApiCache<{ orders: Order[]; total: number }>(ordersUrl)
   const orders = ordersData?.orders ?? []
   const total = ordersData?.total ?? 0
@@ -171,7 +175,7 @@ export default function OrdersPage() {
   const [msStatus, setMsStatus] = useState<MsStatus | null>(null)
   const [msConfirm, setMsConfirm] = useState(false)
   const [exportConfirm, setExportConfirm] = useState(false)   // CSV 내보내기 확인창
-  const csvExportUrl = () => `/api/orders?format=csv&completed=${tab === 'done' ? '1' : '0'}${statusFilter ? `&status=${statusFilter}` : ''}${payFilter ? `&paymentStatus=${payFilter}` : ''}${searchQ ? `&q=${encodeURIComponent(searchQ)}` : ''}${tab === 'done' && donePeriod !== 'all' && donePeriodFrom(donePeriod) ? `&from=${encodeURIComponent(donePeriodFrom(donePeriod))}` : ''}`
+  const csvExportUrl = () => `/api/orders?format=csv&completed=${tab === 'done' ? '1' : '0'}${statusFilter ? `&status=${statusFilter}` : ''}${payFilter ? `&paymentStatus=${payFilter}` : ''}${channelFilter ? `&channel=${channelFilter}` : ''}${searchQ ? `&q=${encodeURIComponent(searchQ)}` : ''}${tab === 'done' && donePeriod !== 'all' && donePeriodFrom(donePeriod) ? `&from=${encodeURIComponent(donePeriodFrom(donePeriod))}` : ''}`
   const [msDismissed, setMsDismissed] = useState(false)
   const msPollingRef = React.useRef(false)
   const expectingRef = React.useRef(false)   // 이 화면에서 수신을 시작함 → 서버 기록을 기다림
@@ -228,7 +232,7 @@ export default function OrdersPage() {
   }, [startPolling])
 
   // 필터/탭 변경 시 1페이지로 (목록 로드는 useApiCache가 ordersUrl 변경으로 처리)
-  useEffect(() => { setPage(1) }, [statusFilter, payFilter, searchQ, tab, donePeriod])
+  useEffect(() => { setPage(1) }, [statusFilter, payFilter, channelFilter, searchQ, tab, donePeriod])
 
   // 탭 전환 시 필터 초기화 — 숨겨진 필터가 남아 헷갈리는 것 방지
   const switchTab = (nt: 'active' | 'ready' | 'done') => { setTab(nt); setStatusFilter(''); setPayFilter(''); setPage(1) }
@@ -425,6 +429,24 @@ export default function OrdersPage() {
           />
           {searchQ && <button type="button" onClick={() => setSearchQ('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X className="w-3.5 h-3.5" /></button>}
         </div>
+        {/* 유입 경로 — 매출의 절반이 청구서 거래라 섞여 보면 자사몰 흐름을 읽을 수 없다.
+            탭과 무관한 축이라 탭을 바꿔도 유지한다. */}
+        <div className="w-px h-5 bg-gray-200 dark:bg-gray-600" />
+        <div className="flex gap-2 items-center">
+          <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">{t.orders.channelLabel}:</span>
+          {[
+            { v: '', label: t.common.all },
+            { v: 'online', label: t.orders.channelOnline },
+            { v: 'invoice', label: t.orders.channelInvoice },
+            { v: 'manual', label: t.orders.channelManual },
+          ].map(({ v, label }) => (
+            <button key={v || 'all'} onClick={() => setChannelFilter(v)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${channelFilter === v ? 'text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+              style={channelFilter === v ? { backgroundColor: v ? CHANNEL_COLORS[v as 'online'|'invoice'|'manual'] : '#2563eb' } : {}}>
+              {label}
+            </button>
+          ))}
+        </div>
         {tab === 'active' && (
           <>
             <div className="w-px h-5 bg-gray-200 dark:bg-gray-600" />
@@ -498,6 +520,17 @@ export default function OrdersPage() {
                       <p className="font-medium flex items-center gap-1.5">
                         {/* 완료 탭에는 배송완료와 취소가 함께 있다. 취소는 배지로 구분한다. */}
                         <span className={isCancelled ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-900 dark:text-gray-100'}>{order.orderNo}</span>
+                        {/* 유입 경로 — 자사몰은 수가 많아 뱃지를 달면 시끄럽다. 청구서·수기만 표시한다. */}
+                        {(() => {
+                          const ch = channelOf(order)
+                          if (ch === 'online') return null
+                          return (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                              style={{ backgroundColor: CHANNEL_COLORS[ch] + '22', color: CHANNEL_COLORS[ch] }}>
+                              {ch === 'invoice' ? t.orders.channelInvoice : t.orders.channelManual}
+                            </span>
+                          )
+                        })()}
                         {isCancelled && (
                           <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
                             {t.orders.statusCancelled}
