@@ -434,13 +434,16 @@ export default function NewOrderPage() {
     } catch { alert(t.orders.smaregiAddError); return }
 
     const label = [sm.size, sm.color].filter(Boolean).join(' / ') || sm.name
+    // 원가: 표준상품(공급사 가격표)이 있으면 그 규칙으로 계산 — 스마레지 원가(불완전)보다 정확하다.
+    // 없으면(ETC 신규 생성) 스마레지 원가를 쓴다.
+    const costJpy = product.costPrice > 0 ? calcCostJpy(product, rates) : sm.cost
     // 같은 스마레지 코드가 이미 있으면 수량만 증가
     const existing = lines.findIndex(l => l.fromStock && l.optionMemo === sm.productCode)
     if (existing >= 0) {
       setLines(prev => prev.map((l, i) => i === existing ? { ...l, quantity: l.quantity + 1 } : l))
     } else {
       setLines(prev => [...prev, {
-        product, quantity: 1, salePriceJpy: sm.price, costPriceJpy: sm.cost,
+        product, quantity: 1, salePriceJpy: sm.price, costPriceJpy: costJpy,
         optionMemo: sm.productCode, fromStock: true, stockLabel: label, stockQty: sm.stock,
       }])
     }

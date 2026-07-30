@@ -65,6 +65,15 @@ export type CatalogMatch = {
   /** 위 값을 공급사 규칙으로 환산한 JPY — isCostSane() 으로 검증할 때 쓴다 */
   costJpy: number
   brand: string
+  /**
+   * 통합 대상 표준상품 id. 값이 있으면 새 상품을 만들지 말고 이 상품을 그대로 쓴다
+   * (「SAKER 1 タブ RH L」은 번들상품 「SAKER 1 … RH/LH (L/M/S…)」의 옵션일 뿐이다 —
+   * 옵션은 주문 라인의 optionLabel/optionMemo 가 담는다).
+   * null 이면 표준상품으로 못 모으는 경우다:
+   *  - 표준상품 자체가 특정 변형(optionSize/Color 채워짐 — SHIBUYA 색상별 분할 등)
+   *  - JVD 변형 분할군(스파인·색상별 별도 SKU — 형제가 있는 코드 접두 그룹)
+   */
+  mergeTargetId: number | null
   /** 참고용: 어느 카탈로그를 타고 찾았는지 */
   via: string
 }
@@ -93,7 +102,7 @@ export async function matchByCatalog(name: string): Promise<CatalogMatch | null>
 
   const sps = await prisma.product.findMany({
     where: { id: { in: [...new Set(hitIds)] } },
-    select: { name: true, brand: true, supplierCode: true, costPrice: true, supplier: { select: { currency: true, taxRate: true, discount: true } } },
+    select: { id: true, name: true, brand: true, supplierCode: true, productCode: true, costPrice: true, optionSize: true, optionColor: true, supplier: { select: { currency: true, taxRate: true, discount: true } } },
   })
   if (!sps.length) return null
 
@@ -109,12 +118,28 @@ export async function matchByCatalog(name: string): Promise<CatalogMatch | null>
   const single = byJpy.size === 1 ? [...byJpy.entries()][0] : null
   const via = cats.find(c => baseName(c.name) === key)?.name ?? ''
 
+  // 통합 대상 판정 — 표준상품이 정확히 하나이고, 그것이 '변형 번들'일 때만.
+  let mergeTargetId: number | null = null
+  const uniq = [...new Set(sps.map(s => s.id))]
+  if (uniq.length === 1) {
+    const canon = sps[0]
+    const isVariantRow = !!(canon.optionSize || canon.optionColor)   // 특정 변형 상품(색상별 분할 등)
+    let isJvdSplit = false
+    if (canon.supplierCode === 'JVD') {
+      const prefix = canon.productCode.split('-')[0]
+      const siblings = await prisma.product.count({ where: { supplierCode: 'JVD', productCode: { startsWith: `${prefix}-` } } })
+      isJvdSplit = siblings > 1                                       // 스파인·색상별 형제 SKU 존재
+    }
+    if (!isVariantRow && !isJvdSplit) mergeTargetId = canon.id
+  }
+
   return {
     supplierCode: [...sups][0],
     // 후보가 갈리면 0 — 통화 단위가 달라 옛 값을 남기면 오해석된다(¥24,244 → $24,244)
     costPrice: single ? single[1] : 0,
     costJpy: single ? single[0] : 0,
     brand: sps.find(s => s.brand)?.brand ?? '',
+    mergeTargetId,
     via,
   }
 }

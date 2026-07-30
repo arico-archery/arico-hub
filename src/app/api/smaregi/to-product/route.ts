@@ -30,6 +30,15 @@ export async function POST(req: Request) {
   if (!product) {
     // 카탈로그를 통해 진짜 공급사·원가를 찾는다. 못 찾으면 ETC + 스마레지 원가.
     const m = await matchByCatalog(sm.name)
+
+    // 표준상품(변형 번들)이 확정되면 새 상품을 만들지 않고 그것을 그대로 쓴다 —
+    // 「SAKER 1 タブ RH L」은 별도 상품이 아니라 번들상품의 옵션이다.
+    // 옵션(사이즈·색상·스마레지코드)은 주문 라인의 optionLabel/optionMemo 가 담는다.
+    if (m?.mergeTargetId) {
+      const canon = await prisma.product.findUnique({ where: { id: m.mergeTargetId }, include })
+      if (canon) return NextResponse.json({ product: canon })
+    }
+
     const supplierCode = m?.supplierCode ?? 'ETC'
     // ⚠️ costPrice 는 공급사 통화 단위다(JVD/MK/FIVICS=USD). 카탈로그에서 찾았으면 그 원본 값을,
     // 못 찾았으면 스마레지 원가(JPY)를 ETC 에 넣는다. 섞으면 $24,244 로 오해석돼 폭발한다.
