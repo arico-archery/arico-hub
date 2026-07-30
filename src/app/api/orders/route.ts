@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createWithSeqRetry } from '@/lib/seq'
 import { calcDiscount } from '@/lib/utils'
-import { channelWhere } from '@/lib/order-channel'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -35,9 +34,6 @@ export async function GET(req: Request) {
   if (searchParams.get('excludeCancelled') === '1') and.push({ status: { not: 'cancelled' } })
   if (Object.keys(paymentStatusFilter).length) and.push(paymentStatusFilter)
   if (customerId) and.push({ customerId: Number(customerId) })
-  // 유입 경로 필터: online(자사몰) | invoice(청구서) | manual(수기)
-  const chWhere = channelWhere(searchParams.get('channel'))
-  if (chWhere) and.push(chWhere)
   // 완료 필터: '1'=완료(배송완료) 또는 취소, '0'=진행중(완료 안 됨 & 취소 아님)
   if (completed === '1') and.push({ OR: [{ completedAt: { not: null } }, { status: 'cancelled' }] })
   if (completed === '0') and.push({ completedAt: null }, { status: { not: 'cancelled' } })

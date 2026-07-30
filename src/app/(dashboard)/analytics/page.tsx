@@ -7,11 +7,9 @@ import ProfitBar from '@/components/ProfitBar'
 import SalesBar, { SalesBarLegend } from '@/components/SalesBar'
 import { BarChart3, Users, TrendingUp, DollarSign, ShoppingCart, RefreshCw, Tag, AlertTriangle } from 'lucide-react'
 import { useT } from '@/lib/i18n'
-import { CHANNEL_COLORS } from '@/lib/order-channel'
 
 // ── 타입 ─────────────────────────────────────────────
-type MonthData = { label: string; month: number; year: number; sales: number; cost: number; count: number
-  invoiceSales?: number; onlineSales?: number; invoiceCount?: number }
+type MonthData = { label: string; month: number; year: number; sales: number; cost: number; count: number }
 type SupplierStat = { sales: number; cost: number }
 type TopItem = {
   productId: number; count: number; sales: number; cost: number
@@ -202,17 +200,8 @@ export default function AnalyticsPage() {
                   </div>
                   <SalesBar sales={m.sales} cost={m.cost} max={maxSales} />
                   {m.sales > 0 && (
-                    <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      {/* 경로 내역 — 막대(원가/이익)와 다른 축이라 글자로 덧붙인다 */}
-                      <span className="flex items-center gap-2">
-                        {(m.invoiceSales ?? 0) > 0 && (
-                          <>
-                            <span style={{ color: CHANNEL_COLORS.online }}>{t.orders.channelOnline} {formatJpy(m.onlineSales ?? 0)}</span>
-                            <span style={{ color: CHANNEL_COLORS.invoice }}>{t.orders.channelInvoice} {formatJpy(m.invoiceSales ?? 0)}</span>
-                          </>
-                        )}
-                      </span>
-                      <span>{t.analytics.margin} {margin.toFixed(1)}%</span>
+                    <div className="text-right text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      {t.analytics.margin} {margin.toFixed(1)}%
                     </div>
                   )}
                 </div>
