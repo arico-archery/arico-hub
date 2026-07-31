@@ -28,7 +28,7 @@ export async function GET(req: Request) {
   const win = (from && /^\d{8}$/.test(from) && to && /^\d{8}$/.test(to)) ? { start: `${from}000000`, end: `${to}235959` } : undefined
   try {
     const { rows } = await buildPreview(days, win)
-    const { refreshed, changes } = await refreshExisting(rows, true)   // dryRun
+    const { refreshed, procured, changes } = await refreshExisting(rows, true)   // dryRun
     const dup = rows.filter(r => r.dup).length
     // 품목이 0인 행 = レンタルリム 등 제외품목만 담긴 주문. 신규에서 빠지므로 따로 보고한다
     // (안 그러면 total 과 신규+중복 이 안 맞아 "빠뜨린 것"처럼 보인다).
@@ -40,6 +40,7 @@ export async function GET(req: Request) {
       alreadyImported: dup,
       wouldRefresh: refreshed,
       wouldStaySame: dup - refreshed,
+      wouldProcureItems: procured,   // 발송완료 주문의 needed 품목 → received 전환 예정 수
       skippedNoItems: empty.length,
       skippedSample: empty.slice(0, 10).map(r => ({ no: r.displayOrderNumber, date: r.orderDate })),
       newSample: rows.filter(r => !r.dup && r.items.length > 0).slice(0, 20).map(r => ({ no: r.displayOrderNumber, date: r.orderDate })),

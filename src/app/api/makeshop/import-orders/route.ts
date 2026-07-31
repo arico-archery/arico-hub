@@ -172,7 +172,9 @@ async function writeStatus(s: Record<string, unknown>) {
 
 // 이미 받은 주문의 "현재 상태"를 자사몰에서 읽어와 반영한다.
 // 자사몰이 아는 것만 대상: 입금 · 발송/배송완료(운송장·발송일) · 취소.
-// 발주·입고는 자사몰에 없는 개념이라 손대지 않는다.
+// 발주·입고는 자사몰에 없는 개념이라 원칙적으로 손대지 않는다 — 단 자사몰이
+// 발송완료한 주문의 미발주(needed) 품목은 이미 고객에게 간 것이므로 received로
+// 전환해 백오더(발주 대상)에서 내린다(2026-07-31 지안 확정).
 //
 // 되돌리기(다운그레이드)는 하지 않는다 — 자사몰이 모르는 사정(계좌이체를 앱에만
 // 기록, 앱에서 먼저 발송 처리 등)을 지워버리기 때문. 단 취소는 예외로 항상 반영한다.
@@ -181,9 +183,9 @@ async function writeStatus(s: Record<string, unknown>) {
 type RefreshRow = { externalOrderNo: string; payment: string; orderStatus: string; trackingNo: string; shipDate: string | null; dup: boolean }
 export async function refreshExisting(rows: RefreshRow[], dryRun = false) {
   const changes: { orderNo: string; from: string; to: string }[] = []
-  let refreshed = 0
+  let refreshed = 0, procured = 0
   const allDup = rows.filter(r => r.dup)
-  if (!allDup.length) return { refreshed, changes }
+  if (!allDup.length) return { refreshed, procured, changes }
 
   const cur = await prisma.order.findMany({
     where: { externalOrderNo: { in: allDup.map(r => r.externalOrderNo) }, internal: false },
@@ -242,7 +244,22 @@ export async function refreshExisting(rows: RefreshRow[], dryRun = false) {
     }
     if (!dryRun) await prisma.order.update({ where: { id: o.id }, data })
   }
-  return { refreshed, changes }
+
+  // ⑤ 자사몰이 발송완료한 주문의 미발주(needed) 품목 → received.
+  //    수신 후에 자사몰에서 발송된 주문(매장 재고 출고 등)의 품목이 백오더에
+  //    계속 발주 대상으로 남는 것을 막는다. 이미 발주된 것(ordered)은 PO 흐름이
+  //    따로 있으므로 건드리지 않는다. 과거에 잔류한 품목도 다음 수신 때 정리된다.
+  const deliveredIds = allDup
+    .filter(r => r.orderStatus === 'delivered')
+    .map(r => byNo.get(r.externalOrderNo)?.id)
+    .filter((v): v is number => v != null)
+  if (deliveredIds.length) {
+    const where = { orderId: { in: deliveredIds }, procureStatus: 'needed' }
+    procured = dryRun
+      ? await prisma.orderItem.count({ where })
+      : (await prisma.orderItem.updateMany({ where, data: { procureStatus: 'received' } })).count
+  }
+  return { refreshed, procured, changes }
 }
 
 // 실제 수신 로직 (POST·cron 공용). 결과 객체 반환.
@@ -408,12 +425,12 @@ export async function runImport(days: number, win?: { start: string; end: string
       }
     }
 
-    const { refreshed } = await refreshExisting(rows)
+    const { refreshed, procured } = await refreshExisting(rows)
 
     skipped = rows.filter(r => r.dup).length
     const partial = rows.filter(r => !r.dup && !r.allMatched).length
-    await writeStatus({ state: 'done', days, startedAt, finishedAt: new Date().toISOString(), created, dup: skipped, partial, custCreated, custUpdated, optionFilled, refreshed, stockCovered })
-    return { ok: true, created, skipped, dup: skipped, etcCreated, custCreated, custUpdated, partial, optionFilled, refreshed, stockCovered }
+    await writeStatus({ state: 'done', days, startedAt, finishedAt: new Date().toISOString(), created, dup: skipped, partial, custCreated, custUpdated, optionFilled, refreshed, procured, stockCovered })
+    return { ok: true, created, skipped, dup: skipped, etcCreated, custCreated, custUpdated, partial, optionFilled, refreshed, procured, stockCovered }
   } catch (e) {
     const err = e instanceof MakeshopError ? { error: e.message, detail: e.detail } : { error: String(e) }
     await writeStatus({ state: 'error', days, startedAt, finishedAt: new Date().toISOString(), created: 0, dup: 0, partial: 0, error: String(err.error) }).catch(() => {})
