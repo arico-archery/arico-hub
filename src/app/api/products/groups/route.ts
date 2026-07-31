@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { unstable_cache } from 'next/cache'
 import { prisma } from '@/lib/prisma'
-import { groupKeyOf, commonBaseName, sibuyaBaseName } from '@/lib/variants'
+import { groupKeyOf, commonBaseName, sibuyaBaseName, fivicsBaseName } from '@/lib/variants'
 
 const PAGE_SIZE = 50
 
@@ -17,6 +17,8 @@ type GroupRow = {
 async function buildGroups(supplier: string, category: string, brand: string, q: string): Promise<GroupRow[]> {
   const rows = await prisma.product.findMany({
     where: {
+      // 변형으로 분리된 기본코드(FIVICS 부모행)는 자식들이 대표하므로 통합 보기에서 제외
+      variantParent: false,
       ...(supplier ? { supplierCode: supplier } : {}),
       ...(category ? { category } : {}),
       ...(brand ? { brand } : {}),
@@ -43,7 +45,9 @@ async function buildGroups(supplier: string, category: string, brand: string, q:
     const sales = vs.map(v => v.salePriceJpy).filter(p => p > 0)
     const base = vs[0].supplierCode === 'SHIBUYA'
       ? sibuyaBaseName(vs[0].name, vs[0].optionSize, vs[0].optionColor)
-      : (commonBaseName(vs.map(v => v.name)) || vs[0].name)
+      : vs[0].supplierCode === 'FIVICS'
+        ? fivicsBaseName(vs[0].name, vs[0].optionSize)
+        : (commonBaseName(vs.map(v => v.name)) || vs[0].name)
     groups.push({
       groupCode: gc,
       base: base || vs[0].name,

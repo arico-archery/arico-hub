@@ -91,10 +91,12 @@ export function parseSibuyaOption(size: string, color: string): VariantOption {
   return o
 }
 
-// 공급사별 변형 그룹 키. JVD=코드접두부, SHIBUYA=베이스명, 그 외=자기 코드(그룹핑 안 함).
+// 공급사별 변형 그룹 키. JVD=코드접두부, SHIBUYA=베이스명, FIVICS=이름 접미부 뗀 베이스명,
+// 그 외=자기 코드(그룹핑 안 함).
 export function groupKeyOf(p: { supplierCode: string; productCode: string; name: string; optionSize: string; optionColor: string }): string {
   if (p.supplierCode === 'JVD') return groupCodeOf('JVD', p.productCode)
   if (p.supplierCode === 'SHIBUYA') return 'SBY:' + sibuyaBaseName(p.name, p.optionSize, p.optionColor)
+  if (p.supplierCode === 'FIVICS') return 'FVX:' + fivicsBaseName(p.name, p.optionSize)
   return p.productCode
 }
 

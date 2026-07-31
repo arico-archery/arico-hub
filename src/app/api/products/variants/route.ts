@@ -20,7 +20,7 @@ export async function GET(req: Request) {
 
   const target = await prisma.product.findUnique({
     where: { id: productId },
-    select: { supplierCode: true, name: true, productCode: true, optionSize: true, optionColor: true },
+    select: { supplierCode: true, name: true, productCode: true, optionSize: true, optionColor: true, variantParent: true },
   })
   if (!target) return NextResponse.json({ variants: [] })
 
@@ -53,6 +53,19 @@ export async function GET(req: Request) {
 
   // FIVICS: 이름 접미부(옵션)를 뗀 베이스명으로 형제 변형을 묶는다 (숨긴 base 제외).
   if (target.supplierCode === 'FIVICS') {
+    // 대상이 부모(변형으로 분리된 기본코드 — 카탈로그가 여기 연결된 경우)면
+    // 코드 접두부로 자식 변형을 모아 돌려준다. 예: TPROS → TPROS300~TPROS1200(스파인 축)
+    if (target.variantParent) {
+      const kids = await prisma.product.findMany({
+        where: { supplierCode: 'FIVICS', variantParent: false, productCode: { startsWith: target.productCode } },
+        select: VARIANT_SELECT,
+      })
+      if (kids.length >= 2) {
+        const group = buildFivicsGroup(kids as RawVariant[])
+        return NextResponse.json({ base: group.base, axes: group.axes, variants: group.variants })
+      }
+      // 자식이 없으면 아래 이름 기반 그룹핑으로 폴백
+    }
     const base = fivicsBaseName(target.name, target.optionSize)
     const candidates = await prisma.product.findMany({
       where: { supplierCode: 'FIVICS', variantParent: false, name: { startsWith: base } },
