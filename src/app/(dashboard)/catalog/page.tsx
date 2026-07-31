@@ -325,7 +325,10 @@ export default function CatalogPage() {
     setMsSyncing(true); setMsResult(null)
     try {
       const res = await fetch('/api/makeshop/sync-products', { method: 'POST' })
-      const d = await res.json()
+      // 타임아웃 등으로 Vercel 이 JSON 아닌 에러 페이지를 돌려줄 수 있다 — 그대로 보여준다
+      const text = await res.text()
+      let d: { ok?: boolean; error?: string; detail?: unknown; hint?: string; fetched?: number; created?: number; updated?: number; skipped?: number }
+      try { d = JSON.parse(text) } catch { d = { ok: false, error: `HTTP ${res.status}`, detail: text.slice(0, 200) } }
       if (!res.ok || !d.ok) {
         const detail = d.detail ? (typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail)) : ''
         setMsResult('⚠️ ' + (d.error === 'not_configured' ? (d.hint || 'API 미설정') : `${d.error}${detail ? ' — ' + detail.slice(0, 500) : ''}`))
