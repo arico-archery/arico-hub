@@ -9,6 +9,8 @@ type GroupRow = {
   groupCode: string; base: string; brand: string; category: string; supplierCode: string
   count: number; repId: number; minSale: number; maxSale: number
   pricedCount: number; inStockCount: number
+  // FIVICS: 변형으로 분리되기 전 부모(대표상품) id — 카탈로그 매칭은 변형이 아니라 여기에 건다
+  parentId: number | null
 }
 
 // 슬림하게 불러와 코드 접두부로 그룹핑. (무거운 단계만 캐시)
@@ -40,6 +42,11 @@ async function buildGroups(supplier: string, category: string, brand: string, q:
     map.get(gc)!.push(r)
   }
 
+  // FIVICS 대표상품(부모) 색인 — 자식 코드가 부모 코드로 시작한다(TPROS → TPROS300…)
+  const fivicsParents = rows.some(r => r.supplierCode === 'FIVICS')
+    ? await prisma.product.findMany({ where: { supplierCode: 'FIVICS', variantParent: true }, select: { id: true, productCode: true } })
+    : []
+
   const groups: GroupRow[] = []
   for (const [gc, vs] of map) {
     const sales = vs.map(v => v.salePriceJpy).filter(p => p > 0)
@@ -48,6 +55,15 @@ async function buildGroups(supplier: string, category: string, brand: string, q:
       : vs[0].supplierCode === 'FIVICS'
         ? fivicsBaseName(vs[0].name, vs[0].optionSize)
         : (commonBaseName(vs.map(v => v.name)) || vs[0].name)
+    // FIVICS: 대표 자식 코드를 가장 길게 접두하는 부모 = 이 그룹의 대표상품
+    let parentId: number | null = null
+    if (vs[0].supplierCode === 'FIVICS') {
+      let best: { id: number; productCode: string } | null = null
+      for (const pa of fivicsParents) {
+        if (pa.productCode && vs[0].productCode.startsWith(pa.productCode) && (!best || pa.productCode.length > best.productCode.length)) best = pa
+      }
+      parentId = best?.id ?? null
+    }
     groups.push({
       groupCode: gc,
       base: base || vs[0].name,
@@ -60,6 +76,7 @@ async function buildGroups(supplier: string, category: string, brand: string, q:
       maxSale: sales.length ? Math.max(...sales) : 0,
       pricedCount: sales.length,
       inStockCount: vs.filter(v => v.availability === 'in_stock').length,
+      parentId,
     })
   }
   groups.sort((a, b) => a.base.localeCompare(b.base))

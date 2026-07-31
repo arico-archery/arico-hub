@@ -43,6 +43,7 @@ function MatchedName({ m }: { m: SupplierProduct }) {
 type GroupResult = {
   groupCode: string; base: string; brand: string; supplierCode: string
   count: number; repId: number; minSale: number; maxSale: number; pricedCount: number
+  parentId?: number | null   // FIVICS 대표상품(부모) — 있으면 변형 대신 여기에 매칭
 }
 
 type CatalogStats = {
@@ -134,17 +135,18 @@ function MatchModal({
     return () => clearTimeout(t)
   }, [q, search])
 
-  // 그룹 선택 → 대표 변형(repId)으로 매칭. 주문 시 옵션(변형)을 선택한다.
+  // 그룹 선택 → 매칭. FIVICS 는 대표상품(부모)에, 그 외는 대표 변형(repId)에 건다.
+  // 주문 시 옵션(변형)을 선택한다 — 부모에 걸려도 variants API 가 자식 축을 띄운다.
   const handleSelect = async (group: GroupResult | null) => {
     setSaving(true)
-    const pid = group?.repId ?? null
+    const pid = group ? (group.parentId ?? group.repId) : null
     await fetch('/api/arico-catalog', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: item.id, supplierProductId: pid, barcode }),
     })
     const synth: SupplierProduct | null = group ? {
-      id: group.repId, name: group.base, brand: group.brand, productCode: group.groupCode,
+      id: pid!, name: group.base, brand: group.brand, productCode: group.groupCode,
       supplierCode: group.supplierCode, costPrice: 0, salePriceJpy: group.minSale, supplier: { currency: 'JPY' },
       group: { base: group.base, count: group.count },   // 낙관적 표시도 그룹으로
     } : null
@@ -230,7 +232,7 @@ function MatchModal({
             <div className="text-center py-8 text-gray-400 text-sm">{tr.catalog.enterSearch}</div>
           )}
           {results.map(g => {
-            const isSelected = item.supplierProductId === g.repId
+            const isSelected = item.supplierProductId === (g.parentId ?? g.repId)
             const color = SUPPLIER_COLORS[g.supplierCode] ?? '#6b7280'
             return (
               <button
