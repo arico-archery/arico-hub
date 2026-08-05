@@ -7,7 +7,7 @@ import SupplierBadge from '@/components/SupplierBadge'
 import BarcodeScanner from '@/components/BarcodeScanner'
 import ProfitBar from '@/components/ProfitBar'
 import ConfirmDialog from '@/components/ConfirmDialog'
-import { formatJpy, formatNumber, calcProfitRate, calcCostJpy, SUPPLIER_COLORS, SUPPLIER_LIST } from '@/lib/utils'
+import { formatJpy, formatNumber, calcProfitRate, calcCostJpy, SUPPLIER_COLORS, SUPPLIER_LIST, supplierCurrency } from '@/lib/utils'
 import { useT } from '@/lib/i18n'
 
 type Supplier = { id: number; code: string; name: string; currency: string; taxRate: number; discount: number }
@@ -990,10 +990,19 @@ export default function ProductsPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 block">{t.products.fieldCost} (¥)</label>
+                  {/* 원가는 공급사 통화 단위로 저장된다(USD 공급사에 엔화 입력 시 환산 폭발) — 단위를 라벨에 명시 */}
+                  <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 block">
+                    {t.products.fieldCost} ({supplierCurrency(form.supplierCode) === 'USD' ? '$ USD' : '¥'})
+                  </label>
                   <input type="number" value={form.costPrice} onChange={e => setForm(f => ({ ...f, costPrice: e.target.value }))}
                     placeholder="0"
                     className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  {supplierCurrency(form.supplierCode) === 'USD' && (
+                    <p className="text-[11px] text-amber-600 mt-1">
+                      ⚠ {form.supplierCode}는 달러(USD) 단위 — 엔화 금액을 넣으면 원가가 환율×1.1배로 부풀어요
+                      {Number(form.costPrice) > 0 && ` (현재 입력 $${Number(form.costPrice).toLocaleString()})`}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1 block">{t.products.colSale} (¥)</label>

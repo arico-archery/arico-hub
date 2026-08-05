@@ -112,3 +112,9 @@ export const SUPPLIER_COLORS: Record<string, string> = {
 
 export const SUPPLIER_LIST = ['ARICO', 'JVD', 'MK', 'FIVICS', 'SHIBUYA', 'KOREA', 'ANGEL', 'WJ', 'KOWA', 'ETC'] as const
 export type SupplierCode = typeof SUPPLIER_LIST[number]
+
+// 공급사별 원가(costPrice) 통화 — costPrice 는 공급사 통화 단위 그대로 저장된다.
+// USD 공급사에 엔화 금액을 넣으면 환산(×환율×1.1) 시 원가가 폭발하므로 입력 UI 에서 단위를 보여준다.
+export function supplierCurrency(code: string): 'USD' | 'JPY' {
+  return code === 'JVD' || code === 'MK' || code === 'FIVICS' ? 'USD' : 'JPY'
+}
