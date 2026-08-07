@@ -399,7 +399,10 @@ export default function NewOrderPage() {
     const defaultSalePrice = linkCat && linkCat.priceJpy > 0
       ? linkCat.priceJpy
       : (p.salePriceJpy > 0 ? p.salePriceJpy : 0)
-    const existing = lines.findIndex(l => l.product.id === p.id && !linkCat)
+    // 옵션이 있는 라인(변형 축·변형 목록·카탈로그 옵션·옵션 메모)은 병합하지 않는다 —
+    // 같은 상품을 다른 옵션으로 한 줄 더 담을 수 있어야 하기 때문. 옵션 없는 단순 상품만 수량+1.
+    const existing = lines.findIndex(l => l.product.id === p.id && !linkCat
+      && !l.optionMemo && !l.variantAxes && !l.variants && !l.catalogOptions)
     if (existing >= 0) {
       setLines(prev => prev.map((l, i) => i === existing ? { ...l, quantity: l.quantity + 1 } : l))
     } else {
@@ -483,7 +486,9 @@ export default function NewOrderPage() {
       optionSize: mp.optionSize, optionColor: mp.optionColor,
     }
 
-    const existing = lines.findIndex(l => l.product.id === product.id)
+    // 옵션이 있는 라인은 병합하지 않고 새 줄로 — 같은 상품의 다른 옵션 추가 가능 (addProduct 와 동일 규칙)
+    const existing = lines.findIndex(l => l.product.id === product.id
+      && !l.optionMemo && !l.variantAxes && !l.variants && !l.catalogOptions)
     if (existing >= 0) {
       setLines(prev => prev.map((l, i) => i === existing ? { ...l, quantity: l.quantity + 1 } : l))
     } else {
