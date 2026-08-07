@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { formatJpy } from '@/lib/utils'
 import { DOC_TEXT, DOC_LANGS, DocLang, DocType, fmtDocDate, fmtDocDateShort, fmtDocDatePadded, inclusiveTax, cleanDocText, cleanDocOption } from '@/lib/documents'
 import DocToolbar from './DocToolbar'
+import EditableName from './EditableName'
 import Logo, { ARICO_GREEN } from '@/components/Logo'
 
 async function getSettings(): Promise<Record<string, string>> {
@@ -14,7 +15,7 @@ async function getSettings(): Promise<Record<string, string>> {
   }
 }
 
-type Row = { date: string; name: string; opt: string; txId: string; code: string; taxRate: number; unit: string; qty: number; unitPrice: number; amount: number }
+type Row = { date: string; name: string; opt: string; txId: string; code: string; taxRate: number; unit: string; qty: number; unitPrice: number; amount: number; itemId?: number }
 type DateRow = { label: string; value: string }
 
 export default async function DocumentPage({
@@ -126,6 +127,7 @@ export default async function DocumentPage({
       // 자사몰명이 없으면(수동 주문 등) 공급사 상품명으로 폴백. 옵션도 같은 태그 제거.
       name: cleanDocText(it.shopProductName) || it.product.name,
       opt: cleanDocOption(it.optionLabel || it.optionMemo || ''),
+      itemId: it.id,   // 품명 인라인 편집용
       txId: String(order.id),
       code: it.product.productCode,
       taxRate: 10,
@@ -306,7 +308,8 @@ export default async function DocumentPage({
               <tr key={i} className={zebra}>
                 <td className={`${cell} align-top text-center whitespace-nowrap`}>{r.date}</td>
                 <td className={`${cell} align-top`}>
-                  <p className="font-medium">{r.name}</p>
+                  {/* 품명에 마우스 올리면 연필 → 이 주문의 표기명만 수정(인쇄에는 아이콘 안 나옴) */}
+                  {r.itemId ? <EditableName itemId={r.itemId} initial={r.name} /> : <p className="font-medium">{r.name}</p>}
                   {r.opt && <p className="text-[11px] text-amber-700">{r.opt}</p>}
                 </td>
                 <td className={`${cell} align-top text-center`}>{r.taxRate}%</td>

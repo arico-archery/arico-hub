@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, Trash2, ArrowLeft, ShoppingCart, Filter, Tag, Link2, RefreshCw, FileText, Image as ImageIcon, Clock, X, Boxes } from 'lucide-react'
+import { Search, Plus, Trash2, ArrowLeft, ShoppingCart, Filter, Tag, Link2, RefreshCw, FileText, Image as ImageIcon, Clock, X, Boxes, Pencil } from 'lucide-react'
 import { formatJpy, formatNumber, calcProfitRate, calcCostJpy, calcDiscount, SUPPLIER_COLORS, SUPPLIER_LIST } from '@/lib/utils'
 import SupplierBadge from '@/components/SupplierBadge'
 import ProfitBar from '@/components/ProfitBar'
@@ -45,6 +45,8 @@ type ExchangeRate = { currency: string; rateToJpy: number }
 type OrderLine = {
   product: Product; quantity: number; salePriceJpy: number; costPriceJpy: number
   optionMemo: string; catalogName?: string; catalogId?: number
+  displayName?: string   // 문서(청구서·견적서)에 찍히는 표시명(shopProductName) — 비우면 카탈로그명→상품명 순
+  editingName?: boolean  // 표시명 인라인 편집 중 (UI 상태)
   catalogImage?: string                       // ARICO 자사몰 대표 이미지
   catalogOptions?: CatalogOption[]            // ARICO 자사몰 옵션 (축별 드롭다운)
   catalogOptionSel?: Record<string, string>   // 선택된 옵션 {label: value}
@@ -189,7 +191,7 @@ export default function NewOrderPage() {
       setMemo(order.memo ?? '')
       setDiscountRate(order.discountRate ?? 0)
       setDiscountAmount(order.discountAmount ?? 0)
-      type LoadedItem = { quantity: number; salePriceJpy: number; costPriceJpy: number; optionMemo: string; product: Product & { supplier: Supplier } }
+      type LoadedItem = { quantity: number; salePriceJpy: number; costPriceJpy: number; optionMemo: string; shopProductName?: string; product: Product & { supplier: Supplier } }
       setLines((order.items as LoadedItem[]).map((it) => ({
         product: {
           id: it.product.id, name: it.product.name, brand: it.product.brand,
@@ -200,6 +202,7 @@ export default function NewOrderPage() {
         },
         quantity: it.quantity, salePriceJpy: it.salePriceJpy, costPriceJpy: it.costPriceJpy,
         optionMemo: it.optionMemo ?? '',
+        displayName: it.shopProductName || '',   // 문서 표시명 — 편집 저장 시 소실 방지
       })))
     })
   }, [])
@@ -565,6 +568,8 @@ export default function NewOrderPage() {
         salePriceJpy: l.salePriceJpy,
         costPriceJpy: l.costPriceJpy,
         optionMemo:   l.optionMemo,
+        // 문서(청구서·견적서) 표시명: 직접 수정했으면 그 값, 아니면 카탈로그(자사몰)명
+        shopProductName: (l.displayName || l.catalogName || '').trim(),
         catalogId:    l.catalogId ?? null,
         // 스마레지 재고 품목: 발주 안 하고 재고 충당(입고완료) + 읽는 라벨 저장
         ...(l.fromStock ? { optionLabel: l.stockLabel ?? '', procureStatus: 'received', stockAllocated: true } : {}),
@@ -945,18 +950,30 @@ export default function NewOrderPage() {
                           <div className="flex items-center gap-2">
                             {line.catalogName && <Thumb src={line.catalogImage} size={40} />}
                             <SupplierBadge code={line.product.supplierCode} />
-                            <div className="min-w-0">
-                              {line.catalogName ? (
-                                <>
-                                  <p className="font-medium text-gray-900 dark:text-gray-100 leading-tight truncate">{line.catalogName}</p>
-                                  <p className="text-xs text-gray-400 truncate">{line.product.name}</p>
-                                </>
+                            <div className="min-w-0 flex-1">
+                              {/* 표시명(문서에 찍히는 이름) — 연필로 인라인 수정. 비우면 카탈로그명→상품명 순 */}
+                              {line.editingName ? (
+                                <input
+                                  autoFocus
+                                  value={line.displayName ?? (line.catalogName || line.product.name)}
+                                  onChange={e => setLines(prev => prev.map((l, i) => i === idx ? { ...l, displayName: e.target.value } : l))}
+                                  onBlur={() => setLines(prev => prev.map((l, i) => i === idx ? { ...l, editingName: false } : l))}
+                                  onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') (e.target as HTMLInputElement).blur() }}
+                                  className="w-full border border-blue-300 rounded px-1.5 py-0.5 text-sm font-medium text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                />
                               ) : (
-                                <>
-                                  <p className="font-medium text-gray-900 dark:text-gray-100 leading-tight">{line.product.name}</p>
-                                  <p className="text-xs text-gray-400">{line.product.brand}</p>
-                                </>
+                                <p className="font-medium text-gray-900 dark:text-gray-100 leading-tight flex items-center gap-1">
+                                  <span className="truncate">{line.displayName || line.catalogName || line.product.name}</span>
+                                  <button
+                                    onClick={() => setLines(prev => prev.map((l, i) => i === idx ? { ...l, editingName: true, displayName: l.displayName || l.catalogName || l.product.name } : l))}
+                                    title={t.orders.editDisplayName}
+                                    className="shrink-0 p-0.5 text-gray-300 hover:text-blue-600"
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                  </button>
+                                </p>
                               )}
+                              <p className="text-xs text-gray-400 truncate">{line.catalogName ? line.product.name : line.product.brand}</p>
                             </div>
                           </div>
                         </td>

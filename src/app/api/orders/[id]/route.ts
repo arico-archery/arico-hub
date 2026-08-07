@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { calcDiscount } from '@/lib/utils'
 
-type EditItem = { productId: number; quantity: number; salePriceJpy: number; costPriceJpy: number; optionMemo?: string }
+type EditItem = { productId: number; quantity: number; salePriceJpy: number; costPriceJpy: number; optionMemo?: string; shopProductName?: string }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -20,6 +20,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         productId: it.productId, quantity: it.quantity,
         salePriceJpy: it.salePriceJpy, costPriceJpy: it.costPriceJpy,
         optionMemo: it.optionMemo ?? '',
+        // 표시명(청구서·견적서 인쇄명) — 품목 전체 교체 시 소실되지 않게 함께 저장
+        shopProductName: (it.shopProductName ?? '').trim().slice(0, 200),
       }
     })
     // 할인: 본문에 오면 사용, 없으면 기존 주문 스냅샷 유지
