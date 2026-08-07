@@ -23,8 +23,8 @@ export default function DocToolbar({
   issuers?: string[]; issuerIdx?: number; banks?: string[]; bankIdx?: number
   zan?: boolean; noPrice?: boolean; ship?: string
 }) {
-  // 주문 기반 문서(청구·견적·납품·영수)는 상호 전환 가능. 발주서는 단독.
-  const orderTypes: DocType[] = ['invoice', 'quote', 'delivery', 'receipt']
+  // 주문 기반 문서는 상호 전환 가능. 발주서는 단독. 순서 = 거래 흐름(견적→청구→납품→영수, 지안 지정)
+  const orderTypes: DocType[] = ['quote', 'invoice', 'delivery', 'receipt']
   const showTypeSwitch = type !== 'po'
   // 注残 토글은 품목 표가 있는 고객 문서에만 (영수증 제외)
   const showZan = type === 'invoice' || type === 'quote' || type === 'delivery'
