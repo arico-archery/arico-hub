@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { formatJpy, calcProfitRate } from '@/lib/utils'
 import { notFound } from 'next/navigation'
 import PrintButton from './PrintButton'
+import EditableName from './EditableName'
 import { AricoMark } from '@/components/Logo'
 
 async function getSettings(): Promise<Record<string, string>> {
@@ -106,8 +107,9 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
                 <tr key={item.id} className="border-b border-gray-50">
                   <td className="py-3 text-gray-400">{idx + 1}</td>
                   <td className="py-3">
-                    <p className="font-medium text-gray-900">{item.product.name}</p>
-                    <p className="text-xs text-gray-400">{item.product.brand} · {item.product.productCode}</p>
+                    {/* 품명: 이 주문에서의 표기명(shopProductName) 우선 — 연필 아이콘으로 인라인 수정 */}
+                    <EditableName itemId={item.id} initial={item.shopProductName || item.product.name} />
+                    <p className="text-xs text-gray-400">{item.product.brand} · {item.product.productCode}{item.optionLabel ? ` · ${item.optionLabel}` : ''}</p>
                   </td>
                   <td className="py-3 text-center text-gray-700">{item.quantity}</td>
                   <td className="py-3 text-right text-gray-700 tabular-nums">{formatJpy(item.salePriceJpy)}</td>
