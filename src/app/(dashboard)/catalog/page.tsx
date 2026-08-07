@@ -307,6 +307,10 @@ export default function CatalogPage() {
   const t = useT()
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<'all' | 'matched' | 'unmatched'>('all')
+  // 브랜드 / 카테고리 / 마진 필터 ('' = 전체, '__none' = 미지정·미분류)
+  const [brandF, setBrandF] = useState('')
+  const [catF, setCatF] = useState('')
+  const [marginF, setMarginF] = useState('')
   const [page, setPage] = useState(1)
   const [modalItem, setModalItem] = useState<CatalogItem | null>(null)
   const [krwPerJpy] = useState(9.5)
@@ -330,15 +334,20 @@ export default function CatalogPage() {
   const [debouncedQ, setDebouncedQ] = useState('')
   useEffect(() => { const t = setTimeout(() => setDebouncedQ(q), 300); return () => clearTimeout(t) }, [q])
   // 필터/검색 변경 시 1페이지로
-  useEffect(() => { setPage(1) }, [debouncedQ, filter])
+  useEffect(() => { setPage(1) }, [debouncedQ, filter, brandF, catF, marginF])
   // 클라 캐시: URL(검색+필터+페이지)별 → 재방문/페이지 왕복 즉시표시 + 백그라운드 재검증
   const itemsUrl = useMemo(() => {
     const params = new URLSearchParams({
       q: debouncedQ, limit: String(PAGE_SIZE), offset: String((page - 1) * PAGE_SIZE),
       ...(filter === 'matched' ? { matchedOnly: '1' } : filter === 'unmatched' ? { unmatchedOnly: '1' } : {}),
+      ...(brandF ? { brand: brandF } : {}),
+      ...(catF ? { category: catF } : {}),
+      ...(marginF ? { margin: marginF } : {}),
     })
     return `/api/arico-catalog?${params}`
-  }, [debouncedQ, filter, page])
+  }, [debouncedQ, filter, brandF, catF, marginF, page])
+  // 필터 드롭다운용 브랜드·카테고리 목록
+  const { data: filterMeta } = useApiCache<{ brands: string[]; categories: string[] }>('/api/arico-catalog?meta=1')
   const { data: itemsData, isLoading: loading, refresh, mutate } = useApiCache<{ rows: CatalogItem[]; total: number }>(itemsUrl)
   const items = itemsData?.rows ?? []
   const total = itemsData?.total ?? 0
@@ -563,6 +572,28 @@ export default function CatalogPage() {
             </button>
           ))}
         </div>
+        {/* 브랜드 / 카테고리 / 마진 필터 */}
+        <select value={brandF} onChange={e => setBrandF(e.target.value)}
+          className={`px-2 py-1.5 text-xs rounded-lg border bg-white dark:bg-gray-700 ${brandF ? 'border-blue-400 text-blue-700 dark:text-blue-300 font-medium' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300'}`}>
+          <option value="">{t.catalog.brandLabel}: {t.common.all}</option>
+          <option value="__none">{t.catalog.brandNone}</option>
+          {(filterMeta?.brands ?? []).map(b => <option key={b} value={b}>{b}</option>)}
+        </select>
+        <select value={catF} onChange={e => setCatF(e.target.value)}
+          className={`px-2 py-1.5 text-xs rounded-lg border bg-white dark:bg-gray-700 ${catF ? 'border-blue-400 text-blue-700 dark:text-blue-300 font-medium' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300'}`}>
+          <option value="">{t.catalog.categoryLabel}: {t.common.all}</option>
+          <option value="__none">{t.catalog.categoryNone}</option>
+          {(filterMeta?.categories ?? []).map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={marginF} onChange={e => setMarginF(e.target.value)}
+          className={`px-2 py-1.5 text-xs rounded-lg border bg-white dark:bg-gray-700 ${marginF ? 'border-blue-400 text-blue-700 dark:text-blue-300 font-medium' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300'}`}>
+          <option value="">{t.catalog.marginLabel}: {t.common.all}</option>
+          <option value="neg">{t.catalog.marginNeg}</option>
+          <option value="lt20">{t.catalog.marginLt20}</option>
+          <option value="20to40">20~40%</option>
+          <option value="gte40">{t.catalog.marginGte40}</option>
+          <option value="nocost">{t.catalog.marginNoCost}</option>
+        </select>
         <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
           <button onClick={() => setViewMode('list')} title={t.catalog.viewList}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === 'list' ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}>

@@ -30,12 +30,31 @@ export async function GET(req: Request) {
     }
   }
 
+  // 필터 드롭다운용 메타 (meta=1): 브랜드·카테고리 목록
+  if (searchParams.get('meta') === '1') {
+    try {
+      const [brandRows, catRows] = await Promise.all([
+        prisma.aricoCatalog.groupBy({ by: ['brand'], where: { active: true } }),
+        prisma.aricoCatalog.findMany({
+          where: { active: true, supplierProductId: { not: null } },
+          select: { supplierProduct: { select: { category: true } } },
+        }),
+      ])
+      const brands = brandRows.map(b => b.brand).filter(Boolean).sort()
+      const categories = [...new Set(catRows.map(r => r.supplierProduct?.category).filter((c): c is string => !!c))].sort()
+      return NextResponse.json({ brands, categories })
+    } catch { return NextResponse.json({ brands: [], categories: [] }) }
+  }
+
   const q = searchParams.get('q') ?? ''
   const limit = Number(searchParams.get('limit') ?? '50')
   const offset = Number(searchParams.get('offset') ?? '0')
   const matchedOnly = searchParams.get('matchedOnly') === '1'
   const unmatchedOnly = searchParams.get('unmatchedOnly') === '1'
   const includeInactive = searchParams.get('includeInactive') === '1'  // 미진열(판매안함)도 포함
+  const brand = searchParams.get('brand') ?? ''        // '__none' = 브랜드 미지정
+  const category = searchParams.get('category') ?? ''  // '__none' = 미분류(미매칭 포함)
+  const marginF = searchParams.get('margin') ?? ''     // neg | lt20 | 20to40 | gte40 | nocost
 
   try {
     const textWhere = q
@@ -48,17 +67,53 @@ export async function GET(req: Request) {
       : {}
     // 미진열(active=false = 판매안함) 상품은 기본 숨김
     const activeWhere = includeInactive ? {} : { active: true }
-    const where = { ...textWhere, ...matchWhere, ...activeWhere }
+    const brandWhere = brand ? (brand === '__none' ? { brand: '' } : { brand }) : {}
+    const catWhere = category
+      ? category === '__none'
+        ? { OR: [{ supplierProductId: null }, { supplierProduct: { category: '' } }] }
+        : { supplierProduct: { category } }
+      : {}
+    // textWhere/catWhere 둘 다 OR 를 쓸 수 있어 AND 배열로 합친다
+    const where = { AND: [textWhere, matchWhere, activeWhere, brandWhere, catWhere] }
 
-    const [rows, total] = await Promise.all([
-      prisma.aricoCatalog.findMany({
-        where,
-        orderBy: [{ brand: 'asc' }, { name: 'asc' }],
-        take: limit,
-        skip: offset,
-      }),
-      prisma.aricoCatalog.count({ where }),
-    ])
+    let rows, total
+    const marginOn = ['neg', 'lt20', '20to40', 'gte40', 'nocost'].includes(marginF)
+    if (marginOn) {
+      // 마진 필터: 원가 환산이 필요해 전체 조회 후 계산·필터·페이지네이션 (카탈로그 ~850행이라 가벼움)
+      const all = await prisma.aricoCatalog.findMany({ where, orderBy: [{ brand: 'asc' }, { name: 'asc' }] })
+      const pids = [...new Set(all.map(r => r.supplierProductId).filter((v): v is number => v != null))]
+      const prods = pids.length
+        ? await prisma.product.findMany({
+            where: { id: { in: pids } },
+            select: { id: true, name: true, brand: true, supplierCode: true, costPrice: true, supplier: { select: { currency: true, taxRate: true, discount: true } } },
+          })
+        : []
+      const pm = new Map(prods.map(p => [p.id, p]))
+      const mRates = await prisma.exchangeRate.findMany({ select: { currency: true, rateToJpy: true } })
+      const bucketOf = (r: { supplierProductId: number | null; priceJpy: number }) => {
+        const mp = r.supplierProductId ? pm.get(r.supplierProductId) : null
+        const cost = mp ? Math.round(calcCostJpy(mp, mRates)) : 0
+        if (!mp || cost <= 0 || r.priceJpy <= 0) return 'nocost'
+        const m = ((r.priceJpy - cost) / r.priceJpy) * 100
+        if (m < 0) return 'neg'
+        if (m < 20) return 'lt20'
+        if (m < 40) return '20to40'
+        return 'gte40'
+      }
+      const filtered = all.filter(r => bucketOf(r) === marginF)
+      total = filtered.length
+      rows = filtered.slice(offset, offset + limit)
+    } else {
+      [rows, total] = await Promise.all([
+        prisma.aricoCatalog.findMany({
+          where,
+          orderBy: [{ brand: 'asc' }, { name: 'asc' }],
+          take: limit,
+          skip: offset,
+        }),
+        prisma.aricoCatalog.count({ where }),
+      ])
+    }
 
     // 매칭된 공급사 상품 정보 조회
     const productIds = rows.map(r => r.supplierProductId).filter((id): id is number => id != null)
