@@ -32,8 +32,9 @@ type GroupVariant = {
 }
 
 const SUPPLIERS = ['', ...SUPPLIER_LIST]
-const SUPPLIER_NAMES: Record<string, string> = {
-  ARICO: 'ARICO', JVD: 'JVD', MK: 'MK Korea', FIVICS: 'FIVICS', SHIBUYA: 'SHIBUYA', KOREA: 'Korea Archery', ANGEL: 'Angel', WJ: 'WJ Sports', KOWA: 'KOWA', OUTLET: '아웃렛', ETC: '기타'
+// 라틴 표기 공급사명 — 아웃렛/기타는 언어 토글을 따라야 해서 컴포넌트 안에서 번역키로 합친다
+const SUPPLIER_NAMES_BASE: Record<string, string> = {
+  ARICO: 'ARICO', JVD: 'JVD', MK: 'MK Korea', FIVICS: 'FIVICS', SHIBUYA: 'SHIBUYA', KOREA: 'Korea Archery', ANGEL: 'Angel', WJ: 'WJ Sports', KOWA: 'KOWA'
 }
 const PAGE_SIZE = 50
 const MAX_CATEGORY_BUTTONS = 8
@@ -45,6 +46,8 @@ function msrpToJpy(product: Product, rates: ExchangeRate[]): number {
 
 export default function ProductsPage() {
   const t = useT()
+  // 공급사 표시명 — 아웃렛/기타는 현재 언어를 따른다
+  const SUPPLIER_NAMES: Record<string, string> = { ...SUPPLIER_NAMES_BASE, OUTLET: t.products.supplierOutlet, ETC: t.products.supplierEtc }
   const [q, setQ] = useState('')
   const [supplierFilter, setSupplierFilter] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
@@ -999,8 +1002,8 @@ export default function ProductsPage() {
                     className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   {supplierCurrency(form.supplierCode) === 'USD' && (
                     <p className="text-[11px] text-amber-600 mt-1">
-                      ⚠ {form.supplierCode}는 달러(USD) 단위 — 엔화 금액을 넣으면 원가가 환율×1.1배로 부풀어요
-                      {Number(form.costPrice) > 0 && ` (현재 입력 $${Number(form.costPrice).toLocaleString()})`}
+                      ⚠ {t.products.costUsdWarn.replace('{sup}', form.supplierCode)}
+                      {Number(form.costPrice) > 0 && t.products.costUsdNow.replace('{n}', Number(form.costPrice).toLocaleString())}
                     </p>
                   )}
                 </div>
