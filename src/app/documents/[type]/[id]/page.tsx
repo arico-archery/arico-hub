@@ -81,6 +81,10 @@ export default async function DocumentPage({
   const showPrices = !(docType === 'delivery' && sp.np === '1')
   // 회차 납품서 하단의 미발송분 목록 (이 회차 시점의 잔량 — 이후 회차는 계산에 안 넣음)
   let shipRemainRows: { name: string; opt: string; qty: number }[] = []
+  // 이전 회차에서 이미 보낸 품목(発送済み 표기) + 이번 회차로 전량 납품 완료 여부
+  let shipPriorRows: { name: string; opt: string; qty: number; date: string }[] = []
+  let shipComplete = false
+  let isShipDoc = false
   // 영수증용 데이터
   let receiptAmount = 0
   let receiptFullyPaid = false
@@ -198,11 +202,13 @@ export default async function DocumentPage({
           include: { items: true },
         })
         if (shipment && shipment.orderId === order.id) {
+          isShipDoc = true
           const qtyByItem = new Map(shipment.items.map(si => [si.orderItemId, si.quantity]))
           // 이 회차 시점까지의 발송 누계 → 품목별 미발송 잔량 (하단 「미발송분」 표기용)
           const priorShipments = await prisma.shipment.findMany({
             where: { orderId: order.id, shipNo: { lte: shipment.shipNo } },
             include: { items: true },
+            orderBy: { shipNo: 'asc' },
           })
           const shippedUpTo = new Map<number, number>()
           for (const s of priorShipments) for (const si of s.items) {
@@ -211,6 +217,16 @@ export default async function DocumentPage({
           shipRemainRows = rows
             .map(r => ({ name: r.name, opt: r.opt, qty: r.qty - (r.itemId ? (shippedUpTo.get(r.itemId) ?? 0) : 0) }))
             .filter(r => r.qty > 0)
+          // 이전 회차 기발송분 (発送済み 표기) — 품명·옵션·수량·발송일
+          const rowInfo = new Map(rows.filter(r => r.itemId).map(r => [r.itemId!, { name: r.name, opt: r.opt }]))
+          for (const s of priorShipments.filter(s => s.shipNo < shipment.shipNo)) {
+            for (const si of s.items) {
+              const info = rowInfo.get(si.orderItemId)
+              if (info) shipPriorRows.push({ name: info.name, opt: info.opt, qty: si.quantity, date: fmtDocDateShort(s.shippingDate) })
+            }
+          }
+          // 이번 회차로 전량 납품 완료
+          shipComplete = shipRemainRows.length === 0
           rows = rows
             .filter(r => r.itemId && qtyByItem.has(r.itemId))
             .map(r => {
@@ -499,6 +515,32 @@ export default async function DocumentPage({
             ))}
           </tbody>
         </table>
+        )}
+
+        {/* 회차 납품서: 전량 납품 완료 안내 — 이번 회차로 주문의 모든 품목 발송이 끝났을 때 */}
+        {docType === 'delivery' && isShipDoc && shipComplete && (
+          <p className="mt-2 text-[12px] font-semibold [print-color-adjust:exact]" style={{ color: ARICO_GREEN }}>
+            {lang === 'ja'
+              ? '※ 本納品をもちまして、ご注文の全品目の納品が完了いたしました。'
+              : lang === 'ko'
+                ? '※ 이번 납품으로 주문하신 전 품목의 납품이 완료되었습니다.'
+                : '* This delivery completes all items in your order.'}
+          </p>
+        )}
+
+        {/* 회차 납품서: 이전 회차에서 이미 보낸 품목 — 発送済み 표기 */}
+        {docType === 'delivery' && shipPriorRows.length > 0 && (
+          <div className="mt-2 text-[11px] leading-snug">
+            <p className="font-semibold text-gray-800 mb-0.5">
+              {lang === 'ja' ? '以下 発送済み分' : lang === 'ko' ? '이하 기발송분 (발송 완료)' : 'Previously shipped'}
+            </p>
+            {shipPriorRows.map((r, i) => (
+              <p key={i} className="text-gray-600">
+                {r.name}{r.opt ? ` ${r.opt}` : ''} ×{r.qty}
+                <span className="text-gray-400">（{r.date} {lang === 'ja' ? '発送済み' : lang === 'ko' ? '발송 완료' : 'shipped'}）</span>
+              </p>
+            ))}
+          </div>
         )}
 
         {/* 회차 납품서: 이번에 안 보낸 주문 품목(미발송분) — 고객이 나머지가 온다는 걸 알 수 있게 */}
