@@ -17,6 +17,12 @@ import { channelOf, CHANNEL_COLORS } from '@/lib/order-channel'
 
 const PAGE_SIZE = 30
 
+// 오늘 날짜 YYYY-MM-DD (로컬 기준 — toISOString 은 UTC 라 JST 아침에 하루 밀린다)
+function todayStr(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 // 완료 탭 기간 프리셋 → 시작일(ISO). 'all'이면 빈 문자열(전체).
 function donePeriodFrom(p: string): string {
   const d = new Date()
@@ -300,7 +306,7 @@ export default function OrdersPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        shippingDate: info?.date || new Date().toISOString().slice(0, 10),
+        shippingDate: info?.date || todayStr(),
         trackingNo: info?.trackingNo ?? '',
         items,
       }),
@@ -843,7 +849,7 @@ export default function OrdersPage() {
                               <DateInput
                                 size="sm"
                                 className="mb-1"
-                                value={shipInfo[order.id]?.date ?? ''}
+                                value={shipInfo[order.id]?.date ?? todayStr()}
                                 onChange={v => setShipInfo(prev => ({ ...prev, [order.id]: { ...prev[order.id], date: v } }))}
                               />
                               <input type="text"
