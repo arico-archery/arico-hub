@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useApiCache } from '@/lib/useApiCache'
 import { Search, RefreshCw, ChevronLeft, ChevronRight, Link2, Link2Off, X, Check, ImageOff, Barcode, Languages, ScanLine, Layers, List, LayoutGrid, Plus, Pencil, Trash2 } from 'lucide-react'
 import BarcodeScanner from '@/components/BarcodeScanner'
-import { formatNumber, SUPPLIER_COLORS } from '@/lib/utils'
+import { formatNumber, SUPPLIER_COLORS, SUPPLIER_LIST } from '@/lib/utils'
 import Image from 'next/image'
 import { useT } from '@/lib/i18n'
 
@@ -89,6 +89,7 @@ function MatchModal({
   const [barcode, setBarcode] = useState(item.barcode ?? '')
   const [translating, setTranslating] = useState(false)
   const [showScanner, setShowScanner] = useState(false)
+  const [supFilter, setSupFilter] = useState('')   // 공급사 필터 ('' = 전체)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const translateSearch = async () => {
@@ -116,24 +117,26 @@ function MatchModal({
   }
 
   const latestQ = useRef('')
-  const search = useCallback(async (query: string) => {
-    if (!query.trim()) { latestQ.current = ''; setResults([]); setLoading(false); return }
-    latestQ.current = query
+  const search = useCallback(async (query: string, supplier: string) => {
+    // 공급사 필터만 걸어도 그 공급사 그룹을 훑어볼 수 있게 허용
+    if (!query.trim() && !supplier) { latestQ.current = ''; setResults([]); setLoading(false); return }
+    const key = `${supplier}|${query}`
+    latestQ.current = key
     setLoading(true)
     // 통합(그룹) 검색 — JVD는 변형이 한 그룹으로 묶여서 나옴
-    const res = await fetch(`/api/products/groups?q=${encodeURIComponent(query)}&page=1`)
+    const res = await fetch(`/api/products/groups?q=${encodeURIComponent(query)}&page=1${supplier ? `&supplier=${encodeURIComponent(supplier)}` : ''}`)
     const data = await res.json()
-    // 경쟁 상태 방지: 더 최신 검색어가 있으면 이 응답은 버린다(느린 광범위 검색이 덮어쓰는 문제)
-    if (latestQ.current !== query) return
+    // 경쟁 상태 방지: 더 최신 검색이 있으면 이 응답은 버린다(느린 광범위 검색이 덮어쓰는 문제)
+    if (latestQ.current !== key) return
     setResults(data.groups ?? [])
     setLoading(false)
   }, [])
 
   useEffect(() => {
     inputRef.current?.focus()
-    const t = setTimeout(() => search(q), 300)
+    const t = setTimeout(() => search(q, supFilter), 300)
     return () => clearTimeout(t)
-  }, [q, search])
+  }, [q, supFilter, search])
 
   // 그룹 선택 → 매칭. FIVICS 는 대표상품(부모)에, 그 외는 대표 변형(repId)에 건다.
   // 주문 시 옵션(변형)을 선택한다 — 부모에 걸려도 variants API 가 자식 축을 띄운다.
@@ -220,6 +223,32 @@ function MatchModal({
             <Languages className={`w-3.5 h-3.5 ${translating ? 'animate-pulse' : ''}`} />
             {tr.catalog.translateSearch}
           </button>
+        </div>
+
+        {/* 공급사 필터 — 전 공급사가 섞여 나와 찾기 어려운 문제 해소 */}
+        <div className="px-6 py-2 border-b border-gray-100 dark:border-gray-700 flex items-center gap-1.5 flex-wrap">
+          <button
+            onClick={() => setSupFilter('')}
+            className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border transition-colors ${
+              supFilter === ''
+                ? 'bg-slate-900 border-slate-900 text-white'
+                : 'text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+            }`}
+          >
+            {tr.common.all}
+          </button>
+          {SUPPLIER_LIST.map(s => (
+            <button
+              key={s}
+              onClick={() => setSupFilter(supFilter === s ? '' : s)}
+              className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border transition-colors ${
+                supFilter === s ? 'text-white' : 'text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+              }`}
+              style={supFilter === s ? { backgroundColor: SUPPLIER_COLORS[s] ?? '#6b7280', borderColor: SUPPLIER_COLORS[s] ?? '#6b7280' } : {}}
+            >
+              {s}
+            </button>
+          ))}
         </div>
 
         {/* 결과 */}
