@@ -54,8 +54,9 @@ export function profitBgColor(margin: number): string {
 //   ANGEL (税抜 가격 그대로 저장)
 //     └ クィーバー・ベルトネーム加工・トリートメント・ダビン → × 0.70
 //     └ 그 외 → × 0.60
-//   KOREA 등 JPY 공급처
+//   그 외 JPY 공급처
 //     └ supplier.taxRate 제거 + supplier.discount 적용
+//   ※ KOREA 는 2026-08 신가격표부터 USD (JVD 와 동일 경로)
 // ─────────────────────────────────────────────────────────────
 
 // ANGEL 70% 적용 품목 키워드 (상품명에 포함 시 70% 掛率)
@@ -89,7 +90,7 @@ export function calcCostJpy(
     }
     return Math.round(price * rateToJpy * 1.1)
   } else {
-    // KOREA 등 JPY 공급처
+    // JPY 공급처 — 세금 제거 + 掛率
     if (p.supplier.taxRate > 0 && p.supplier.taxRate < 1) price = price / (1 + p.supplier.taxRate)
     if (p.supplier.discount > 0 && p.supplier.discount < 1)     price = price * p.supplier.discount
   }
@@ -116,6 +117,7 @@ export type SupplierCode = typeof SUPPLIER_LIST[number]
 
 // 공급사별 원가(costPrice) 통화 — costPrice 는 공급사 통화 단위 그대로 저장된다.
 // USD 공급사에 엔화 금액을 넣으면 환산(×환율×1.1) 시 원가가 폭발하므로 입력 UI 에서 단위를 보여준다.
+// KOREA 는 2026-08 신가격표부터 USD (JVD 와 같은 방식).
 export function supplierCurrency(code: string): 'USD' | 'JPY' {
-  return code === 'JVD' || code === 'MK' || code === 'FIVICS' ? 'USD' : 'JPY'
+  return code === 'JVD' || code === 'MK' || code === 'FIVICS' || code === 'KOREA' ? 'USD' : 'JPY'
 }
