@@ -6,6 +6,7 @@ import DocToolbar from './DocToolbar'
 import EditableName from './EditableName'
 import ZanSection from './ZanSection'
 import NotesSection from './NotesSection'
+import ProvisoLine from './ProvisoLine'
 import Logo, { ARICO_GREEN } from '@/components/Logo'
 
 async function getSettings(): Promise<Record<string, string>> {
@@ -24,12 +25,12 @@ export default async function DocumentPage({
   params, searchParams,
 }: {
   params: Promise<{ type: string; id: string }>
-  searchParams: Promise<{ lang?: string; issuer?: string; bank?: string; zan?: string }>
+  searchParams: Promise<{ lang?: string; issuer?: string; bank?: string; zan?: string; np?: string }>
 }) {
   const { type, id } = await params
   const sp = await searchParams
   const docType = type as DocType
-  if (!['invoice', 'quote', 'po'].includes(docType)) notFound()
+  if (!['invoice', 'quote', 'po', 'delivery', 'receipt'].includes(docType)) notFound()
   const lang: DocLang = DOC_LANGS.includes(sp.lang as DocLang) ? (sp.lang as DocLang) : 'ja'
   const T = DOC_TEXT[lang]
   const yen = lang === 'ja' ? '円' : ''
@@ -76,6 +77,13 @@ export default async function DocumentPage({
   let zanRows: { ref: string; name: string; opt: string; qty: number }[] = []
   let zanText = ''
   let zanOrderId = 0
+  // 납품서 금액 표시(기본 켬) — ?np=1 이면 수량만 찍는 납품서
+  const showPrices = !(docType === 'delivery' && sp.np === '1')
+  // 영수증용 데이터
+  let receiptAmount = 0
+  let receiptFullyPaid = false
+  let receiptDate: Date | null = null
+  let receiptNote = ''
 
   if (docType === 'po') {
     const po = await prisma.purchaseOrder.findUnique({
@@ -178,6 +186,12 @@ export default async function DocumentPage({
       ]
       paidAmount = order.paidAmountJpy
       showBank = true
+    } else if (docType === 'delivery') {
+      // 납품일 = 발송일 우선, 없으면 주문일
+      dateRows = [
+        { label: T.issueDate, value: fmtDocDate(order.shippingDate ?? order.orderDate, lang) },
+        { label: T.deliveryDate, value: fmtDocDate(order.shippingDate ?? order.orderDate, lang) },
+      ]
     } else {
       const valid = order.dueDate ?? new Date(new Date(order.orderDate).getTime() + 30 * 86400000)
       dateRows = [
@@ -185,6 +199,11 @@ export default async function DocumentPage({
         { label: T.validUntil, value: fmtDocDate(valid, lang) },
       ]
     }
+    // 영수증: 입금액 기준(미입금이면 청구액을 쓰되 화면에 경고), 領収日 = 입금일 우선
+    receiptAmount = order.paidAmountJpy > 0 ? order.paidAmountJpy : order.totalAmountJpy
+    receiptFullyPaid = order.paymentStatus === 'paid'
+    receiptDate = order.paymentDate ?? order.orderDate
+    receiptNote = order.receiptNote ?? ''
     notes = order.memo
   }
 
@@ -213,6 +232,99 @@ export default async function DocumentPage({
   ].filter(f => f.value)
   const bankNote = bp.bank_note || settings.bank_note || ''
 
+  // ── 영수증(領収書) 전용 레이아웃 — 품목 표 없이 금액 중심 (현행 양식 답습) ──
+  if (docType === 'receipt') {
+    const stampNeeded = receiptAmount >= 50000   // 5만엔 이상 수입인지 관행
+    const rTax = inclusiveTax(receiptAmount, 10)
+    return (
+      <div className="min-h-screen bg-gray-100 dark:bg-slate-900 p-6 print:bg-white print:p-0">
+        <DocToolbar type={docType} id={id} lang={lang} backHref={backHref}
+          issuers={companyProfiles.map((p, i) => p.label || `프로필 ${i + 1}`)} issuerIdx={issuerIdx} />
+
+        {/* 미입금 경고 — 화면에만 표시, 인쇄엔 안 나옴 */}
+        {!receiptFullyPaid && (
+          <div className="max-w-[820px] mx-auto mb-3 px-4 py-2 rounded-lg bg-amber-50 border border-amber-300 text-amber-800 text-sm print:hidden">
+            ⚠ {lang === 'ja'
+              ? 'この注文はまだ全額入金されていません。金額は' + (paidAmount > 0 || receiptAmount !== grandTotalIncl ? '入金額' : 'ご請求額') + '基準です。'
+              : '이 주문은 아직 완납되지 않았습니다. 표시 금액은 ' + (receiptAmount !== grandTotalIncl ? '입금액' : '청구액') + ' 기준입니다.'}
+          </div>
+        )}
+
+        <div className="print-page max-w-[820px] mx-auto bg-white text-gray-900 shadow-lg rounded-md print:shadow-none print:rounded-none p-8 print:p-6 text-[13px] leading-relaxed" id="document">
+          {/* 헤더 — 다른 문서와 동일한 양식 */}
+          <div className="flex items-center justify-between gap-4 border-b-[3px] mb-6 pb-2.5" style={{ borderColor: ARICO_GREEN }}>
+            <div className="w-[110px] shrink-0"><Logo size={22} /></div>
+            <h1 className="text-2xl font-bold tracking-[0.4em] leading-none" style={{ color: ARICO_GREEN }}>{T.title[docType]}</h1>
+            <div className="w-[110px] shrink-0" aria-hidden="true" />
+          </div>
+
+          {/* 宛名(좌) + No·発行日(우) */}
+          <div className="flex justify-between gap-8 mb-6">
+            <div className="flex-1 min-w-0 pt-1">
+              {recipientOrg && <p className="text-[12px] text-gray-600 leading-tight">{recipientOrg}</p>}
+              <p className="text-lg font-bold border-b-2 pb-1 inline-block" style={{ borderColor: ARICO_GREEN }}>{recipientName} {recipientHonorific}</p>
+            </div>
+            <div className="w-[240px] shrink-0 text-[12px] text-right space-y-0.5">
+              <p><span className="text-gray-500">No: </span>{docNoVal}</p>
+              <p><span className="text-gray-500">{T.issueDate}: </span>{fmtDocDate(receiptDate, lang)}</p>
+            </div>
+          </div>
+
+          {/* 금액 — 문서의 중심 */}
+          <div className="mx-auto w-[78%] border-y-[3px] py-4 my-6 text-center" style={{ borderColor: ARICO_GREEN }}>
+            <span className="text-3xl font-bold tracking-wide tabular-nums" style={{ color: ARICO_GREEN }}>{formatJpy(receiptAmount)}</span>
+            <span className="text-sm text-gray-500 ml-2">−（{lang === 'ja' ? '税込' : lang === 'ko' ? '세금 포함' : 'tax incl.'}）</span>
+          </div>
+
+          {/* 但し書き + 영수 문구 */}
+          <div className="w-[78%] mx-auto space-y-2 mb-8">
+            <ProvisoLine orderId={zanOrderId} initial={receiptNote} label={T.proviso} fallback={T.provisoDefault} />
+            <p className="text-gray-700">{T.receiptReceived}</p>
+          </div>
+
+          {/* 하단: 内訳·収入印紙(좌) + 발행처(우) */}
+          <div className="flex justify-between items-end gap-8 mt-10">
+            <div className="space-y-4">
+              <div className="text-[12px]">
+                <p className="font-semibold mb-1" style={{ color: ARICO_GREEN }}>{T.breakdown}</p>
+                <table className="border-collapse">
+                  <tbody>
+                    <tr>
+                      <td className="border border-gray-300 px-2 py-1 text-gray-600">10%{T.taxTargetLabel}</td>
+                      <td className="border border-gray-300 px-2 py-1 text-right tabular-nums">{formatJpy(receiptAmount)}</td>
+                    </tr>
+                    <tr>
+                      <td className="border border-gray-300 px-2 py-1 text-gray-600">10%{T.taxAmountLabel}</td>
+                      <td className="border border-gray-300 px-2 py-1 text-right tabular-nums">{formatJpy(rTax)}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              {stampNeeded && (
+                <div className="w-20 h-24 border border-dashed border-gray-400 rounded flex items-center justify-center text-[11px] text-gray-400 [print-color-adjust:exact]">
+                  {T.stampBox}
+                </div>
+              )}
+            </div>
+            <div className="w-[290px] shrink-0 text-[12px]">
+              <div className="relative border border-gray-300 rounded p-2.5 space-y-0.5">
+                <p className="font-bold text-[13px]">{seller.name}</p>
+                {seller.regNo && <p className="text-gray-600">{T.regNo}: {seller.regNo}</p>}
+                {seller.address && <p className="text-gray-600">{seller.address}</p>}
+                {seller.tel && <p className="text-gray-600">TEL: {seller.tel}</p>}
+                {seller.ceo && <p className="text-gray-600">{T.representative}: {seller.ceo}</p>}
+                {seller.contact && <p className="text-gray-600">{T.contactLabel}: {seller.contact}</p>}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/arico-stamp.png" alt="" width={64} height={64} aria-hidden="true"
+                  className="pointer-events-none select-none absolute -right-2 -bottom-2 w-16 h-16 object-contain mix-blend-multiply [print-color-adjust:exact] [-webkit-print-color-adjust:exact]" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const cell = 'border border-gray-300 px-2 py-1.5'
   // 표 머리는 브랜드 초록 톤. 인쇄에서 배경색이 날아가지 않게 print-color-adjust 를 켠다.
   const th = `${cell} bg-[#eaf3ee] text-[#2f7d55] font-semibold [print-color-adjust:exact] [-webkit-print-color-adjust:exact]`
@@ -224,7 +336,7 @@ export default async function DocumentPage({
       <DocToolbar type={docType} id={id} lang={lang} backHref={backHref}
         issuers={companyProfiles.map((p, i) => p.label || `프로필 ${i + 1}`)} issuerIdx={issuerIdx}
         banks={docType === 'invoice' ? bankProfiles.map((p, i) => p.label || `계좌 ${i + 1}`) : []} bankIdx={bankIdx}
-        zan={zanOn} />
+        zan={zanOn} noPrice={!showPrices} />
 
       {/* print-page: 인쇄 시 문서 자체가 페이지 여백을 갖는다(@page margin:0 → 브라우저 머리글·바닥글 제거) */}
       <div className="print-page max-w-[820px] mx-auto bg-white text-gray-900 shadow-lg rounded-md print:shadow-none print:rounded-none p-8 print:p-6 text-[13px] leading-relaxed" id="document">
@@ -284,11 +396,13 @@ export default async function DocumentPage({
                 <td className={cell}>{dueRow.value}</td>
               </tr>
             )}
-            <tr>
-              <th className={`${th} text-left whitespace-nowrap`}>{totalInclLabel}</th>
-              {/* 청구서에서 제일 먼저 찾는 숫자 — 브랜드색으로 크게 */}
-              <td className={`${cell} text-right font-bold text-lg tabular-nums`} style={{ color: ARICO_GREEN }}>{formatJpy(grandTotalIncl)} {yen}</td>
-            </tr>
+            {showPrices && (
+              <tr>
+                <th className={`${th} text-left whitespace-nowrap`}>{totalInclLabel}</th>
+                {/* 청구서에서 제일 먼저 찾는 숫자 — 브랜드색으로 크게 */}
+                <td className={`${cell} text-right font-bold text-lg tabular-nums`} style={{ color: ARICO_GREEN }}>{formatJpy(grandTotalIncl)} {yen}</td>
+              </tr>
+            )}
           </tbody>
         </table>
 
@@ -325,11 +439,11 @@ export default async function DocumentPage({
             <tr>
               <th className={`${th} w-24`}>{T.txDate}</th>
               <th className={`${th} text-left`}>{T.itemName}</th>
-              <th className={`${th} w-14`}>{T.taxRate}</th>
+              {showPrices && <th className={`${th} w-14`}>{T.taxRate}</th>}
               <th className={`${th} w-14`}>{T.qty}</th>
               <th className={`${th} w-12`}>{T.unit}</th>
-              <th className={`${th} w-24 text-right`}>{T.unitPriceIncl}</th>
-              <th className={`${th} w-24 text-right`}>{T.amountIncl}</th>
+              {showPrices && <th className={`${th} w-24 text-right`}>{T.unitPriceIncl}</th>}
+              {showPrices && <th className={`${th} w-24 text-right`}>{T.amountIncl}</th>}
             </tr>
           </thead>
           <tbody>
@@ -341,11 +455,11 @@ export default async function DocumentPage({
                   {r.itemId ? <EditableName itemId={r.itemId} initial={r.name} /> : <p className="font-medium">{r.name}</p>}
                   {r.opt && <p className="text-[11px] text-amber-700">{r.opt}</p>}
                 </td>
-                <td className={`${cell} align-top text-center`}>{r.taxRate}%</td>
+                {showPrices && <td className={`${cell} align-top text-center`}>{r.taxRate}%</td>}
                 <td className={`${cell} align-top text-center`}>{r.qty}</td>
                 <td className={`${cell} align-top text-center`}>{r.unit}</td>
-                <td className={`${cell} align-top text-right tabular-nums`}>{formatJpy(r.unitPrice)}</td>
-                <td className={`${cell} align-top text-right tabular-nums`}>{formatJpy(r.amount)}</td>
+                {showPrices && <td className={`${cell} align-top text-right tabular-nums`}>{formatJpy(r.unitPrice)}</td>}
+                {showPrices && <td className={`${cell} align-top text-right tabular-nums`}>{formatJpy(r.amount)}</td>}
               </tr>
             ))}
           </tbody>
@@ -357,9 +471,10 @@ export default async function DocumentPage({
           <ZanSection orderId={zanOrderId} initial={zanText} autoRows={zanRows} showAuto={zanOn} lang={lang} />
         )}
 
-        {/* 합계/세금 */}
+        {/* 합계/세금 — 금액 숨김 납품서(np=1)에선 합계 박스 생략 */}
         <div className="flex justify-between items-start mt-2 mb-5">
-          <p className="text-[11px] text-gray-500 pt-1">{T.reducedNote}　　{T.totalQty}: {totalQty}</p>
+          <p className="text-[11px] text-gray-500 pt-1">{showPrices ? `${T.reducedNote}　　` : ''}{T.totalQty}: {totalQty}</p>
+          {showPrices && (
           <div className="w-[320px] text-[12px]">
             <div className="flex justify-between border-y-2 py-1.5" style={{ borderColor: ARICO_GREEN }}>
               <span className="font-semibold">{T.total}</span>
@@ -393,6 +508,7 @@ export default async function DocumentPage({
               </div>
             )}
           </div>
+          )}
         </div>
 
         {/* 振込先 (청구서만) */}

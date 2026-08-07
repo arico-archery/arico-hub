@@ -1,10 +1,10 @@
-// 발급 문서(청구서/견적서/발주서) 다국어 양식 — 일본어/한국어/영어
+// 발급 문서(청구서/견적서/발주서/납품서/영수증) 다국어 양식 — 일본어/한국어/영어
 // 같은 데이터(주문 또는 발주)를 3개 언어 양식으로 출력한다.
 
-export type DocType = 'invoice' | 'quote' | 'po'  // 청구서 | 견적서 | 발주서
+export type DocType = 'invoice' | 'quote' | 'po' | 'delivery' | 'receipt'  // 청구서 | 견적서 | 발주서 | 납품서 | 영수증
 export type DocLang = 'ja' | 'ko' | 'en'
 
-export const DOC_TYPES: DocType[] = ['invoice', 'quote', 'po']
+export const DOC_TYPES: DocType[] = ['invoice', 'quote', 'po', 'delivery', 'receipt']
 export const DOC_LANGS: DocLang[] = ['ja', 'ko', 'en']
 export const DOC_LANG_LABEL: Record<DocLang, string> = { ja: '日本語', ko: '한국어', en: 'English' }
 
@@ -131,16 +131,27 @@ export type DocText = {
   representative: string     // 代表者
   transferFeeNote: string    // ※お振込手数料はご負担願います。
   unitDefault: string        // 単位 기본값(個/개/ea)
+  // ── 납품서(delivery) ──
+  deliveryDate: string       // 納品日
+  // ── 영수증(receipt) ──
+  proviso: string            // 但し (但し書き 라벨)
+  provisoDefault: string     // お品代として (기본 단서)
+  breakdown: string          // 内訳
+  taxAmountLabel: string     // 税額
+  stampBox: string           // 収入印紙
+  receiptReceived: string    // 上記正に領収いたしました。
 }
 
 export const DOC_TEXT: Record<DocLang, DocText> = {
   ja: {
-    title:  { invoice: '請求書', quote: '見積書', po: '発注書' },
-    docNo:  { invoice: '請求番号', quote: '見積番号', po: '発注番号' },
+    title:  { invoice: '請求書', quote: '見積書', po: '発注書', delivery: '納品書', receipt: '領収書' },
+    docNo:  { invoice: '請求番号', quote: '見積番号', po: '発注番号', delivery: '納品番号', receipt: '領収番号' },
     intro:  {
       invoice: '下記の通りご請求申し上げます。',
       quote:   '下記の通りお見積り申し上げます。',
       po:      '下記の通り発注いたします。',
+      delivery: '下記の通り納品いたします。',
+      receipt: '',
     },
     to: '宛先', from: '発行元', honorific: '御中', honorificPerson: '様', contactLabel: '担当',
     issueDate: '発行日', dueDate: 'お支払期限', validUntil: '有効期限', expectedDate: '納品予定日',
@@ -154,14 +165,19 @@ export const DOC_TEXT: Record<DocLang, DocText> = {
     taxRate: '税率', unit: '単位', unitPriceIncl: '税込単価', amountIncl: '税込金額', inTax: '内消費税',
     taxTargetLabel: '対象 税込金額', includedTaxLabel: '内税', reducedNote: '※ は軽減税率対象商品',
     representative: '代表者', transferFeeNote: '※お振込手数料はご負担願います。', unitDefault: '個',
+    deliveryDate: '納品日',
+    proviso: '但し', provisoDefault: 'お品代として', breakdown: '内訳', taxAmountLabel: '税額',
+    stampBox: '収入印紙', receiptReceived: '上記正に領収いたしました。',
   },
   ko: {
-    title:  { invoice: '청구서', quote: '견적서', po: '발주서' },
-    docNo:  { invoice: '청구번호', quote: '견적번호', po: '발주번호' },
+    title:  { invoice: '청구서', quote: '견적서', po: '발주서', delivery: '납품서', receipt: '영수증' },
+    docNo:  { invoice: '청구번호', quote: '견적번호', po: '발주번호', delivery: '납품번호', receipt: '영수번호' },
     intro:  {
       invoice: '아래와 같이 청구합니다.',
       quote:   '아래와 같이 견적합니다.',
       po:      '아래와 같이 발주합니다.',
+      delivery: '아래와 같이 납품합니다.',
+      receipt: '',
     },
     to: '수신', from: '발행처', honorific: '귀중', honorificPerson: '님', contactLabel: '담당',
     issueDate: '발행일', dueDate: '결제 기한', validUntil: '유효 기한', expectedDate: '입고 예정일',
@@ -175,14 +191,19 @@ export const DOC_TEXT: Record<DocLang, DocText> = {
     taxRate: '세율', unit: '단위', unitPriceIncl: '단가(세込)', amountIncl: '금액(세込)', inTax: '내 소비세',
     taxTargetLabel: '대상 세込금액', includedTaxLabel: '내세', reducedNote: '※ 는 경감세율 대상 상품',
     representative: '대표자', transferFeeNote: '※ 이체 수수료는 부담 부탁드립니다.', unitDefault: '개',
+    deliveryDate: '납품일',
+    proviso: '단서', provisoDefault: '상품 대금으로', breakdown: '내역', taxAmountLabel: '세액',
+    stampBox: '수입인지', receiptReceived: '위 금액을 정히 영수하였습니다.',
   },
   en: {
-    title:  { invoice: 'INVOICE', quote: 'QUOTATION', po: 'PURCHASE ORDER' },
-    docNo:  { invoice: 'Invoice No.', quote: 'Quote No.', po: 'PO No.' },
+    title:  { invoice: 'INVOICE', quote: 'QUOTATION', po: 'PURCHASE ORDER', delivery: 'DELIVERY NOTE', receipt: 'RECEIPT' },
+    docNo:  { invoice: 'Invoice No.', quote: 'Quote No.', po: 'PO No.', delivery: 'Delivery No.', receipt: 'Receipt No.' },
     intro:  {
       invoice: 'Please find our invoice below.',
       quote:   'We are pleased to provide the following quotation.',
       po:      'We hereby place the following order.',
+      delivery: 'We hereby deliver the following items.',
+      receipt: '',
     },
     to: 'To', from: 'From', honorific: '', honorificPerson: '', contactLabel: 'Attn',
     issueDate: 'Issue Date', dueDate: 'Due Date', validUntil: 'Valid Until', expectedDate: 'Expected Delivery',
@@ -196,5 +217,8 @@ export const DOC_TEXT: Record<DocLang, DocText> = {
     taxRate: 'Tax', unit: 'Unit', unitPriceIncl: 'Unit (incl.)', amountIncl: 'Amount (incl.)', inTax: 'Incl. Tax',
     taxTargetLabel: 'taxable (incl.)', includedTaxLabel: 'incl. tax', reducedNote: '* reduced-rate item',
     representative: 'Representative', transferFeeNote: '* Bank transfer fees are to be borne by the payer.', unitDefault: 'ea',
+    deliveryDate: 'Delivery Date',
+    proviso: 'For', provisoDefault: 'Payment for goods', breakdown: 'Breakdown', taxAmountLabel: 'tax',
+    stampBox: 'Revenue Stamp', receiptReceived: 'Received with thanks the amount stated above.',
   },
 }
