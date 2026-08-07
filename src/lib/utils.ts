@@ -107,10 +107,11 @@ export const SUPPLIER_COLORS: Record<string, string> = {
   ANGEL: '#f59e0b',
   WJ: '#f97316',
   KOWA: '#14b8a6',  // KOWA 광학
+  OUTLET: '#d946ef',  // 아웃렛 (구모델·전시·재고처분 — 정규 가격표 밖 상품)
   ETC: '#64748b',  // 기타 브랜드 (수동 입력)
 }
 
-export const SUPPLIER_LIST = ['ARICO', 'JVD', 'MK', 'FIVICS', 'SHIBUYA', 'KOREA', 'ANGEL', 'WJ', 'KOWA', 'ETC'] as const
+export const SUPPLIER_LIST = ['ARICO', 'JVD', 'MK', 'FIVICS', 'SHIBUYA', 'KOREA', 'ANGEL', 'WJ', 'KOWA', 'OUTLET', 'ETC'] as const
 export type SupplierCode = typeof SUPPLIER_LIST[number]
 
 // 공급사별 원가(costPrice) 통화 — costPrice 는 공급사 통화 단위 그대로 저장된다.
