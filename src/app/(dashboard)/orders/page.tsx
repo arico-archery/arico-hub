@@ -273,6 +273,13 @@ export default function OrdersPage() {
     fetchOrders(page)
   }
 
+  // 부분발송 중 — 일부 수량만 발송됐고 전량 발송 전 (목록에서 한눈에 보이게 배지·스텝 표시)
+  const isPartialShipped = (o: Order) => {
+    const shipped = (o.shipments ?? []).reduce((s, sh) => s + sh.items.reduce((a, x) => a + x.quantity, 0), 0)
+    const totalQty = o.items.reduce((s, i) => s + i.quantity, 0)
+    return shipped > 0 && shipped < totalQty && !['delivered', 'cancelled'].includes(o.status)
+  }
+
   // 품목별 발송 수량 헬퍼 — 이미 발송된 수량 / 이번 선택 수량
   const shippedQtyOf = (order: Order, itemId: number) =>
     (order.shipments ?? []).reduce((s, sh) => s + sh.items.filter(x => x.orderItemId === itemId).reduce((a, x) => a + x.quantity, 0), 0)
@@ -556,6 +563,12 @@ export default function OrdersPage() {
                             </span>
                           )
                         })()}
+                        {/* 부분발송 중 — 펼치지 않아도 목록에서 바로 보이게 */}
+                        {isPartialShipped(order) && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                            {t.orders.partialShippingBadge}
+                          </span>
+                        )}
                         {isCancelled && (
                           <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
                             {t.orders.statusCancelled}
@@ -589,12 +602,15 @@ export default function OrdersPage() {
                       const done    = stepDone[idx]
                       const current = idx === currentStep && !isComplete
                       const Icon    = step.icon
+                      // 발송 스텝: 부분발송 중이면 주황 반완료 표시 (전량 발송 전이라 done 은 아님)
+                      const partialHere = step.key === 'shipped' && !done && isPartialShipped(order)
                       return (
                         <td key={step.key} className="px-1 py-3 text-center">
                           <div className="flex flex-col items-center gap-0.5">
                             <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
                               done && isComplete   ? 'bg-green-500 text-white' :
                               done                 ? 'bg-blue-500 text-white' :
+                              partialHere          ? 'bg-amber-400 text-white' :
                               current              ? 'bg-blue-100 text-blue-500 ring-2 ring-blue-300' :
                               'bg-gray-100 dark:bg-gray-700 text-gray-300 dark:text-gray-500'
                             }`}>
@@ -606,9 +622,10 @@ export default function OrdersPage() {
                             <span className={`text-[10px] leading-none ${
                               done && isComplete ? 'text-green-600 font-medium' :
                               done               ? 'text-blue-500 dark:text-blue-400 font-medium' :
+                              partialHere        ? 'text-amber-500 font-medium' :
                               current            ? 'text-blue-400' :
                               'text-gray-400 dark:text-gray-500'
-                            }`}>{step.label}</span>
+                            }`}>{partialHere ? t.orders.partialShippingBadge : step.label}</span>
                           </div>
                         </td>
                       )
