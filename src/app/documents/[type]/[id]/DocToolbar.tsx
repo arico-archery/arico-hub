@@ -17,11 +17,11 @@ const ZAN_LABEL: Record<DocLang, string> = { ja: '注残', ko: '백오더', en: 
 const PRICE_LABEL: Record<DocLang, string> = { ja: '金額表示', ko: '금액 표시', en: 'Prices' }
 
 export default function DocToolbar({
-  type, id, lang, backHref, issuers = [], issuerIdx = 0, banks = [], bankIdx = 0, zan = false, noPrice = false,
+  type, id, lang, backHref, issuers = [], issuerIdx = 0, banks = [], bankIdx = 0, zan = false, noPrice = false, ship = '',
 }: {
   type: DocType; id: string; lang: DocLang; backHref: string
   issuers?: string[]; issuerIdx?: number; banks?: string[]; bankIdx?: number
-  zan?: boolean; noPrice?: boolean
+  zan?: boolean; noPrice?: boolean; ship?: string
 }) {
   // 주문 기반 문서(청구·견적·납품·영수)는 상호 전환 가능. 발주서는 단독.
   const orderTypes: DocType[] = ['invoice', 'quote', 'delivery', 'receipt']
@@ -29,7 +29,7 @@ export default function DocToolbar({
   // 注残 토글은 품목 표가 있는 고객 문서에만 (영수증 제외)
   const showZan = type === 'invoice' || type === 'quote' || type === 'delivery'
 
-  const extras = `${zan ? '&zan=1' : ''}${noPrice ? '&np=1' : ''}`
+  const extras = `${zan ? '&zan=1' : ''}${noPrice ? '&np=1' : ''}${ship ? `&ship=${ship}` : ''}`
   const link = (t: DocType, l: DocLang) => `/documents/${t}/${id}?lang=${l}&issuer=${issuerIdx}&bank=${bankIdx}${extras}`
   const goProfile = (iss: number, bnk: number) => { window.location.href = `/documents/${type}/${id}?lang=${lang}&issuer=${iss}&bank=${bnk}${extras}` }
 

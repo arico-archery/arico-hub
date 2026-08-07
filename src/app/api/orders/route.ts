@@ -60,6 +60,8 @@ export async function GET(req: Request) {
       include: {
         customer: true,
         items: { include: { product: { include: { supplier: true } } } },
+        // 발송 회차(부분발송 기록) — 주문 화면의 발송 이력·회차별 납품서용
+        shipments: { include: { items: true }, orderBy: { shipNo: 'asc' } },
       },
       skip: exportCsv ? 0 : skip,
       take: exportCsv ? 9999 : limit,

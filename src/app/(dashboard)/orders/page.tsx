@@ -44,6 +44,8 @@ type Order = {
     shopProductName?: string
     catalogImage?: string
   }[]
+  // 발송 회차(부분발송 기록) — 회차마다 발송일·운송장·품목·수량
+  shipments?: { id: number; shipNo: number; shippingDate: string; trackingNo: string; items: { orderItemId: number; quantity: number }[] }[]
 }
 
 const STEP_ICONS = [ShoppingCart, Banknote, ClipboardList, Package, Truck, MapPin]
@@ -131,6 +133,8 @@ export default function OrdersPage() {
   const [page, setPage]       = useState(1)
   const [expanded, setExpanded] = useState<number | null>(null)
   const [shipInfo, setShipInfo] = useState<Record<number, { date: string; trackingNo: string }>>({})
+  // 이번 발송에 담을 품목 수량 (orderId → orderItemId → qty). 미지정이면 입고완료 품목의 잔량이 기본
+  const [shipSel, setShipSel] = useState<Record<number, Record<number, number>>>({})
   const [partialPayInputs, setPartialPayInputs] = useState<Record<number, string>>({})
   const [delayInputs, setDelayInputs] = useState<Record<number, string>>({})
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)   // 삭제 확인 중인 주문 id
@@ -269,18 +273,39 @@ export default function OrdersPage() {
     fetchOrders(page)
   }
 
-  const saveShipInfo = async (id: number) => {
-    const info = shipInfo[id]
-    if (!info) return
-    const body: Record<string, string> = {}
-    if (info.date)                       body.shippingDate = info.date
-    if (info.trackingNo !== undefined)   body.trackingNo   = info.trackingNo
-    if (Object.keys(body).length === 0)  return
-    await fetch(`/api/orders/${id}`, {
-      method: 'PATCH',
+  // 품목별 발송 수량 헬퍼 — 이미 발송된 수량 / 이번 선택 수량
+  const shippedQtyOf = (order: Order, itemId: number) =>
+    (order.shipments ?? []).reduce((s, sh) => s + sh.items.filter(x => x.orderItemId === itemId).reduce((a, x) => a + x.quantity, 0), 0)
+  const selQtyOf = (order: Order, itemId: number, remain: number, received: boolean) =>
+    shipSel[order.id]?.[itemId] ?? (received ? remain : 0)
+
+  // 발송 회차 생성 — 선택한 품목·수량으로 Shipment 기록 (부분발송 지원)
+  const createShipment = async (order: Order) => {
+    const items = order.items
+      .map(it => {
+        const remain = it.quantity - shippedQtyOf(order, it.id)
+        return { orderItemId: it.id, quantity: Math.min(remain, selQtyOf(order, it.id, remain, it.procureStatus === 'received')) }
+      })
+      .filter(x => x.quantity > 0)
+    if (!items.length) { alert(t.orders.alertShipSelect); return }
+    const info = shipInfo[order.id]
+    await fetch(`/api/orders/${order.id}/shipments`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...body, status: 'shipped' }),
+      body: JSON.stringify({
+        shippingDate: info?.date || new Date().toISOString().slice(0, 10),
+        trackingNo: info?.trackingNo ?? '',
+        items,
+      }),
     })
+    setShipSel(prev => { const n = { ...prev }; delete n[order.id]; return n })
+    setShipInfo(prev => { const n = { ...prev }; delete n[order.id]; return n })
+    fetchOrders(page)
+  }
+
+  const deleteShipment = async (shipmentId: number) => {
+    if (!window.confirm(t.orders.deleteShipmentConfirm)) return
+    await fetch(`/api/shipments/${shipmentId}`, { method: 'DELETE' })
     fetchOrders(page)
   }
 
@@ -747,6 +772,51 @@ export default function OrdersPage() {
                                   </div>
                                 )
                               })()}
+                              {/* 발송 이력 (회차별) — 납품서 열기 · 삭제 */}
+                              {(order.shipments ?? []).length > 0 && (
+                                <div className="mb-1.5 space-y-1">
+                                  {(order.shipments ?? []).map(s => (
+                                    <div key={s.id} className="flex items-center justify-between text-xs bg-blue-50 dark:bg-blue-900/20 rounded px-2 py-1">
+                                      <span className="text-blue-700 dark:text-blue-300 truncate">
+                                        #{s.shipNo} {new Date(s.shippingDate).toLocaleDateString('ja-JP')} · {s.items.reduce((a, x) => a + x.quantity, 0)}{t.common.items}
+                                        {s.trackingNo && <span className="text-gray-400 ml-1">({s.trackingNo})</span>}
+                                      </span>
+                                      <span className="flex items-center gap-1 shrink-0">
+                                        <button title={t.orders.deliveryNote}
+                                          onClick={() => window.open(`/documents/delivery/${order.id}?lang=ja&ship=${s.id}`, '_blank')}
+                                          className="p-0.5 text-blue-600 hover:text-blue-800"><FileText className="w-3.5 h-3.5" /></button>
+                                        <button title={t.common.delete}
+                                          onClick={() => deleteShipment(s.id)}
+                                          className="p-0.5 text-gray-300 hover:text-red-500"><Trash2 className="w-3 h-3" /></button>
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {/* 이번에 보낼 품목·수량 — 미발송 잔량이 있는 품목만. 기본값 = 입고완료 품목의 잔량 */}
+                              {(() => {
+                                const rows = order.items
+                                  .map(it => ({ it, remain: it.quantity - shippedQtyOf(order, it.id) }))
+                                  .filter(r => r.remain > 0)
+                                if (rows.length === 0) return <p className="text-xs text-green-600 mb-1.5">{t.orders.allShipped}</p>
+                                return (
+                                  <div className="mb-1.5 space-y-0.5 max-h-36 overflow-y-auto pr-0.5">
+                                    {rows.map(({ it, remain }) => (
+                                      <div key={it.id} className="flex items-center gap-1.5 text-xs">
+                                        <input type="number" min={0} max={remain}
+                                          value={selQtyOf(order, it.id, remain, it.procureStatus === 'received')}
+                                          onChange={e => setShipSel(prev => ({ ...prev, [order.id]: { ...prev[order.id], [it.id]: Math.max(0, Math.min(remain, Number(e.target.value) || 0)) } }))}
+                                          className="w-12 shrink-0 border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-1 py-0.5 text-xs text-right" />
+                                        <span className="text-gray-400 shrink-0">/{remain}</span>
+                                        <span className={`truncate flex-1 ${it.procureStatus !== 'received' ? 'text-gray-400' : 'text-gray-700 dark:text-gray-200'}`}
+                                          title={(it.shopProductName || it.product.name) + (it.optionLabel ? ` ${it.optionLabel}` : '')}>
+                                          {(it.shopProductName || it.product.name)}{it.optionLabel ? ` · ${it.optionLabel}` : ''}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )
+                              })()}
                               {order.shippingDate && (
                                 <p className="text-xs text-blue-600 mb-1">
                                   {t.orders.shippedOn}: {new Date(order.shippingDate).toLocaleDateString('ja-JP')}
@@ -756,22 +826,28 @@ export default function OrdersPage() {
                               <DateInput
                                 size="sm"
                                 className="mb-1"
-                                value={shipInfo[order.id]?.date ?? order.shippingDate?.slice(0, 10) ?? ''}
+                                value={shipInfo[order.id]?.date ?? ''}
                                 onChange={v => setShipInfo(prev => ({ ...prev, [order.id]: { ...prev[order.id], date: v } }))}
                               />
                               <input type="text"
                                 className="w-full border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded px-2 py-1 text-xs mb-1.5"
                                 placeholder={t.orders.trackingNoPlaceholder}
-                                defaultValue={order.trackingNo}
+                                value={shipInfo[order.id]?.trackingNo ?? ''}
                                 onChange={e => setShipInfo(prev => ({ ...prev, [order.id]: { ...prev[order.id], trackingNo: e.target.value } }))}
                               />
-                              <button onClick={() => saveShipInfo(order.id)}
-                                disabled={!order.items.some(i => i.procureStatus === 'received')}
-                                className="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-1.5 rounded text-xs font-medium flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed">
-                                <Truck className="w-3 h-3" />
-                                {order.items.filter(i => i.procureStatus === 'received').length < order.items.length && order.items.some(i => i.procureStatus === 'received')
-                                  ? t.orders.partialShipBtn : t.orders.shipProcess}
-                              </button>
+                              {(() => {
+                                const rows = order.items.map(it => ({ it, remain: it.quantity - shippedQtyOf(order, it.id) }))
+                                const remainTotal = rows.reduce((s, r) => s + r.remain, 0)
+                                const selTotal = rows.reduce((s, r) => s + Math.min(r.remain, selQtyOf(order, r.it.id, r.remain, r.it.procureStatus === 'received')), 0)
+                                return (
+                                  <button onClick={() => createShipment(order)}
+                                    disabled={selTotal === 0}
+                                    className="w-full bg-yellow-500 hover:bg-yellow-600 text-white py-1.5 rounded text-xs font-medium flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed">
+                                    <Truck className="w-3 h-3" />
+                                    {selTotal > 0 && selTotal < remainTotal ? t.orders.partialShipBtn : t.orders.shipProcess}
+                                  </button>
+                                )
+                              })()}
                             </div>
 
                             {/* 배송완료 → 완료 처리 */}

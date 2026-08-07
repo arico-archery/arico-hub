@@ -25,7 +25,7 @@ export default async function DocumentPage({
   params, searchParams,
 }: {
   params: Promise<{ type: string; id: string }>
-  searchParams: Promise<{ lang?: string; issuer?: string; bank?: string; zan?: string; np?: string }>
+  searchParams: Promise<{ lang?: string; issuer?: string; bank?: string; zan?: string; np?: string; ship?: string }>
 }) {
   const { type, id } = await params
   const sp = await searchParams
@@ -188,9 +188,30 @@ export default async function DocumentPage({
       showBank = true
     } else if (docType === 'delivery') {
       // 납품일 = 발송일 우선, 없으면 주문일
+      let deliveryDate: Date | string | null = order.shippingDate ?? order.orderDate
+      // 발송 회차별 납품서 — ?ship=<shipmentId> 면 그 회차의 품목·수량만 찍는다
+      if (sp.ship) {
+        const shipment = await prisma.shipment.findUnique({
+          where: { id: Number(sp.ship) },
+          include: { items: true },
+        })
+        if (shipment && shipment.orderId === order.id) {
+          const qtyByItem = new Map(shipment.items.map(si => [si.orderItemId, si.quantity]))
+          rows = rows
+            .filter(r => r.itemId && qtyByItem.has(r.itemId))
+            .map(r => {
+              const q = qtyByItem.get(r.itemId!) ?? 0
+              return { ...r, qty: q, amount: r.unitPrice * q }
+            })
+          grandTotalIncl = rows.reduce((s, r) => s + r.amount, 0)
+          discountValue = 0   // 회차 문서에는 주문 할인 미적용(품목 합계 그대로)
+          deliveryDate = shipment.shippingDate
+          docNoVal = `${order.orderNo}-S${shipment.shipNo}`
+        }
+      }
       dateRows = [
-        { label: T.issueDate, value: fmtDocDate(order.shippingDate ?? order.orderDate, lang) },
-        { label: T.deliveryDate, value: fmtDocDate(order.shippingDate ?? order.orderDate, lang) },
+        { label: T.issueDate, value: fmtDocDate(deliveryDate, lang) },
+        { label: T.deliveryDate, value: fmtDocDate(deliveryDate, lang) },
       ]
     } else {
       const valid = order.dueDate ?? new Date(new Date(order.orderDate).getTime() + 30 * 86400000)
@@ -336,7 +357,7 @@ export default async function DocumentPage({
       <DocToolbar type={docType} id={id} lang={lang} backHref={backHref}
         issuers={companyProfiles.map((p, i) => p.label || `프로필 ${i + 1}`)} issuerIdx={issuerIdx}
         banks={docType === 'invoice' ? bankProfiles.map((p, i) => p.label || `계좌 ${i + 1}`) : []} bankIdx={bankIdx}
-        zan={zanOn} noPrice={!showPrices} />
+        zan={zanOn} noPrice={!showPrices} ship={docType === 'delivery' ? (sp.ship ?? '') : ''} />
 
       {/* print-page: 인쇄 시 문서 자체가 페이지 여백을 갖는다(@page margin:0 → 브라우저 머리글·바닥글 제거) */}
       <div className="print-page max-w-[820px] mx-auto bg-white text-gray-900 shadow-lg rounded-md print:shadow-none print:rounded-none p-8 print:p-6 text-[13px] leading-relaxed" id="document">

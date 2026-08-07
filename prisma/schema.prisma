@@ -126,6 +126,7 @@ model Order {
   zanText           String      @default("")   // 문서(청구서·견적서) 注残(백오더 잔량) 수기 텍스트 — 한 줄에 한 품목
   receiptNote       String      @default("")   // 영수증 但し書き(단서) — 비우면 「お品代として」 기본값
   items             OrderItem[]
+  shipments         Shipment[]  // 품목 단위 발송 기록 (2026-08-06 분할배송 도입 — 회차별 운송장·납품서)
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
@@ -152,9 +153,37 @@ model OrderItem {
   shopProductName String         @default("")  // 고객이 실제 주문한 자사몰(MakeShop) 상품명 — 공급사 상품명(일반명)과 달라 변형정보를 담음
   purchaseOrderId Int?           // 연결된 발주서
   purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  shipmentItems   ShipmentItem[] // 이 품목의 발송 이력 (합계 = 발송된 수량)
   createdAt       DateTime       @default(now())
 
   @@index([procureStatus])
+}
+
+// 발송 회차 — 한 주문을 여러 번에 나눠 보낼 때 회차마다 발송일·운송장·품목·수량을 기록한다.
+// (2026-08-06 도입. 이전에는 주문당 발송 기록 1세트뿐이라 부분발송 내역·2차 운송장이 남지 않았음)
+model Shipment {
+  id           Int            @id @default(autoincrement())
+  orderId      Int
+  order        Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  shipNo       Int            // 주문 내 회차 (1부터)
+  shippingDate DateTime
+  trackingNo   String         @default("")
+  memo         String         @default("")
+  items        ShipmentItem[]
+  createdAt    DateTime       @default(now())
+
+  @@index([orderId])
+}
+
+model ShipmentItem {
+  id          Int       @id @default(autoincrement())
+  shipmentId  Int
+  shipment    Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  orderItemId Int
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  quantity    Int
+
+  @@index([orderItemId])
 }
 
 model Setting {
