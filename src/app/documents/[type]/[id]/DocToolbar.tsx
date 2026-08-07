@@ -76,7 +76,7 @@ export default function DocToolbar({
       {/* 注残(백오더 잔량) 표기 토글 — 청구 품목 아래에 미출하 잔량을 같이 찍어달라는 거래처용(安井 등) */}
       {showZan && (
         <a
-          href={`/documents/${type}/${id}?lang=${lang}&issuer=${issuerIdx}&bank=${bankIdx}${zan ? '' : '&zan=1'}${noPrice ? '&np=1' : ''}`}
+          href={`/documents/${type}/${id}?lang=${lang}&issuer=${issuerIdx}&bank=${bankIdx}${zan ? '' : '&zan=1'}${noPrice ? '&np=1' : ''}${ship ? `&ship=${ship}` : ''}`}
           className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
             zan
               ? 'bg-amber-500 border-amber-500 text-white'
@@ -90,7 +90,7 @@ export default function DocToolbar({
       {/* 납품서: 금액 표시 토글 (기본 표시 — 끄면 수량만 찍는 납품서) */}
       {type === 'delivery' && (
         <a
-          href={`/documents/${type}/${id}?lang=${lang}&issuer=${issuerIdx}&bank=${bankIdx}${zan ? '&zan=1' : ''}${noPrice ? '' : '&np=1'}`}
+          href={`/documents/${type}/${id}?lang=${lang}&issuer=${issuerIdx}&bank=${bankIdx}${zan ? '&zan=1' : ''}${noPrice ? '' : '&np=1'}${ship ? `&ship=${ship}` : ''}`}
           className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
             !noPrice
               ? 'bg-green-700 border-green-700 text-white'
