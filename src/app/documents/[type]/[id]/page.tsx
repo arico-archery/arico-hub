@@ -79,6 +79,8 @@ export default async function DocumentPage({
   let zanOrderId = 0
   // 납품서 금액 표시(기본 켬) — ?np=1 이면 수량만 찍는 납품서
   const showPrices = !(docType === 'delivery' && sp.np === '1')
+  // 회차 납품서 하단의 미발송분 목록 (이 회차 시점의 잔량 — 이후 회차는 계산에 안 넣음)
+  let shipRemainRows: { name: string; opt: string; qty: number }[] = []
   // 영수증용 데이터
   let receiptAmount = 0
   let receiptFullyPaid = false
@@ -197,6 +199,18 @@ export default async function DocumentPage({
         })
         if (shipment && shipment.orderId === order.id) {
           const qtyByItem = new Map(shipment.items.map(si => [si.orderItemId, si.quantity]))
+          // 이 회차 시점까지의 발송 누계 → 품목별 미발송 잔량 (하단 「미발송분」 표기용)
+          const priorShipments = await prisma.shipment.findMany({
+            where: { orderId: order.id, shipNo: { lte: shipment.shipNo } },
+            include: { items: true },
+          })
+          const shippedUpTo = new Map<number, number>()
+          for (const s of priorShipments) for (const si of s.items) {
+            shippedUpTo.set(si.orderItemId, (shippedUpTo.get(si.orderItemId) ?? 0) + si.quantity)
+          }
+          shipRemainRows = rows
+            .map(r => ({ name: r.name, opt: r.opt, qty: r.qty - (r.itemId ? (shippedUpTo.get(r.itemId) ?? 0) : 0) }))
+            .filter(r => r.qty > 0)
           rows = rows
             .filter(r => r.itemId && qtyByItem.has(r.itemId))
             .map(r => {
@@ -485,6 +499,18 @@ export default async function DocumentPage({
             ))}
           </tbody>
         </table>
+        )}
+
+        {/* 회차 납품서: 이번에 안 보낸 주문 품목(미발송분) — 고객이 나머지가 온다는 걸 알 수 있게 */}
+        {docType === 'delivery' && shipRemainRows.length > 0 && (
+          <div className="mt-2 text-[11px] leading-snug">
+            <p className="font-semibold text-gray-800 mb-0.5">
+              {lang === 'ja' ? '以下 未発送分（追って発送予定）' : lang === 'ko' ? '이하 미발송분 (추후 발송 예정)' : 'To be shipped later'}
+            </p>
+            {shipRemainRows.map((r, i) => (
+              <p key={i} className="text-gray-600">{r.name}{r.opt ? ` ${r.opt}` : ''} ×{r.qty}</p>
+            ))}
+          </div>
         )}
 
         {/* 注残(백오더 잔량) — 수기 입력(기본) + 툴바 [注残] 토글 시 자동 목록 병기 (安井 등 요청 거래처) */}
