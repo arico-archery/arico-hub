@@ -5,6 +5,7 @@ import { DOC_TEXT, DOC_LANGS, DocLang, DocType, fmtDocDate, fmtDocDateShort, fmt
 import DocToolbar from './DocToolbar'
 import EditableName from './EditableName'
 import ZanSection from './ZanSection'
+import NotesSection from './NotesSection'
 import Logo, { ARICO_GREEN } from '@/components/Logo'
 
 async function getSettings(): Promise<Record<string, string>> {
@@ -414,13 +415,11 @@ export default async function DocumentPage({
           </div>
         )}
 
-        {/* 備考 */}
-        {notes && (
-          <div className="text-[12px] mt-3">
-            <p className="font-semibold mb-0.5">{T.notes}</p>
-            <p className="whitespace-pre-wrap text-gray-700">{notes}</p>
-          </div>
-        )}
+        {/* 備考 — 문서 화면에서 바로 기입·수정 (주문/발주의 memo 와 같은 필드) */}
+        <NotesSection
+          endpoint={docType === 'po' ? `/api/purchase-orders/${id}` : `/api/orders/${id}`}
+          initial={notes} title={T.notes} lang={lang}
+        />
       </div>
     </div>
   )
