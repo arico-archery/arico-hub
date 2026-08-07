@@ -22,7 +22,7 @@ export default async function DocumentPage({
   params, searchParams,
 }: {
   params: Promise<{ type: string; id: string }>
-  searchParams: Promise<{ lang?: string; issuer?: string; bank?: string }>
+  searchParams: Promise<{ lang?: string; issuer?: string; bank?: string; zan?: string }>
 }) {
   const { type, id } = await params
   const sp = await searchParams
@@ -68,6 +68,10 @@ export default async function DocumentPage({
   let notes = ''
   let showBank = false
   let backHref = '/orders'
+  // 注残(백오더 잔량) — 청구 품목 아래에 이 거래처의 미출하·미입고 잔량을 같이 찍는 관행(安井 등).
+  // ?zan=1 일 때만 조회·표시.
+  const zanOn = sp.zan === '1'
+  let zanRows: { ref: string; name: string; opt: string; qty: number }[] = []
 
   if (docType === 'po') {
     const po = await prisma.purchaseOrder.findUnique({
@@ -143,6 +147,24 @@ export default async function DocumentPage({
     grandTotalIncl = order.totalAmountJpy
     subject = `${fmtDocDatePadded(order.orderDate, lang)}${T.subjectSuffix}`
 
+    // 注残: 이 거래처의 다른 진행중 주문에서 아직 미발주/발주중(=미출하)인 품목
+    if (zanOn) {
+      const zanItems = await prisma.orderItem.findMany({
+        where: {
+          order: { customerId: order.customerId, id: { not: order.id }, status: { notIn: ['cancelled', 'delivered'] } },
+          procureStatus: { in: ['needed', 'ordered'] },
+        },
+        include: { product: true, order: { select: { orderNo: true, orderDate: true } } },
+        orderBy: [{ order: { orderDate: 'asc' } }, { id: 'asc' }],
+      })
+      zanRows = zanItems.map(it => ({
+        ref: it.order.orderNo,
+        name: cleanDocText(it.shopProductName) || it.product.name,
+        opt: cleanDocOption(it.optionLabel || it.optionMemo || ''),
+        qty: it.quantity,
+      }))
+    }
+
     if (docType === 'invoice') {
       dateRows = [
         { label: T.issueDate, value: fmtDocDate(order.orderDate, lang) },
@@ -195,7 +217,8 @@ export default async function DocumentPage({
     <div className="min-h-screen bg-gray-100 dark:bg-slate-900 p-6 print:bg-white print:p-0">
       <DocToolbar type={docType} id={id} lang={lang} backHref={backHref}
         issuers={companyProfiles.map((p, i) => p.label || `프로필 ${i + 1}`)} issuerIdx={issuerIdx}
-        banks={docType === 'invoice' ? bankProfiles.map((p, i) => p.label || `계좌 ${i + 1}`) : []} bankIdx={bankIdx} />
+        banks={docType === 'invoice' ? bankProfiles.map((p, i) => p.label || `계좌 ${i + 1}`) : []} bankIdx={bankIdx}
+        zan={zanOn} />
 
       {/* print-page: 인쇄 시 문서 자체가 페이지 여백을 갖는다(@page margin:0 → 브라우저 머리글·바닥글 제거) */}
       <div className="print-page max-w-[820px] mx-auto bg-white text-gray-900 shadow-lg rounded-md print:shadow-none print:rounded-none p-8 print:p-6 text-[13px] leading-relaxed" id="document">
@@ -321,6 +344,20 @@ export default async function DocumentPage({
             ))}
           </tbody>
         </table>
+        )}
+
+        {/* 注残(백오더 잔량) — 청구 품목 아래에 미출하 잔량 표기 (安井 등 요청 거래처, 툴바 토글) */}
+        {zanRows.length > 0 && (
+          <div className="mt-2 text-[11px] leading-snug">
+            <p className="font-semibold text-gray-800 mb-0.5">
+              {lang === 'ja' ? '以下注残' : lang === 'ko' ? '이하 미출하(백오더) 잔량' : 'Backorder (pending)'}
+            </p>
+            {zanRows.map((r, i) => (
+              <p key={i} className="text-gray-600">
+                {r.ref}　{r.name}{r.opt ? ` ${r.opt}` : ''} ×{r.qty}
+              </p>
+            ))}
+          </div>
         )}
 
         {/* 합계/세금 */}

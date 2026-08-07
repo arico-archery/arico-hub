@@ -12,15 +12,18 @@ const TYPE_LABEL: Record<DocType, Record<DocLang, string>> = {
 const ISSUER_LABEL: Record<DocLang, string> = { ja: '発行元', ko: '발행처', en: 'Issuer' }
 const BANK_LABEL: Record<DocLang, string> = { ja: '口座', ko: '계좌', en: 'Bank' }
 
+const ZAN_LABEL: Record<DocLang, string> = { ja: '注残', ko: '백오더', en: 'Backorder' }
+
 export default function DocToolbar({
-  type, id, lang, backHref, issuers = [], issuerIdx = 0, banks = [], bankIdx = 0,
-}: { type: DocType; id: string; lang: DocLang; backHref: string; issuers?: string[]; issuerIdx?: number; banks?: string[]; bankIdx?: number }) {
+  type, id, lang, backHref, issuers = [], issuerIdx = 0, banks = [], bankIdx = 0, zan = false,
+}: { type: DocType; id: string; lang: DocLang; backHref: string; issuers?: string[]; issuerIdx?: number; banks?: string[]; bankIdx?: number; zan?: boolean }) {
   // 청구서 ↔ 견적서는 같은 주문 데이터라 상호 전환 가능. 발주서는 단독.
   const orderTypes: DocType[] = ['invoice', 'quote']
   const showTypeSwitch = type !== 'po'
 
-  const link = (t: DocType, l: DocLang) => `/documents/${t}/${id}?lang=${l}&issuer=${issuerIdx}&bank=${bankIdx}`
-  const goProfile = (iss: number, bnk: number) => { window.location.href = `/documents/${type}/${id}?lang=${lang}&issuer=${iss}&bank=${bnk}` }
+  const zanQ = zan ? '&zan=1' : ''
+  const link = (t: DocType, l: DocLang) => `/documents/${t}/${id}?lang=${l}&issuer=${issuerIdx}&bank=${bankIdx}${zanQ}`
+  const goProfile = (iss: number, bnk: number) => { window.location.href = `/documents/${type}/${id}?lang=${lang}&issuer=${iss}&bank=${bnk}${zanQ}` }
 
   return (
     <div className="max-w-3xl mx-auto mb-4 flex flex-wrap items-center gap-3 print:hidden">
@@ -68,6 +71,19 @@ export default function DocToolbar({
           className="px-2 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200">
           {issuers.map((lbl, i) => <option key={i} value={i}>{ISSUER_LABEL[lang]}: {lbl}</option>)}
         </select>
+      )}
+      {/* 注残(백오더 잔량) 표기 토글 — 청구 품목 아래에 미출하 잔량을 같이 찍어달라는 거래처용(安井 등) */}
+      {showTypeSwitch && (
+        <a
+          href={`/documents/${type}/${id}?lang=${lang}&issuer=${issuerIdx}&bank=${bankIdx}${zan ? '' : '&zan=1'}`}
+          className={`px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors ${
+            zan
+              ? 'bg-amber-500 border-amber-500 text-white'
+              : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+          }`}
+        >
+          {ZAN_LABEL[lang]}{zan ? ' ✓' : ''}
+        </a>
       )}
       {/* 계좌 프로필 선택 (청구서, 여러 개일 때) */}
       {banks.length > 1 && (
