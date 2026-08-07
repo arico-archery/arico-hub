@@ -123,6 +123,7 @@ model Order {
   totalCostJpy      Float       @default(0)
   paidAmountJpy     Float       @default(0)
   memo              String      @default("")
+  zanText           String      @default("")   // 문서(청구서·견적서) 注残(백오더 잔량) 수기 텍스트 — 한 줄에 한 품목
   items             OrderItem[]
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt

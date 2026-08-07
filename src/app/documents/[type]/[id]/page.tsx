@@ -4,6 +4,7 @@ import { formatJpy } from '@/lib/utils'
 import { DOC_TEXT, DOC_LANGS, DocLang, DocType, fmtDocDate, fmtDocDateShort, fmtDocDatePadded, inclusiveTax, cleanDocText, cleanDocOption } from '@/lib/documents'
 import DocToolbar from './DocToolbar'
 import EditableName from './EditableName'
+import ZanSection from './ZanSection'
 import Logo, { ARICO_GREEN } from '@/components/Logo'
 
 async function getSettings(): Promise<Record<string, string>> {
@@ -68,10 +69,12 @@ export default async function DocumentPage({
   let notes = ''
   let showBank = false
   let backHref = '/orders'
-  // 注残(백오더 잔량) — 청구 품목 아래에 이 거래처의 미출하·미입고 잔량을 같이 찍는 관행(安井 등).
-  // ?zan=1 일 때만 조회·표시.
+  // 注残(백오더 잔량) — 청구 품목 아래에 이 거래처의 미출하 잔량을 같이 찍는 관행(安井 등).
+  // 수기 텍스트(Order.zanText)가 기본. ?zan=1 이면 앱 백오더 자동 목록도 표시.
   const zanOn = sp.zan === '1'
   let zanRows: { ref: string; name: string; opt: string; qty: number }[] = []
+  let zanText = ''
+  let zanOrderId = 0
 
   if (docType === 'po') {
     const po = await prisma.purchaseOrder.findUnique({
@@ -147,8 +150,10 @@ export default async function DocumentPage({
     grandTotalIncl = order.totalAmountJpy
     subject = `${fmtDocDatePadded(order.orderDate, lang)}${T.subjectSuffix}`
 
-    // 注残: 이 거래처의 다른 진행중 주문에서 아직 미발주/발주중(=미출하)인 품목
-    if (zanOn) {
+    // 注残: 수기 텍스트 로드 + 자동 목록(편집기의 '불러오기' 초안용으로 항상 조회)
+    zanText = order.zanText ?? ''
+    zanOrderId = order.id
+    {
       const zanItems = await prisma.orderItem.findMany({
         where: {
           order: { customerId: order.customerId, id: { not: order.id }, status: { notIn: ['cancelled', 'delivered'] } },
@@ -346,18 +351,9 @@ export default async function DocumentPage({
         </table>
         )}
 
-        {/* 注残(백오더 잔량) — 청구 품목 아래에 미출하 잔량 표기 (安井 등 요청 거래처, 툴바 토글) */}
-        {zanRows.length > 0 && (
-          <div className="mt-2 text-[11px] leading-snug">
-            <p className="font-semibold text-gray-800 mb-0.5">
-              {lang === 'ja' ? '以下注残' : lang === 'ko' ? '이하 미출하(백오더) 잔량' : 'Backorder (pending)'}
-            </p>
-            {zanRows.map((r, i) => (
-              <p key={i} className="text-gray-600">
-                {r.ref}　{r.name}{r.opt ? ` ${r.opt}` : ''} ×{r.qty}
-              </p>
-            ))}
-          </div>
+        {/* 注残(백오더 잔량) — 수기 입력(기본) + 툴바 [注残] 토글 시 자동 목록 병기 (安井 등 요청 거래처) */}
+        {docType !== 'po' && (
+          <ZanSection orderId={zanOrderId} initial={zanText} autoRows={zanRows} showAuto={zanOn} lang={lang} />
         )}
 
         {/* 합계/세금 */}
