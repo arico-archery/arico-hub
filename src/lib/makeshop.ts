@@ -181,8 +181,9 @@ export async function getAllOrdersDetailed(startOrderDate: string, endOrderDate:
 export type MakeshopMemberDetail = {
   memberId: string; name: string; nameKana: string; email: string
   tel: string; etcphone: string; hpost: string; haddress1: string; haddressAddr: string; haddress2: string
+  haddress: string   // 시구정촌 + 번지·건물명까지 담긴 상세주소 (haddress2 는 시구정촌까지만)
 }
-const MEMBER_DETAIL_FIELDS = `memberId name nameKana email tel etcphone hpost haddress1 haddressAddr haddress2`
+const MEMBER_DETAIL_FIELDS = `memberId name nameKana email tel etcphone hpost haddress1 haddressAddr haddress2 haddress`
 
 export async function searchMemberDetailedPage(page = 1, limit = 1000): Promise<MakeshopMemberDetail[]> {
   const data = await makeshopQuery<{ searchMember?: { members?: MakeshopMemberDetail[] } }>(
@@ -221,8 +222,11 @@ export function memberAddress(m?: MakeshopMemberDetail | null): string {
   if (!m) return ''
   // haddress1 은 주소가 아니라 MakeShop의 도도부현 코드(東京23区内=13, 神奈川=15 …)다.
   // 예전에는 이걸 주소 뒤에 붙여 「東京(23区内) 江戸川区南葛西 13」처럼 저장됐다 → 쓰지 않는다.
+  // 주소 3단: haddressAddr(도도부현) + haddress(시구정촌+번지·건물명). haddress2 는
+  // 시구정촌까지만이라 haddress 가 있으면 그쪽을 쓴다(번지가 빠지던 원인).
   const acc: string[] = []
-  for (const raw of [normalizePrefecture(m.haddressAddr), m.haddress2]) {
+  const detail = (m.haddress || '').trim() || m.haddress2
+  for (const raw of [normalizePrefecture(m.haddressAddr), detail]) {
     const p = (raw || '').trim()
     if (!p) continue
     if (acc.length) {
