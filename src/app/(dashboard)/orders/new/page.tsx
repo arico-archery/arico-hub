@@ -209,25 +209,33 @@ export default function NewOrderPage() {
 
   // 라인별 매장 재고(스마레지) — 원가 대신 이 값을 보여준다.
   // 연결: 옵션코드(=스마레지 상품코드) 우선, 없으면 상품 바코드/카탈로그 바코드로 서버가 찾아준다.
-  type StockQty = { total: number; tokyo: number; aichi: number }
-  const [stockMap, setStockMap] = useState<{ byId: Record<number, StockQty>; byCode: Record<string, StockQty> }>({ byId: {}, byCode: {} })
-  const stockKey = useMemo(() => lines.map(l => `${l.product.id}:${l.optionMemo || ''}`).join('|'), [lines])
+  type StockQty = { total: number; tokyo: number; aichi: number; skus: number; via: string }
+  const [stockMap, setStockMap] = useState<Record<string, StockQty>>({})
+  // 조회 요청 본문 — 라인의 상품·옵션코드·이름·선택옵션. 값이 바뀔 때만 다시 조회한다.
+  const stockReq = useMemo(() => lines.map((l, i) => ({
+    key: String(i),
+    productId: l.product.id,
+    code: l.optionMemo || '',
+    name: l.catalogName || l.product.name,
+    options: [...Object.values(l.catalogOptionSel ?? {}), ...Object.values(l.variantAxisSel ?? {})].filter(Boolean),
+  })), [lines])
+  const stockKey = useMemo(() => JSON.stringify(stockReq), [stockReq])
   useEffect(() => {
-    if (!stockKey) { setStockMap({ byId: {}, byCode: {} }); return }
-    const parts = stockKey.split('|')
-    const ids = [...new Set(parts.map((s: string) => s.split(':')[0]))].join(',')
-    const codes = [...new Set(parts.map((s: string) => s.split(':').slice(1).join(':')).filter(Boolean))].join(',')
-    fetch(`/api/smaregi/stock-lookup?ids=${ids}&codes=${encodeURIComponent(codes)}`)
+    const req = JSON.parse(stockKey) as { key: string }[]
+    if (!req.length) { setStockMap({}); return }
+    let alive = true
+    fetch('/api/smaregi/stock-lookup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lines: req }),
+    })
       .then(r => r.json())
-      .then(d => setStockMap({ byId: d.byId ?? {}, byCode: d.byCode ?? {} }))
+      .then(d => { if (alive) setStockMap(d.stock ?? {}) })
       .catch(() => {})
+    return () => { alive = false }
   }, [stockKey])
-  const stockOf = (line: OrderLine): StockQty | null => {
-    const raw = (line.optionMemo || '').trim()
-    const code = raw.replace(/^[#＃TtＴｔ]+/, '')
-    return stockMap.byCode[code] ?? stockMap.byId[line.product.id]
-      ?? (line.fromStock && line.stockQty != null ? { total: line.stockQty, tokyo: 0, aichi: 0 } : null)
-  }
+  const stockOf = (idx: number, line: OrderLine): StockQty | null =>
+    stockMap[String(idx)]
+    ?? (line.fromStock && line.stockQty != null ? { total: line.stockQty, tokyo: 0, aichi: 0, skus: 1, via: 'stock' } : null)
 
   // 검색 순서 가드 — 이전에 던진 느린 검색 응답이 나중 검색 결과를 덮어쓰는 것을 막는다.
   // (예: 다른 검색어의 응답이 늦게 도착해 「ARICO」 검색 결과를 지워버리던 문제)
@@ -1100,12 +1108,15 @@ export default function NewOrderPage() {
                         {/* 매장 재고(스마레지) — 발주 없이 바로 보낼 수 있는지 판단용. 원가는 오른쪽 요약에만 */}
                         <td className="px-4 py-3 text-right tabular-nums">
                           {(() => {
-                            const s = stockOf(line)
+                            const s = stockOf(idx, line)
                             if (!s) return <span className="text-gray-300 dark:text-gray-600">—</span>
+                            // 옵션을 아직 안 골랐으면 상품군 합계라 그 뜻을 함께 보여준다
+                            const isGroup = s.skus > 1
                             return (
-                              <span title={`${t.orders.stockTokyo} ${s.tokyo} / ${t.orders.stockAichi} ${s.aichi}`}
+                              <span title={`${t.orders.stockTokyo} ${s.tokyo} / ${t.orders.stockAichi} ${s.aichi}${isGroup ? ` (${s.skus} SKU)` : ''}`}
                                 className={s.total > 0 ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-gray-400'}>
                                 {s.total}
+                                {isGroup && <span className="text-[10px] text-gray-400 ml-0.5 font-normal">({s.skus})</span>}
                               </span>
                             )
                           })()}
