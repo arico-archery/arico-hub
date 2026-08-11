@@ -873,36 +873,20 @@ export default function OrdersPage() {
                               })()}
                             </div>
 
-                            {/* 배송완료 → 완료 처리 */}
-                            <div className="pt-1 border-t border-gray-100 dark:border-gray-700">
-                              <p className="text-xs text-gray-600 dark:text-gray-400 font-medium mb-1.5 flex items-center gap-1">
-                                <MapPin className="w-3 h-3" /> {t.orders.btnDone}
-                              </p>
-                              {order.completedAt ? (
-                                <div>
-                                  <p className="text-xs text-green-600 font-medium mb-1.5 flex items-center gap-1">
-                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                    {t.orders.completedOn} {new Date(order.completedAt).toLocaleDateString('ja-JP')}
-                                  </p>
-                                  <button
-                                    onClick={() => updateStatus(order.id, 'status', 'shipped')}
-                                    className="w-full border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300 py-1.5 rounded text-xs hover:bg-gray-50 dark:hover:bg-gray-700"
-                                  >{t.orders.cancelDone}</button>
-                                </div>
-                              ) : (
+                            {/* 완료 표시 — 전량 발송 시 자동 완료(배송완료 버튼 폐지, 2026-08-11).
+                                되돌리기(완료 취소)만 남긴다. */}
+                            {order.completedAt && (
+                              <div className="pt-1 border-t border-gray-100 dark:border-gray-700">
+                                <p className="text-xs text-green-600 font-medium mb-1.5 flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  {t.orders.completedOn} {new Date(order.completedAt).toLocaleDateString('ja-JP')}
+                                </p>
                                 <button
-                                  onClick={() => updateStatus(order.id, 'status', 'delivered')}
-                                  disabled={order.status !== 'shipped' && order.status !== 'delivered'}
-                                  className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded text-xs font-semibold flex items-center justify-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                >
-                                  <CheckCheck className="w-3.5 h-3.5" />
-                                  {t.orders.btnDone}
-                                </button>
-                              )}
-                              {order.status !== 'shipped' && !order.completedAt && (
-                                <p className="text-xs text-gray-400 mt-1 text-center">{t.orders.enableAfterShipped}</p>
-                              )}
-                            </div>
+                                  onClick={() => updateStatus(order.id, 'status', 'shipped')}
+                                  className="w-full border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300 py-1.5 rounded text-xs hover:bg-gray-50 dark:hover:bg-gray-700"
+                                >{t.orders.cancelDone}</button>
+                              </div>
+                            )}
 
                             {/* 지연 연락 날짜 */}
                             <div className="pt-1 border-t border-gray-100 dark:border-gray-700">

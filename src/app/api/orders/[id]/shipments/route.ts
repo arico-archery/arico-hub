@@ -55,8 +55,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     data: {
       shippingDate,
       ...(shipment.trackingNo ? { trackingNo: shipment.trackingNo } : {}),
-      // 전량 발송이면 shipped 로 (이미 delivered/cancelled 면 유지). 부분발송은 상태 유지.
-      ...(allShipped && !['delivered', 'cancelled'].includes(order.status) ? { status: 'shipped' } : {}),
+      // 전량 발송 = 곧바로 완료 (2026-08-11 지안 결정: 배송완료 단계 폐지 — 발송이 끝이다).
+      // 부분발송은 상태 유지.
+      ...(allShipped && !['delivered', 'cancelled'].includes(order.status)
+        ? { status: 'delivered', deliveryDate: shippingDate, completedAt: shippingDate }
+        : {}),
     },
   })
 
