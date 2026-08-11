@@ -29,6 +29,49 @@ function fmtMd(iso: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
+// 옵션값 비교용 정규화 — 「【取り寄せ】」 같은 자사몰 표기와 공백·전각차를 지운다.
+const normOpt = (s: string) =>
+  String(s || '').normalize('NFKC').replace(/【[^】]*】/g, '').replace(/[\s　]/g, '').toLowerCase()
+
+// 비고(고객이 주문한 옵션)에서 변형 축의 선택값을 추정한다.
+//   「左右 : 【取り寄せ】RH カラー : ブラック」 → { 左右: 'RH', カラー: 'ブラック' }
+// 축 라벨이 나오는 위치를 찾아 다음 라벨 전까지를 값으로 본다(값에 공백이 섞여도 안전).
+// 라벨 없이 값만 나열된 형태(「RH / ブラック」)는 값 매칭으로 보완한다.
+function guessSelFromMemo(axes: VariantAxis[], memo: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  const text = String(memo || '').normalize('NFKC')
+  if (!text) return out
+
+  const marks = axes
+    .map(ax => ({ ax, i: text.indexOf(ax.label) }))
+    .filter(m => m.i >= 0)
+    .sort((a, b) => a.i - b.i)
+  for (let k = 0; k < marks.length; k++) {
+    const { ax, i } = marks[k]
+    const end = k + 1 < marks.length ? marks[k + 1].i : text.length
+    const seg = normOpt(text.slice(i + ax.label.length, end).replace(/^[\s　]*[:：][\s　]*/, ''))
+    if (!seg) continue
+    const hit = ax.values.find(v => normOpt(v) === seg) ?? ax.values.find(v => normOpt(v) && seg.startsWith(normOpt(v)))
+    if (hit) out[ax.label] = hit
+  }
+  // 남은 축은 값만으로 훑는다. 한 글자 값(S/M/L 등)은 오탐이 커서 제외.
+  const whole = normOpt(text)
+  for (const ax of axes) {
+    if (out[ax.label]) continue
+    const hit = ax.values.find(v => normOpt(v).length >= 2 && whole.includes(normOpt(v)))
+    if (hit) out[ax.label] = hit
+  }
+  return out
+}
+
+// 선택이 모든 축을 채웠고 후보가 하나로 좁혀지면 그 변형을 돌려준다.
+function resolveVariant(list: VItem[], axes: VariantAxis[], sel: Record<string, string>): VItem | null {
+  const keys = Object.keys(sel).filter(k => sel[k])
+  if (keys.length < axes.length) return null
+  const m = list.filter(v => keys.every(k => v.options[k] === sel[k]))
+  return m.length >= 1 ? m[0] : null
+}
+
 // ── 타입 ──────────────────────────────────────────────
 type BackorderItem = {
   id: number
@@ -190,7 +233,11 @@ export default function BackordersPage() {
       const d = await fetch(`/api/products/variants?productId=${item.product.id}`).then(r => r.json())
       if (Array.isArray(d.variants) && d.variants.length >= 2 && Array.isArray(d.axes) && d.axes.length > 0) {
         const cur = (d.variants as VItem[]).find(v => v.id === item.product.id)
-        setVData(prev => ({ ...prev, [item.id]: { axes: d.axes, list: d.variants, sel: cur ? { ...cur.options } : {} } }))
+        // 기본값은 고객이 주문한 옵션(비고)에서 추정하고, 추정 못 한 축만 현재 상품 값으로 채운다.
+        // 맞으면 그대로 두고 다른 축만 바꾸면 되고, 현재 상품과 다르면 [적용] 버튼이 뜬다.
+        const guess = guessSelFromMemo(d.axes, item.optionLabel || item.optionMemo || '')
+        const sel: Record<string, string> = { ...(cur ? cur.options : {}), ...guess }
+        setVData(prev => ({ ...prev, [item.id]: { axes: d.axes, list: d.variants, sel } }))
       } else {
         setVData(prev => ({ ...prev, [item.id]: 'none' }))
       }
@@ -220,20 +267,26 @@ export default function BackordersPage() {
     }
     setVData(prev => ({ ...prev, [item.id]: { ...vd, sel } }))
 
-    const keys = Object.keys(sel).filter(k => sel[k])
-    const matches = vd.list.filter(v => keys.every(k => v.options[k] === sel[k]))
-    if (matches.length >= 1 && keys.length >= vd.axes.length) {
-      const v = matches[0]
-      if (v.id === item.product.id) return
-      const res = await fetch(`/api/order-items/${item.id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId: v.id, optionMemo: v.optionLabel }),
-      })
-      if (res.ok) {
-        mutate(items.map(it => it.id === item.id
-          ? { ...it, optionMemo: v.optionLabel, product: { ...it.product, id: v.id, name: v.name, productCode: v.productCode, optionSize: v.optionSize, optionColor: v.optionColor } }
-          : it))
-      }
+    const v = resolveVariant(vd.list, vd.axes, sel)
+    if (v) await applyVariant(item, v)
+  }
+
+  // 고른 변형을 주문 품목에 반영 — 상품 교체 + 원가 재계산(서버). 비고는 고객 주문 기록이라 건드리지 않는다.
+  const applyVariant = async (item: BackorderItem, v: VItem) => {
+    if (v.id === item.product.id) return
+    const res = await fetch(`/api/order-items/${item.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ productId: v.id }),
+    })
+    if (res.ok) {
+      const updated = await res.json().catch(() => null)
+      mutate(items.map(it => it.id === item.id
+        ? {
+            ...it,
+            costPriceJpy: updated?.costPriceJpy ?? it.costPriceJpy,
+            product: { ...it.product, id: v.id, name: v.name, productCode: v.productCode, optionSize: v.optionSize, optionColor: v.optionColor },
+          }
+        : it))
     }
   }
 
@@ -599,8 +652,10 @@ export default function BackordersPage() {
                                         <SlidersHorizontal className="w-3 h-3" /> {t.backorders.changeOption}
                                       </button>
                                     )
+                                    // 비고에서 추정한 기본값이 현재 상품과 다르면 [적용] 버튼을 띄운다
+                                    const pick = resolveVariant(vd.list, vd.axes, vd.sel)
                                     return (
-                                      <div className="flex flex-wrap gap-1 mt-1.5" onClick={e => e.stopPropagation()}>
+                                      <div className="flex flex-wrap items-center gap-1 mt-1.5" onClick={e => e.stopPropagation()}>
                                         {vd.axes.map(ax => {
                                           const vals = availableAxisValues(vd.list, ax.label, vd.sel)
                                           return (
@@ -615,6 +670,15 @@ export default function BackordersPage() {
                                             </select>
                                           )
                                         })}
+                                        {pick && pick.id !== item.product.id && (
+                                          <button
+                                            onClick={() => applyVariant(item, pick)}
+                                            className="text-xs px-2 py-0.5 rounded bg-blue-600 text-white hover:bg-blue-700 font-medium"
+                                            title={pick.name}
+                                          >
+                                            {t.backorders.applyOption}
+                                          </button>
+                                        )}
                                       </div>
                                     )
                                   })()}
