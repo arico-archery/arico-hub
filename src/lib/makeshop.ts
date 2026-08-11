@@ -222,11 +222,12 @@ export function memberAddress(m?: MakeshopMemberDetail | null): string {
   if (!m) return ''
   // haddress1 은 주소가 아니라 MakeShop의 도도부현 코드(東京23区内=13, 神奈川=15 …)다.
   // 예전에는 이걸 주소 뒤에 붙여 「東京(23区内) 江戸川区南葛西 13」처럼 저장됐다 → 쓰지 않는다.
-  // 주소 3단: haddressAddr(도도부현) + haddress(시구정촌+번지·건물명). haddress2 는
-  // 시구정촌까지만이라 haddress 가 있으면 그쪽을 쓴다(번지가 빠지던 원인).
+  // 주소 3단 결합: haddressAddr(도도부현) + haddress2(시구정촌) + haddress(상세).
+  // haddress 는 회원마다 형태가 다르다 — 도쿄 23구는 구까지 포함(「港区芝浦4－4－27」),
+  // 그 밖은 시 이후만(「小野路町 2566-5」). 그래서 셋을 다 넣고 아래 중복 제거에 맡긴다.
+  // (haddress2 만 쓰면 번지가 빠지고, haddress 만 쓰면 시구정촌이 빠진다)
   const acc: string[] = []
-  const detail = (m.haddress || '').trim() || m.haddress2
-  for (const raw of [normalizePrefecture(m.haddressAddr), detail]) {
+  for (const raw of [normalizePrefecture(m.haddressAddr), m.haddress2, m.haddress]) {
     const p = (raw || '').trim()
     if (!p) continue
     if (acc.length) {
