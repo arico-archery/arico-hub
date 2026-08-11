@@ -4,7 +4,7 @@ import React, { useState, useCallback } from 'react'
 import { useApiCache } from '@/lib/useApiCache'
 import Link from 'next/link'
 import {
-  ClipboardList, Truck, CheckCircle2, Clock, AlertCircle,
+  ClipboardList, Truck, CheckCircle2, Clock, AlertCircle, Circle,
   ChevronDown, ChevronUp, Filter, RefreshCw, SlidersHorizontal, FileSpreadsheet
 } from 'lucide-react'
 import { formatJpy, SUPPLIER_COLORS, SUPPLIER_LIST } from '@/lib/utils'
@@ -23,6 +23,18 @@ function boPeriodFrom(p: string): string {
   return ''
 }
 
+// 날짜를 M/D 로 짧게 (입금일·발주일 보조표시용)
+function fmtMd(iso: string): string {
+  const d = new Date(iso)
+  return `${d.getMonth() + 1}/${d.getDate()}`
+}
+// 약속 납기가 오늘보다 이전인가 — 지난 약속은 빨갛게 띄운다(당일은 아직 아님)
+function isOverdue(iso: string): boolean {
+  const d = new Date(iso)
+  const today = new Date()
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()) < new Date(today.getFullYear(), today.getMonth(), today.getDate())
+}
+
 // ── 타입 ──────────────────────────────────────────────
 type BackorderItem = {
   id: number
@@ -34,11 +46,16 @@ type BackorderItem = {
   optionLabel?: string
   smaregiStock?: { total: number; tokyo: number; aichi: number } | null
   purchaseOrderId: number | null
+  promisedDate: string | null   // 고객에게 약속한 납기(품목 단위)
+  boMemo: string                // 백오더 품목 메모
   order: {
     id: number
     orderNo: string
     orderDate: string
     delayNotifyDate: string | null
+    paymentStatus: 'unpaid' | 'partial' | 'paid'
+    paymentDate: string | null
+    externalOrderNo: string
     customer: { name: string; company: string }
   }
   product: {
@@ -56,6 +73,7 @@ type BackorderItem = {
     poNo: string
     status: string
     expectedDate: string | null
+    orderDate: string | null
   } | null
 }
 
@@ -100,6 +118,9 @@ export default function BackordersPage() {
   const [creating, setCreating]     = useState(false)
   const [lastResult, setLastResult] = useState<{ poNo: string; supplierCode: string; origin?: string; itemCount: number }[] | null>(null)
   const [confirmGroup, setConfirmGroup] = useState<{ ids: number[]; sc: string } | null>(null)  // 전체발주 확인 대상
+  // 약속 납기·메모 인라인 편집 — 편집 중인 셀 하나만 연다(`<품목id>:<필드>`)
+  const [editCell, setEditCell] = useState<string | null>(null)
+  const [editVal, setEditVal]   = useState('')
   const [confirmStocked, setConfirmStocked] = useState<number[] | null>(null)  // 재고 있는 품목이 섞였을 때 확인 대상
   // 백오더 단계 변형(옵션) 선택: orderItemId → {axes, list, sel}
   const [vData, setVData] = useState<Record<number, { axes: VariantAxis[]; list: VItem[]; sel: Record<string, string> } | 'none'>>({})
@@ -151,6 +172,25 @@ export default function BackordersPage() {
       }
       return n
     })
+  }
+
+  // 약속 납기·메모 저장 — 낙관적 갱신(즉시 반영 후 서버 저장, 실패하면 재조회로 되돌림)
+  const saveCell = async (item: BackorderItem, field: 'promisedDate' | 'boMemo', raw: string) => {
+    const value = field === 'promisedDate' ? (raw || null) : raw
+    setEditCell(null)
+    const cur = field === 'promisedDate' ? item.promisedDate : item.boMemo
+    if ((cur ?? '') === (value ?? '')) return
+    mutate(items.map(i => i.id === item.id ? { ...i, [field]: value } as BackorderItem : i))
+    try {
+      const r = await fetch(`/api/order-items/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
+      })
+      if (!r.ok) throw new Error(await r.text())
+    } catch {
+      refresh()
+    }
   }
 
   // 옵션(변형) 불러오기 — 같은 그룹 변형/축
@@ -276,8 +316,12 @@ export default function BackordersPage() {
       [t.backorders.colCost]: i.costPriceJpy,
       [t.backorders.colCostTotal]: i.costPriceJpy * i.quantity,
       [t.backorders.colStatus]: label[i.procureStatus] || i.procureStatus,
+      [t.backorders.colPaid]: i.order.paymentStatus === 'paid' ? (i.order.paymentDate?.slice(0, 10) || 'O') : (i.order.paymentStatus === 'partial' ? t.backorders.payPartial : t.backorders.payUnpaid),
       [t.backorders.colPoNo]: i.purchaseOrder?.poNo || '',
+      [t.backorders.colOrdered]: i.purchaseOrder?.orderDate?.slice(0, 10) || '',
       [t.backorders.colExpected]: i.purchaseOrder?.expectedDate?.slice(0, 10) || '',
+      [t.backorders.colPromised]: i.promisedDate?.slice(0, 10) || '',
+      [t.backorders.colBoMemo]: i.boMemo || '',
     }))
     const ws = XLSX.utils.json_to_sheet(rows)
     ws['!cols'] = Object.keys(rows[0] || {}).map(k => ({ wch: k.length < 6 ? 10 : 18 }))
@@ -451,7 +495,7 @@ export default function BackordersPage() {
 
                     {/* 그룹 품목 */}
                     {!isCollapsed && (
-                      <table className="w-full text-sm min-w-[640px]">
+                      <table className="w-full text-sm min-w-[1080px]">
                         <thead>
                           <tr className="border-b border-gray-100 dark:border-gray-700">
                             <th className="w-8 px-4 py-2" />
@@ -463,6 +507,11 @@ export default function BackordersPage() {
                             <th className="text-center px-3 py-2 font-semibold text-gray-600 dark:text-gray-300 text-xs w-14">{t.backorders.colQty}</th>
                             <th className="text-center px-3 py-2 font-semibold text-gray-600 dark:text-gray-300 text-xs w-24">{t.backorders.colStock}</th>
                             <th className="text-right px-3 py-2 font-semibold text-gray-600 dark:text-gray-300 text-xs w-28">{t.common.cost}</th>
+                            {/* 노션 백오더 표에서 옮겨온 열 — 입금·발주·약속납기·메모 */}
+                            <th className="text-center px-3 py-2 font-semibold text-gray-600 dark:text-gray-300 text-xs w-16">{t.backorders.colPaid}</th>
+                            <th className="text-center px-3 py-2 font-semibold text-gray-600 dark:text-gray-300 text-xs w-24">{t.backorders.colOrdered}</th>
+                            <th className="text-center px-3 py-2 font-semibold text-gray-600 dark:text-gray-300 text-xs w-28">{t.backorders.colPromised}</th>
+                            <th className="text-left px-3 py-2 font-semibold text-gray-600 dark:text-gray-300 text-xs w-36">{t.backorders.colBoMemo}</th>
                             <th className="text-center px-3 py-2 font-semibold text-gray-600 dark:text-gray-300 text-xs w-28">{t.common.status}</th>
                           </tr>
                         </thead>
@@ -585,6 +634,97 @@ export default function BackordersPage() {
                                 </td>
                                 <td className="px-3 py-3 text-right font-medium text-gray-600 dark:text-gray-300 tabular-nums text-sm">
                                   {formatJpy(item.costPriceJpy * item.quantity)}
+                                </td>
+                                {/* 입금 — 발주 판단의 근거. 미입금이면 회색 원 */}
+                                <td className="px-3 py-3 text-center">
+                                  {item.order.paymentStatus === 'paid' ? (
+                                    <>
+                                      <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" />
+                                      {item.order.paymentDate && (
+                                        <p className="text-[11px] text-gray-400 mt-0.5 tabular-nums">{fmtMd(item.order.paymentDate)}</p>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <span className={`text-xs font-medium ${item.order.paymentStatus === 'partial' ? 'text-amber-600' : 'text-gray-400'}`}>
+                                      {item.order.paymentStatus === 'partial' ? t.backorders.payPartial : t.backorders.payUnpaid}
+                                    </span>
+                                  )}
+                                </td>
+                                {/* 발주 작성 여부 + 발주일 */}
+                                <td className="px-3 py-3 text-center">
+                                  {item.purchaseOrder ? (
+                                    <>
+                                      <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" />
+                                      <Link
+                                        href={`/purchase-orders/${item.purchaseOrder.id}`}
+                                        onClick={e => e.stopPropagation()}
+                                        className="text-[11px] text-blue-500 hover:underline block leading-tight"
+                                      >
+                                        {item.purchaseOrder.poNo}
+                                      </Link>
+                                      {item.purchaseOrder.orderDate && (
+                                        <p className="text-[11px] text-gray-400 tabular-nums">{fmtMd(item.purchaseOrder.orderDate)}</p>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <Circle className="w-4 h-4 text-gray-300 dark:text-gray-600 mx-auto" />
+                                  )}
+                                </td>
+                                {/* 약속 납기 — 클릭해 인라인 편집. 지난 날짜는 빨강 */}
+                                <td className="px-3 py-3 text-center" onClick={e => e.stopPropagation()}>
+                                  {editCell === `${item.id}:promisedDate` ? (
+                                    <input
+                                      type="date"
+                                      autoFocus
+                                      value={editVal}
+                                      onChange={e => setEditVal(e.target.value)}
+                                      onBlur={() => saveCell(item, 'promisedDate', editVal)}
+                                      onKeyDown={e => {
+                                        if (e.key === 'Enter') saveCell(item, 'promisedDate', editVal)
+                                        if (e.key === 'Escape') setEditCell(null)
+                                      }}
+                                      className="w-full border border-blue-400 rounded px-1 py-0.5 text-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                    />
+                                  ) : item.promisedDate ? (
+                                    <button
+                                      onClick={() => { setEditCell(`${item.id}:promisedDate`); setEditVal(item.promisedDate!.slice(0, 10)) }}
+                                      className={`text-xs tabular-nums hover:underline ${
+                                        isOverdue(item.promisedDate) ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-700 dark:text-gray-200'
+                                      }`}
+                                    >
+                                      {new Date(item.promisedDate).toLocaleDateString('ja-JP')}
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => { setEditCell(`${item.id}:promisedDate`); setEditVal('') }}
+                                      className="text-xs text-gray-400 border border-dashed border-gray-300 dark:border-gray-600 rounded px-2 py-0.5 hover:border-blue-400 hover:text-blue-500"
+                                    >
+                                      + {t.backorders.setDate}
+                                    </button>
+                                  )}
+                                </td>
+                                {/* 품목 메모 — 클릭해 인라인 편집 */}
+                                <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
+                                  {editCell === `${item.id}:boMemo` ? (
+                                    <input
+                                      autoFocus
+                                      value={editVal}
+                                      onChange={e => setEditVal(e.target.value)}
+                                      onBlur={() => saveCell(item, 'boMemo', editVal)}
+                                      onKeyDown={e => {
+                                        if (e.key === 'Enter') saveCell(item, 'boMemo', editVal)
+                                        if (e.key === 'Escape') setEditCell(null)
+                                      }}
+                                      className="w-full border border-blue-400 rounded px-1.5 py-0.5 text-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                    />
+                                  ) : (
+                                    <button
+                                      onClick={() => { setEditCell(`${item.id}:boMemo`); setEditVal(item.boMemo ?? '') }}
+                                      className={`text-left text-xs w-full hover:underline ${item.boMemo ? 'text-gray-700 dark:text-gray-200' : 'text-gray-300 dark:text-gray-600'}`}
+                                    >
+                                      {item.boMemo || t.backorders.addMemo}
+                                    </button>
+                                  )}
                                 </td>
                                 <td className="px-3 py-3 text-center">
                                   <div className="flex flex-col items-center gap-1">
