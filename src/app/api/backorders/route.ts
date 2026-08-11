@@ -38,8 +38,7 @@ export async function GET(req: Request) {
         include: { supplier: true },
       },
       purchaseOrder: {
-        // orderDate = 발주 작성일. 백오더 화면의 「발주」 열에서 발주 여부·시점을 함께 보여준다.
-        select: { id: true, poNo: true, status: true, expectedDate: true, orderDate: true },
+        select: { id: true, poNo: true, status: true, expectedDate: true },
       },
     },
     orderBy: [
