@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Search, Plus, Trash2, ArrowLeft, ShoppingCart, Filter, Tag, Link2, RefreshCw, FileText, Image as ImageIcon, Clock, X, Boxes, Pencil } from 'lucide-react'
 import { formatJpy, formatNumber, calcProfitRate, calcCostJpy, calcDiscount, SUPPLIER_COLORS, SUPPLIER_LIST } from '@/lib/utils'
@@ -206,6 +206,28 @@ export default function NewOrderPage() {
       })))
     })
   }, [])
+
+  // 라인별 매장 재고(스마레지) — 원가 대신 이 값을 보여준다.
+  // 연결: 옵션코드(=스마레지 상품코드) 우선, 없으면 상품 바코드/카탈로그 바코드로 서버가 찾아준다.
+  type StockQty = { total: number; tokyo: number; aichi: number }
+  const [stockMap, setStockMap] = useState<{ byId: Record<number, StockQty>; byCode: Record<string, StockQty> }>({ byId: {}, byCode: {} })
+  const stockKey = useMemo(() => lines.map(l => `${l.product.id}:${l.optionMemo || ''}`).join('|'), [lines])
+  useEffect(() => {
+    if (!stockKey) { setStockMap({ byId: {}, byCode: {} }); return }
+    const parts = stockKey.split('|')
+    const ids = [...new Set(parts.map((s: string) => s.split(':')[0]))].join(',')
+    const codes = [...new Set(parts.map((s: string) => s.split(':').slice(1).join(':')).filter(Boolean))].join(',')
+    fetch(`/api/smaregi/stock-lookup?ids=${ids}&codes=${encodeURIComponent(codes)}`)
+      .then(r => r.json())
+      .then(d => setStockMap({ byId: d.byId ?? {}, byCode: d.byCode ?? {} }))
+      .catch(() => {})
+  }, [stockKey])
+  const stockOf = (line: OrderLine): StockQty | null => {
+    const raw = (line.optionMemo || '').trim()
+    const code = raw.replace(/^[#＃TtＴｔ]+/, '')
+    return stockMap.byCode[code] ?? stockMap.byId[line.product.id]
+      ?? (line.fromStock && line.stockQty != null ? { total: line.stockQty, tokyo: 0, aichi: 0 } : null)
+  }
 
   // 검색 순서 가드 — 이전에 던진 느린 검색 응답이 나중 검색 결과를 덮어쓰는 것을 막는다.
   // (예: 다른 검색어의 응답이 늦게 도착해 「ARICO」 검색 결과를 지워버리던 문제)
@@ -936,7 +958,7 @@ export default function NewOrderPage() {
                     <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400">{t.orders.newColProduct}</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-500 dark:text-gray-400 w-40">{t.common.remarks}</th>
                     <th className="text-center px-4 py-3 font-medium text-gray-500 dark:text-gray-400 w-20">{t.orders.newColQty}</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400 w-32">{t.orders.newColCost}</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400 w-28">{t.orders.newColStock}</th>
                     <th className="text-right px-4 py-3 font-medium text-gray-500 dark:text-gray-400 w-36">{t.orders.newColSale}</th>
                     <th className="px-4 py-3 font-medium text-gray-500 dark:text-gray-400 w-44">{t.orders.newColMargin}</th>
                   </tr>
@@ -1075,7 +1097,19 @@ export default function NewOrderPage() {
                             onChange={e => updateLine(idx, 'quantity', Number(e.target.value))}
                           />
                         </td>
-                        <td className="px-4 py-3 text-right text-gray-500 dark:text-gray-400 tabular-nums">{formatJpy(line.costPriceJpy)}</td>
+                        {/* 매장 재고(스마레지) — 발주 없이 바로 보낼 수 있는지 판단용. 원가는 오른쪽 요약에만 */}
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {(() => {
+                            const s = stockOf(line)
+                            if (!s) return <span className="text-gray-300 dark:text-gray-600">—</span>
+                            return (
+                              <span title={`${t.orders.stockTokyo} ${s.tokyo} / ${t.orders.stockAichi} ${s.aichi}`}
+                                className={s.total > 0 ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-gray-400'}>
+                                {s.total}
+                              </span>
+                            )
+                          })()}
+                        </td>
                         <td className="px-4 py-3">
                           <input
                             type="number"
