@@ -933,15 +933,20 @@ export default function OrdersPage() {
                               />
                             </div>
 
-                            {/* 문서 발급: 청구서 / 견적서 (열린 문서에서 언어·종류 전환 가능) */}
-                            <div className="grid grid-cols-2 gap-1.5">
+                            {/* 문서 발급: 청구서 / 견적서 / 납품서 (열린 문서에서 언어·종류 전환 가능).
+                                납품서는 주문 전체분 — 회차별 납품서는 위 발송 이력의 문서 아이콘. */}
+                            <div className="grid grid-cols-3 gap-1.5">
                               <a href={`/documents/invoice/${order.id}?lang=ja`} target="_blank" rel="noopener noreferrer"
-                                className="flex items-center justify-center gap-1.5 bg-slate-800 text-white py-2 rounded-lg text-xs font-medium hover:bg-slate-700 transition-colors">
+                                className="flex items-center justify-center gap-1 bg-slate-800 text-white py-2 rounded-lg text-xs font-medium hover:bg-slate-700 transition-colors">
                                 <FileText className="w-3.5 h-3.5" /> {t.orders.docInvoice}
                               </a>
                               <a href={`/documents/quote/${order.id}?lang=ja`} target="_blank" rel="noopener noreferrer"
-                                className="flex items-center justify-center gap-1.5 bg-slate-600 text-white py-2 rounded-lg text-xs font-medium hover:bg-slate-500 transition-colors">
+                                className="flex items-center justify-center gap-1 bg-slate-600 text-white py-2 rounded-lg text-xs font-medium hover:bg-slate-500 transition-colors">
                                 <FileText className="w-3.5 h-3.5" /> {t.orders.docQuote}
+                              </a>
+                              <a href={`/documents/delivery/${order.id}?lang=ja`} target="_blank" rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-1 bg-slate-500 text-white py-2 rounded-lg text-xs font-medium hover:bg-slate-400 transition-colors">
+                                <FileText className="w-3.5 h-3.5" /> {t.orders.deliveryNote}
                               </a>
                             </div>
 
