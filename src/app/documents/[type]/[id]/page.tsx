@@ -108,7 +108,13 @@ export default async function DocumentPage({
     rows = po.items.map(it => ({
       date: fmtDocDateShort(po.orderDate),
       name: it.product.name,
-      opt: [it.product.optionSize, it.product.optionColor].filter(Boolean).join(' / ') || it.memo || '',
+      // 옵션 표기 — 상품명에 이미 들어 있으면 생략한다(「…サイト RH ブラック」 밑에 「RH / ブラック」가
+      // 또 찍히던 중복 제거). 상품에 옵션 필드가 없는 단일 SKU 는 비고를 쓴다.
+      opt: (() => {
+        const parts = [it.product.optionSize, it.product.optionColor].filter(Boolean)
+        const fresh = parts.filter(v => !it.product.name.includes(v))
+        return (fresh.length ? fresh : parts.length ? [] : [it.memo].filter(Boolean)).join(' / ')
+      })(),
       txId: po.poNo,
       code: it.product.productCode,
       taxRate: 10,

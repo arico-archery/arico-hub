@@ -72,9 +72,13 @@ export async function POST(req: Request) {
         if (supplier.discount > 0 && supplier.discount < 1) price *= supplier.discount
         return Math.round(price * rate)
       })()
-      // 그룹핑은 옵션코드(정밀)로, 발주서 표시는 읽기 쉬운 라벨(스마레지 해석) 우선
+      // 그룹핑은 옵션코드(정밀)로, 발주서 표시는 읽기 쉬운 라벨(스마레지 해석) 우선.
+      // 단, 상품 자체가 변형 SKU(optionSize/Color 보유)면 옵션이 상품명·뱃지에 이미 드러나므로
+      // 비고를 또 적지 않는다 — 발주서·발주 화면에 같은 옵션이 두세 번 찍히던 원인.
+      // 옵션이 상품에 없는 단일 SKU(MK·FIVICS 등)는 비고가 유일한 옵션 표기라 그대로 남긴다.
       const opt = item.optionMemo || ''
-      const optDisplay = item.optionLabel || opt
+      const hasSkuOption = !!(p.optionSize || p.optionColor)
+      const optDisplay = hasSkuOption ? '' : (item.optionLabel || opt)
       const key = `${p.id}|${opt}`
       if (productMap.has(key)) {
         productMap.get(key)!.quantity += item.quantity
