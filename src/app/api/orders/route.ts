@@ -42,8 +42,23 @@ export async function GET(req: Request) {
   if (completed === '1') and.push({ OR: [{ completedAt: { not: null } }, { status: 'cancelled' }] })
   if (completed === '0') and.push({ completedAt: null }, { status: { not: 'cancelled' } })
   if (Object.keys(orderDateFilter).length) and.push({ orderDate: orderDateFilter })
-  // 배송대기: 모든 주문품목이 입고완료(received)인데 아직 미발송
-  if (readyToShip === '1') and.push({ shippingDate: null, items: { some: {}, every: { procureStatus: 'received' } } })
+  // 배송대기: 「지금 보낼 수 있는 것」 — 미발송 잔량이 있고, 그 잔량 품목이 전부 입고완료.
+  // 부분발송한 주문의 2차 발송분도 잡히도록 발송 회차(Shipment)를 빼서 계산한다.
+  // (품목별 발송수량 합을 Prisma where 로 표현할 수 없어 후보를 뽑아 id 목록으로 좁힌다.
+  //  진행중 주문은 100건 안팎이라 가볍다.)
+  if (readyToShip === '1') {
+    const cands = await prisma.order.findMany({
+      where: { completedAt: null, status: { not: 'cancelled' } },
+      select: { id: true, items: { select: { quantity: true, procureStatus: true, shipmentItems: { select: { quantity: true } } } } },
+    })
+    const readyIds = cands.filter(o => {
+      const remain = o.items
+        .map(i => ({ ...i, left: i.quantity - i.shipmentItems.reduce((s, x) => s + x.quantity, 0) }))
+        .filter(i => i.left > 0)
+      return remain.length > 0 && remain.every(i => i.procureStatus === 'received')
+    }).map(o => o.id)
+    and.push({ id: { in: readyIds } })
+  }
   if (q) and.push({ OR: [
     { orderNo: { contains: q, mode: 'insensitive' as const } },
     { customer: { name: { contains: q, mode: 'insensitive' as const } } },
