@@ -59,7 +59,11 @@ export function optionTokens(s: string): Set<string> {
   for (const [re, en] of KANA_TOKEN) t = t.replace(re, ` ${en} `)
   const out = new Set<string>()
   for (const w of t.split(/[^a-z0-9]+/)) {
-    if (w.length >= 2 && /[a-z]/.test(w)) out.add(w)
+    // 한 글자 토큰은 사이즈(S/M/L)만 인정한다. 이걸 버리면 RH/M 과 RH/L 이 둘 다 {rh} 가 되어
+    // 구분이 안 된다(실제로 SAKER2 탭에서 두 후보가 동시에 추천됐다).
+    // 숫자만인 토큰은 계속 제외 — 스파인 범위 표기가 양쪽에서 다르기 때문(700~1000 vs 650~1000).
+    if (w.length === 1) { if (/^[sml]$/.test(w)) out.add(w); continue }
+    if (/[a-z]/.test(w)) out.add(w)
   }
   return out
 }
