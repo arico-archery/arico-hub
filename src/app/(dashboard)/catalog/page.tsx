@@ -307,7 +307,11 @@ function MatchModal({
 // ── 메인 페이지 ──────────────────────────────────────
 export default function CatalogPage() {
   const t = useT()
-  const [q, setQ] = useState('')
+  // ?q= 로 열면 그 검색어로 시작한다 (SKU 연결 화면에서 「카탈로그에서 찾기」로 넘어올 때 사용)
+  const [q, setQ] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    return new URLSearchParams(window.location.search).get('q') ?? ''
+  })
   const [filter, setFilter] = useState<'all' | 'matched' | 'unmatched'>('all')
   // 브랜드 / 카테고리 / 마진 필터 ('' = 전체, '__none' = 미지정·미분류)
   const [brandF, setBrandF] = useState('')

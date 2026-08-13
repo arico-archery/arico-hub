@@ -22,6 +22,15 @@ type SkuRow = {
 type Variant = { id: number; name: string; productCode: string; supplierCode: string
   optionSize: string; optionColor: string; optionLabel?: string; options?: Record<string, string> }
 
+// 카탈로그 검색어 — SKU 이름에서 옵션(방향·색·사이즈)을 뺀 앞부분만. 너무 길면 못 찾는다.
+function catalogQuery(name: string): string {
+  const s = String(name || '').normalize('NFKC')
+    .replace(/\b(RH|LH)\b/gi, ' ')
+    .replace(/\d+\s*(インチ|mm|ポンド)/g, ' ')
+    .replace(/[（）()]/g, ' ')
+  return s.split(/[\s　]+/).filter(Boolean).slice(0, 3).join(' ')
+}
+
 // 스마레지(일본어) ↔ 공급사 변형(영어 약어)의 옵션 대조 — 토큰 변환을 거친다
 function guessScore(row: SkuRow, v: Variant): number {
   const variantText = [v.optionSize, v.optionColor, v.optionLabel, ...(v.options ? Object.values(v.options) : [])]
@@ -31,7 +40,7 @@ function guessScore(row: SkuRow, v: Variant): number {
 
 export default function SkuLinksPage() {
   const t = useT()
-  const [filter, setFilter] = useState<'sold' | 'sold-unlinked' | 'linked' | 'all'>('sold-unlinked')
+  const [filter, setFilter] = useState<'sold' | 'sold-unlinked' | 'no-catalog' | 'linked' | 'all'>('sold-unlinked')
   const [q, setQ] = useState('')
   const [rows, setRows] = useState<SkuRow[]>([])
   const [total, setTotal] = useState(0)
@@ -81,6 +90,7 @@ export default function SkuLinksPage() {
 
   const chips: { v: typeof filter; label: string }[] = [
     { v: 'sold-unlinked', label: t.skuLinks.fSoldUnlinked },
+    { v: 'no-catalog', label: t.skuLinks.fNoCatalog },
     { v: 'sold', label: t.skuLinks.fSold },
     { v: 'linked', label: t.skuLinks.fLinked },
     { v: 'all', label: t.skuLinks.fAll },
@@ -142,7 +152,11 @@ export default function SkuLinksPage() {
                       {row.catalog ? (
                         <p className="text-xs text-gray-700 dark:text-gray-200 line-clamp-2">{row.catalog.name}</p>
                       ) : (
-                        <span className="text-xs text-gray-300 dark:text-gray-600">{t.skuLinks.noCatalog}</span>
+                        // 카탈로그가 없으면 붙일 수단이 여기 없다 → 카탈로그 화면으로 검색어를 들고 넘어간다
+                        <a href={`/catalog?q=${encodeURIComponent(catalogQuery(row.name))}`} target="_blank" rel="noopener noreferrer"
+                          className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
+                          <Search className="w-3 h-3" />{t.skuLinks.findCatalog}
+                        </a>
                       )}
                     </td>
                     <td className="px-3 py-2">
@@ -165,7 +179,10 @@ export default function SkuLinksPage() {
                           {t.skuLinks.pickBtn}
                         </button>
                       ) : (
-                        <span className="text-xs text-gray-300 dark:text-gray-600">{t.skuLinks.noGroup}</span>
+                        // 카탈로그부터 없는 것과, 카탈로그는 있는데 공급사 매칭이 없는 것을 구분해 안내
+                        <span className="text-xs text-gray-300 dark:text-gray-600">
+                          {row.catalog ? t.skuLinks.noGroup : t.skuLinks.needCatalogFirst}
+                        </span>
                       )}
                     </td>
                   </tr>

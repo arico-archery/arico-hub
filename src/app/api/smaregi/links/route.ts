@@ -3,8 +3,9 @@ import { prisma } from '@/lib/prisma'
 import { calcCostJpy } from '@/lib/utils'
 
 // SKU 3단 연결(카탈로그 → 스마레지 SKU → 공급사 변형) 관리 API.
-// GET  /api/smaregi/links?filter=sold|unlinked|linked|all&q=&limit=&offset=
-//   - sold(기본): 주문 이력에 등장한 SKU 만 — 실제 작업 대상(~700)으로 좁힌다
+// GET  /api/smaregi/links?filter=sold|sold-unlinked|no-catalog|linked|all&q=&limit=&offset=
+//   - sold: 주문 이력에 등장한 SKU 만 — 실제 작업 대상(~700)으로 좁힌다
+//   - no-catalog: 판매이력은 있는데 카탈로그가 안 붙은 것 (공급사 확정 이전 단계라 별도로 본다)
 //   - 각 행에 카탈로그·확정된 공급사 변형·판매횟수를 붙여 반환
 // PATCH { id, supplierProductId }  — 사람이 확정/해제(null). catalogId 도 같이 바꿀 수 있다.
 export async function GET(req: Request) {
@@ -44,7 +45,9 @@ export async function GET(req: Request) {
   })
   let list = rows.map(r => ({ ...r, sold: soldCount.get(r.productCode) ?? 0 }))
   if (filter === 'sold') list = list.filter(r => r.sold > 0)
-  if (filter === 'sold-unlinked') list = list.filter(r => r.sold > 0 && r.supplierProductId == null)
+  // 미확정 = 카탈로그는 붙었는데 공급사 변형이 아직인 것. 카탈로그부터 없는 건 아래 no-catalog 로 분리한다
+  if (filter === 'sold-unlinked') list = list.filter(r => r.sold > 0 && r.supplierProductId == null && r.catalogId != null)
+  if (filter === 'no-catalog') list = list.filter(r => r.sold > 0 && r.catalogId == null)
   list.sort((a, b) => b.sold - a.sold || a.name.localeCompare(b.name))
   const total = list.length
   const page = list.slice(offset, offset + limit)
