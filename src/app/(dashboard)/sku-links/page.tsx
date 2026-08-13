@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Link2, Search, RefreshCw, CheckCircle2, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { formatNumber, SUPPLIER_COLORS } from '@/lib/utils'
+import { optionMatchScore } from '@/lib/option-guess'
 import { useT } from '@/lib/i18n'
 
 // SKU 3단 연결 화면 — 카탈로그(상품군) → 스마레지(SKU) → 공급사(변형).
@@ -21,14 +22,11 @@ type SkuRow = {
 type Variant = { id: number; name: string; productCode: string; supplierCode: string
   optionSize: string; optionColor: string; optionLabel?: string; options?: Record<string, string> }
 
-const norm = (s: string) => String(s || '').normalize('NFKC').replace(/[\s　]/g, '').toLowerCase()
-
-// 스마레지 SKU 의 옵션(size/color/이름 접미)이 변형의 옵션값을 담고 있으면 추천 후보
-function isGuess(row: SkuRow, v: Variant): boolean {
-  const hay = norm(`${row.name} ${row.size} ${row.color}`)
-  const vals = [v.optionSize, v.optionColor, ...(v.options ? Object.values(v.options) : [])]
-    .map(norm).filter(x => x.length >= 2)
-  return vals.length > 0 && vals.every(x => hay.includes(x))
+// 스마레지(일본어) ↔ 공급사 변형(영어 약어)의 옵션 대조 — 토큰 변환을 거친다
+function guessScore(row: SkuRow, v: Variant): number {
+  const variantText = [v.optionSize, v.optionColor, v.optionLabel, ...(v.options ? Object.values(v.options) : [])]
+    .filter(Boolean).join(' ')
+  return optionMatchScore(`${row.name} ${row.size} ${row.color}`, variantText)
 }
 
 export default function SkuLinksPage() {
@@ -180,8 +178,11 @@ export default function SkuLinksPage() {
                           <p className="text-xs text-gray-400 py-2">{t.skuLinks.noVariants}</p>
                         ) : (
                           <div className="flex flex-wrap gap-1.5 pt-2">
-                            {[...vd].sort((a, b) => Number(isGuess(row, b)) - Number(isGuess(row, a))).slice(0, 40).map(v => {
-                              const guess = isGuess(row, v)
+                            {(() => {
+                            // 가장 구체적으로 맞는 후보만 추천 (OPAQUE PINK 가 있으면 PINK 는 뺀다)
+                            const best = Math.max(0, ...vd.map(v => guessScore(row, v)))
+                            return [...vd].sort((a, b) => guessScore(row, b) - guessScore(row, a)).slice(0, 40).map(v => {
+                              const guess = best > 0 && guessScore(row, v) === best
                               const opt = v.optionLabel || [v.optionSize, v.optionColor].filter(Boolean).join(' / ')
                               return (
                                 <button key={v.id} onClick={() => confirm(row, v.id)}
@@ -194,7 +195,8 @@ export default function SkuLinksPage() {
                                   {opt || v.name.slice(0, 30)}
                                 </button>
                               )
-                            })}
+                            })
+                            })()}
                           </div>
                         )}
                         <p className="text-[11px] text-gray-400 mt-2">{t.skuLinks.pickHint}</p>
