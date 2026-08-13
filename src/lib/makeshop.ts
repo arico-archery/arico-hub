@@ -61,13 +61,35 @@ export async function getShop(): Promise<ShopInfo | null> {
   return data.getShop?.shop ?? null
 }
 
+// ── 페이지네이션 공통 ────────────────────────────────
+// MakeShop 은 limit 을 크게 요청해도 서버 상한(관측: 상품 200건)까지만 돌려준다.
+// 예전에는 「받은 개수 < 요청 limit 이면 마지막 페이지」로 판단해서, limit=1000 으로 요청하면
+// 첫 200건만 읽고 멈췄다(상품 845건 중 645건이 영영 동기화되지 않던 원인).
+// → 종료 조건을 「빈 페이지가 왔을 때」로 바꾸고, 서버가 실제로 지켜주는 크기(200)로 요청한다.
+export const PAGE_SIZE = 200
+
+async function paginate<T>(fetchPage: (page: number) => Promise<T[]>, maxPages: number): Promise<T[]> {
+  const out: T[] = []
+  let prevFirst = ''
+  for (let page = 1; page <= maxPages; page++) {
+    const chunk = await fetchPage(page)
+    if (chunk.length === 0) break
+    // 서버가 page 를 무시하고 같은 페이지를 계속 주는 경우의 무한루프 방지
+    const first = JSON.stringify(chunk[0])
+    if (first === prevFirst) break
+    prevFirst = first
+    out.push(...chunk)
+  }
+  return out
+}
+
 // ── 상품 (searchProduct) ─────────────────────────────
 // systemCode = 商品番号(12자리) → AricoCatalog.productCode 와 동일 키.
 // display = 진열 여부(Y/N). N이면 자사몰 미진열(=판매 안 함).
 // janCode = 스마레지 productCode와 동일 → 카탈로그↔스마레지 연결 키.
 export type MakeshopProduct = { uid: string; systemCode: string; productName: string; sellPrice: number; display: string; janCode: string }
 
-export async function searchProductPage(page: number, limit = 1000): Promise<MakeshopProduct[]> {
+export async function searchProductPage(page: number, limit = PAGE_SIZE): Promise<MakeshopProduct[]> {
   const data = await makeshopQuery<{ searchProduct?: { products?: MakeshopProduct[] } }>(
     `query searchProduct($input: SearchProductRequest!){ searchProduct(input: $input){ products { uid systemCode productName sellPrice display janCode } } }`,
     { input: { page, limit } },
@@ -75,20 +97,14 @@ export async function searchProductPage(page: number, limit = 1000): Promise<Mak
   return data.searchProduct?.products ?? []
 }
 
-// 전 상품 페이지네이션 수집 (limit 미만이 오면 마지막 페이지).
-export async function getAllProducts(limit = 1000, maxPages = 200): Promise<MakeshopProduct[]> {
-  const out: MakeshopProduct[] = []
-  for (let page = 1; page <= maxPages; page++) {
-    const chunk = await searchProductPage(page, limit)
-    out.push(...chunk)
-    if (chunk.length < limit) break
-  }
-  return out
+// 전 상품 페이지네이션 수집.
+export async function getAllProducts(limit = PAGE_SIZE, maxPages = 200): Promise<MakeshopProduct[]> {
+  return paginate(page => searchProductPage(page, limit), maxPages)
 }
 
 // ── 회원 (searchMember) ─────────────────────────────
 export type MakeshopMember = { groupId: string; groupName: string; memberId: string; name: string }
-export async function searchMemberPage(page = 1, limit = 1000): Promise<MakeshopMember[]> {
+export async function searchMemberPage(page = 1, limit = PAGE_SIZE): Promise<MakeshopMember[]> {
   const data = await makeshopQuery<{ searchMember?: { members?: MakeshopMember[] } }>(
     `query searchMember($input: SearchMemberRequest!){ searchMember(input: $input){ members { groupId groupName memberId name } } }`,
     { input: { page, limit } },
@@ -97,14 +113,8 @@ export async function searchMemberPage(page = 1, limit = 1000): Promise<Makeshop
 }
 
 // 전 회원 수집 (memberId→name 매핑용). 검증된 최소 필드만 사용.
-export async function getAllMembers(limit = 1000, maxPages = 100): Promise<MakeshopMember[]> {
-  const out: MakeshopMember[] = []
-  for (let page = 1; page <= maxPages; page++) {
-    const chunk = await searchMemberPage(page, limit)
-    out.push(...chunk)
-    if (chunk.length < limit) break
-  }
-  return out
+export async function getAllMembers(limit = PAGE_SIZE, maxPages = 100): Promise<MakeshopMember[]> {
+  return paginate(page => searchMemberPage(page, limit), maxPages)
 }
 
 // ── 주문 (searchOrder) ─────────────────────────────
@@ -159,22 +169,16 @@ const ORDER_DETAIL_QUERY = `query searchOrder($input: SearchOrderRequest!){
   }
 }`
 
-export async function searchOrdersDetailed(startOrderDate: string, endOrderDate: string, page = 1, limit = 1000): Promise<MakeshopOrderDetail[]> {
+export async function searchOrdersDetailed(startOrderDate: string, endOrderDate: string, page = 1, limit = PAGE_SIZE): Promise<MakeshopOrderDetail[]> {
   const data = await makeshopQuery<{ searchOrder?: { orders?: MakeshopOrderDetail[] } }>(
     ORDER_DETAIL_QUERY, { input: { startOrderDate, endOrderDate, page, limit } },
   )
   return data.searchOrder?.orders ?? []
 }
 
-// 기간 내 전 주문 수집 (페이지네이션). limit 미만이 오면 마지막 페이지.
-export async function getAllOrdersDetailed(startOrderDate: string, endOrderDate: string, limit = 1000, maxPages = 100): Promise<MakeshopOrderDetail[]> {
-  const out: MakeshopOrderDetail[] = []
-  for (let page = 1; page <= maxPages; page++) {
-    const chunk = await searchOrdersDetailed(startOrderDate, endOrderDate, page, limit)
-    out.push(...chunk)
-    if (chunk.length < limit) break
-  }
-  return out
+// 기간 내 전 주문 수집 (페이지네이션).
+export async function getAllOrdersDetailed(startOrderDate: string, endOrderDate: string, limit = PAGE_SIZE, maxPages = 100): Promise<MakeshopOrderDetail[]> {
+  return paginate(page => searchOrdersDetailed(startOrderDate, endOrderDate, page, limit), maxPages)
 }
 
 // ── 회원 상세 (searchMember, 연락처·주소 포함) ─────────────────
@@ -185,7 +189,7 @@ export type MakeshopMemberDetail = {
 }
 const MEMBER_DETAIL_FIELDS = `memberId name nameKana email tel etcphone hpost haddress1 haddressAddr haddress2 haddress`
 
-export async function searchMemberDetailedPage(page = 1, limit = 1000): Promise<MakeshopMemberDetail[]> {
+export async function searchMemberDetailedPage(page = 1, limit = PAGE_SIZE): Promise<MakeshopMemberDetail[]> {
   const data = await makeshopQuery<{ searchMember?: { members?: MakeshopMemberDetail[] } }>(
     `query searchMember($input: SearchMemberRequest!){ searchMember(input: $input){ members { ${MEMBER_DETAIL_FIELDS} } } }`,
     { input: { page, limit } },
@@ -194,14 +198,8 @@ export async function searchMemberDetailedPage(page = 1, limit = 1000): Promise<
 }
 
 // 전 회원 상세 수집 (이메일·전화·주소 포함).
-export async function getAllMembersDetailed(limit = 1000, maxPages = 100): Promise<MakeshopMemberDetail[]> {
-  const out: MakeshopMemberDetail[] = []
-  for (let page = 1; page <= maxPages; page++) {
-    const chunk = await searchMemberDetailedPage(page, limit)
-    out.push(...chunk)
-    if (chunk.length < limit) break
-  }
-  return out
+export async function getAllMembersDetailed(limit = PAGE_SIZE, maxPages = 100): Promise<MakeshopMemberDetail[]> {
+  return paginate(page => searchMemberDetailedPage(page, limit), maxPages)
 }
 
 // 회원 우편번호(7자리) → 000-0000

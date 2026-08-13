@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import crypto from 'node:crypto'
 import { prisma } from '@/lib/prisma'
-import { searchProductPage, makeshopConfigured, MakeshopError } from '@/lib/makeshop'
+import { searchProductPage, makeshopConfigured } from '@/lib/makeshop'
+import { runSyncProducts } from '@/app/api/makeshop/sync-products/route'
 
 export const maxDuration = 60
 
@@ -16,6 +17,13 @@ export async function GET(req: Request) {
   const ok = token.length === expected.length && crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected))
   if (!ok) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   if (!makeshopConfigured()) return NextResponse.json({ ok: false, error: 'not_configured' }, { status: 503 })
+
+  // all=1 → 화면의 [MakeShop 동기화] 버튼과 같은 경로(runSyncProducts)를 그대로 실행.
+  // 버튼은 로그인이 필요해 검증하기 어렵기 때문에, 같은 코드로 확인할 수단을 둔다.
+  if (url.searchParams.get('all') === '1') {
+    const { body, status } = await runSyncProducts()
+    return NextResponse.json(body, { status })
+  }
 
   const limit = 200
   const page = Math.max(1, Number(url.searchParams.get('page')) || 1)
