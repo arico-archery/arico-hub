@@ -9,12 +9,12 @@ export async function GET(req: Request) {
   // 매칭율 요약 통계 (stats=1)
   if (searchParams.get('stats') === '1') {
     try {
-      // 통계도 진열중(active) 상품 기준
+      // 목록이 미진열도 보여주므로 통계도 전체 기준 (숫자가 목록과 어긋나지 않게)
       const [total, matched, matchedRows] = await Promise.all([
-        prisma.aricoCatalog.count({ where: { active: true } }),
-        prisma.aricoCatalog.count({ where: { active: true, supplierProductId: { not: null } } }),
+        prisma.aricoCatalog.count(),
+        prisma.aricoCatalog.count({ where: { supplierProductId: { not: null } } }),
         prisma.aricoCatalog.findMany({
-          where: { active: true, supplierProductId: { not: null } },
+          where: { supplierProductId: { not: null } },
           select: { supplierProduct: { select: { supplierCode: true } } },
         }),
       ])
@@ -33,10 +33,11 @@ export async function GET(req: Request) {
   // 필터 드롭다운용 메타 (meta=1): 브랜드·카테고리 목록
   if (searchParams.get('meta') === '1') {
     try {
+      // 미진열도 목록에 나오므로 필터 후보도 전체에서 뽑는다
       const [brandRows, catRows] = await Promise.all([
-        prisma.aricoCatalog.groupBy({ by: ['brand'], where: { active: true } }),
+        prisma.aricoCatalog.groupBy({ by: ['brand'] }),
         prisma.aricoCatalog.findMany({
-          where: { active: true, supplierProductId: { not: null } },
+          where: { supplierProductId: { not: null } },
           select: { supplierProduct: { select: { category: true } } },
         }),
       ])
@@ -51,7 +52,10 @@ export async function GET(req: Request) {
   const offset = Number(searchParams.get('offset') ?? '0')
   const matchedOnly = searchParams.get('matchedOnly') === '1'
   const unmatchedOnly = searchParams.get('unmatchedOnly') === '1'
-  const includeInactive = searchParams.get('includeInactive') === '1'  // 미진열(판매안함)도 포함
+  // 미진열(자사몰で非表示)も既定で表示する。取寄せ・入荷待ちで一時的に下げている商品が多く、
+  // 隠すと「同期したのに出てこない」ように見えるため（2026-08-13 依頼）。
+  // activeOnly=1 を渡したときだけ陳列中に絞る。
+  const activeOnly = searchParams.get('activeOnly') === '1'
   const brand = searchParams.get('brand') ?? ''        // '__none' = 브랜드 미지정
   const category = searchParams.get('category') ?? ''  // '__none' = 미분류(미매칭 포함)
   const marginF = searchParams.get('margin') ?? ''     // neg | lt20 | 20to40 | gte40 | nocost
@@ -65,8 +69,8 @@ export async function GET(req: Request) {
       : unmatchedOnly
       ? { supplierProductId: null }
       : {}
-    // 미진열(active=false = 판매안함) 상품은 기본 숨김
-    const activeWhere = includeInactive ? {} : { active: true }
+    // 미진열도 기본 표시 — activeOnly=1 일 때만 진열중으로 좁힌다
+    const activeWhere = activeOnly ? { active: true } : {}
     const brandWhere = brand ? (brand === '__none' ? { brand: '' } : { brand }) : {}
     const catWhere = category
       ? category === '__none'

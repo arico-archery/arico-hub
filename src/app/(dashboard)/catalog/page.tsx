@@ -21,6 +21,7 @@ type CatalogItem = {
   supplierProductId: number | null
   barcode: string
   point: number
+  active: boolean                // 자사몰 진열 여부. 미진열도 목록에 나오므로 뱃지로 구분한다
   supplyCostJpy: number | null   // 공급가(엔화) — 미매칭은 null
   matchedProduct: MatchedProduct | null
 }
@@ -640,6 +641,7 @@ export default function CatalogPage() {
                         <p className="font-medium text-gray-900 dark:text-gray-100 leading-tight truncate flex items-center gap-1.5">
                           {item.name}
                           {item.productCode.startsWith('EVENT-') && <span className="text-[10px] px-1 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-medium shrink-0">{t.catalog.manualBadge}</span>}
+                          {!item.active && <span className="text-[10px] px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 font-medium shrink-0">{t.catalog.inactiveBadge}</span>}
                         </p>
                         <p className="text-xs text-gray-400 flex items-center gap-1.5">
                           <span className="truncate">{item.brand}{item.barcode ? ` · ${item.barcode}` : ''}</span>
@@ -699,7 +701,12 @@ export default function CatalogPage() {
           const img = item.imageUrl2 || item.imageUrl1
           const matched = item.matchedProduct
           return (
-            <div key={item.id} className="relative bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow flex flex-col group">
+            <div key={item.id} className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow flex flex-col group ${item.active ? '' : 'opacity-60'}`}>
+              {!item.active && (
+                <span className="absolute top-1 left-1 z-10 px-1 py-0.5 rounded bg-gray-700/80 text-white text-[9px] font-medium">
+                  {t.catalog.inactiveBadge}
+                </span>
+              )}
               {item.barcode && (
                 <span className="absolute top-1 right-1 z-10 flex items-center justify-center w-5 h-5 rounded text-white" style={{ backgroundColor: '#2f7d55' }} title={`JAN ${item.barcode}`}>
                   <Barcode className="w-3 h-3" />
