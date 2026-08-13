@@ -60,12 +60,27 @@ export function parseOption(optStr: string): VariantOption {
   return o
 }
 
-// SHIBUYA 베이스명 = 이름에서 옵션값(사이즈/색상)을 제거한 것
+// SHIBUYA 베이스명 = 이름에서 옵션값(사이즈/색상)을 제거한 것.
+//
+// ⚠ 예전에는 `s.split(size).join('')` 로 전역 치환했는데, 옵션값이 한 글자면 이름 속의 같은 글자까지
+// 전부 지워졌다. 「FIVICS SAKER 2 タブ コードバン RH S」의 색상 S 를 지우면
+// 「FIVIC AKER 2 …」가 되어 다른 형제들과 베이스명이 달라지고, 그 변형만 그룹에서 빠졌다
+// (실제로 SAKER2 탭에서 RH/S·LH/S 만 후보에 안 나왔다).
+// → 옵션값은 「이름 끝에 붙은 것」 또는 「토큰 경계로 떨어진 것」만 한 번씩 제거한다.
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 export function sibuyaBaseName(name: string, size: string, color: string): string {
-  let s = name || ''
-  if (size) s = s.split(size).join('')
-  if (color) s = s.split(color).join('')
-  return s.replace(/\s+/g, ' ').trim()
+  let s = (name || '').trim()
+  // 색상 → 사이즈 순서(이름 끝에서 안쪽으로)
+  for (const raw of [color, size]) {
+    const v = (raw || '').trim()
+    if (!v) continue
+    const tail = new RegExp(`[\\s　]*${escapeRe(v)}[\\s　]*$`)
+    if (tail.test(s)) { s = s.replace(tail, ''); continue }
+    const token = new RegExp(`(^|[\\s　])${escapeRe(v)}([\\s　]|$)`)
+    if (token.test(s)) s = s.replace(token, ' ')
+  }
+  return s.replace(/[\s　]+/g, ' ').trim()
 }
 
 // SHIBUYA는 옵션이 필드(optionSize/optionColor)로 분리돼 있다. 필드값을 축으로 변환.
