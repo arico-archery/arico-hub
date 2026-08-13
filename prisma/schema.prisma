@@ -314,9 +314,14 @@ model SmaregiProduct {
   stockAichi    Int      @default(0)          // 아이치매장(store 1) 재고
   storeStock    String   @default("")         // JSON {storeId: qty} (점포별)
   displayFlag   String   @default("")         // 스마레지 진열 플래그
+  // SKU 3단 연결(2026-08-13 기획: 카탈로그[상품군] → 스마레지[SKU] → 공급사[변형]).
+  // catalogId 는 주문 이력·바코드에서 자동 시드, supplierProductId 는 반드시 사람이 확정(/sku-links).
+  catalogId         Int?
+  supplierProductId Int?
   syncedAt      DateTime @default(now())
   updatedAt     DateTime @default(now()) @updatedAt
 
   @@index([productCode])
+  @@index([catalogId])
   @@map("smaregi_product")
 }
