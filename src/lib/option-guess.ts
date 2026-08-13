@@ -38,6 +38,10 @@ const KANA_TOKEN: [RegExp, string][] = [
 ]
 
 const EN_ALIAS: [RegExp, string][] = [
+  // O-PK, O·WT … = OPAQUE. 색 약어(pk/wt)보다 먼저 처리해야 한다 — 나중에 두면 pk 가 먼저
+  // pink 로 바뀌어 「o·」 뒤가 공백이 되고 이 규칙이 안 걸린다.
+  // 구분자 + 2~3글자 약어가 뒤따를 때만 — ORANGE 의 첫 글자나 RANGE-O-MATIC 의 O 를 먹지 않게.
+  [/\bo[-.·](?=[a-z]{2,3}\b)/g, ' opaque '],
   [/\bl[-\s.·]?grn\b/g, 'light green'],
   [/\borng\b/g, 'orange'],
   [/\bppl?\b/g, 'purple'],
@@ -48,22 +52,26 @@ const EN_ALIAS: [RegExp, string][] = [
   [/\bylw\b|\byel\b/g, 'yellow'],
   [/\bpk\b/g, 'pink'],
   [/\bgrn\b/g, 'green'],
-  // O-PK, O·WT … = OPAQUE. 구분자를 반드시 요구한다 — 안 그러면 ORANGE/OPAQUE 의 첫 글자까지 먹는다.
-  [/\bo[-.·]/g, 'opaque '],
 ]
+
+// 범위 표기(650~1000, 350-600 …)는 통째로 버린다.
+// 같은 물건인데 양쪽 표기가 다르기 때문 — 자사몰 「0line 700~1000」 vs FIVICS 「0LINE(650~1000)」.
+// 범위를 지우고 나면 라인 표기(0line/1line)로 구분되므로 정확도가 오히려 올라간다.
+const RANGE = /\d+\s*[~～\-–—]\s*\d+/g
 
 /** 문자열을 옵션 토큰 집합으로 (일/영 표기 차이를 흡수). */
 export function optionTokens(s: string): Set<string> {
-  let t = String(s || '').normalize('NFKC').toLowerCase()
+  let t = String(s || '').normalize('NFKC').toLowerCase().replace(RANGE, ' ')
   for (const [re, en] of EN_ALIAS) t = t.replace(re, ` ${en} `)
   for (const [re, en] of KANA_TOKEN) t = t.replace(re, ` ${en} `)
   const out = new Set<string>()
   for (const w of t.split(/[^a-z0-9]+/)) {
-    // 한 글자 토큰은 사이즈(S/M/L)만 인정한다. 이걸 버리면 RH/M 과 RH/L 이 둘 다 {rh} 가 되어
-    // 구분이 안 된다(실제로 SAKER2 탭에서 두 후보가 동시에 추천됐다).
-    // 숫자만인 토큰은 계속 제외 — 스파인 범위 표기가 양쪽에서 다르기 때문(700~1000 vs 650~1000).
+    if (!w) continue
+    // 한 글자는 사이즈(S/M/L)만 인정. 버리면 RH/M 과 RH/L 이 둘 다 {rh} 가 되어 구분이 사라진다.
     if (w.length === 1) { if (/^[sml]$/.test(w)) out.add(w); continue }
-    if (/[a-z]/.test(w)) out.add(w)
+    // 숫자만인 토큰(26, 28, 30 = 인치 길이 등)도 인정한다. 범위는 위에서 이미 제거했으므로
+    // 여기 남는 숫자는 「그 옵션을 가리키는 값」이다 — 이걸 버리면 26/28/30 인치가 구분되지 않는다.
+    out.add(w)
   }
   return out
 }
