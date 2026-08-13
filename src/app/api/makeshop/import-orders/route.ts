@@ -4,6 +4,7 @@ import { maxCustomerSeq } from '@/lib/seq'
 import { calcCostJpy } from '@/lib/utils'
 import { resolveOptionLabels, extractOptionCode } from '@/lib/smaregi-option'
 import { availableByCode, allocate } from '@/lib/stock-allocate'
+import { linkSkusToCatalog } from '@/lib/sku-link'
 import { fixOptionAxes } from '@/lib/option-label'
 import {
   getAllOrdersDetailed, fmtOrderDate,
@@ -54,7 +55,7 @@ function effectiveStatus(msStatus: 'pending' | 'delivered' | 'cancelled', paid: 
   return msStatus
 }
 
-type PreviewItem = { productCode: string; productName: string; variationCustomCode: string; option: string; customLabel: string; amount: number; price: number; matched: boolean; supplierCode: string | null; catalogName: string | null }
+type PreviewItem = { productCode: string; productName: string; variationCustomCode: string; option: string; customLabel: string; amount: number; price: number; matched: boolean; supplierCode: string | null; catalogName: string | null; catalogId: number | null }
 
 // MakeShop 옵션 → 사람이 읽는 라벨.
 //  ① variationName(베리에이션/옵션그룹, 예 "カラー : ブラック 左右 : LH")
@@ -91,7 +92,7 @@ export async function buildPreview(days: number, win?: { start: string; end: str
   const orders = await getAllOrdersDetailed(start, end)
 
   // 카탈로그: productCode → {supplierProductId, name}
-  const cats = await prisma.aricoCatalog.findMany({ select: { productCode: true, name: true, supplierProductId: true } })
+  const cats = await prisma.aricoCatalog.findMany({ select: { id: true, productCode: true, name: true, supplierProductId: true } })
   const catMap = new Map(cats.map(c => [c.productCode, c]))
   // 매칭된 공급사 상품 로드 (원가 계산용)
   const supIds = [...new Set(cats.map(c => c.supplierProductId).filter((v): v is number => v != null))]
@@ -121,6 +122,7 @@ export async function buildPreview(days: number, win?: { start: string; end: str
         customLabel: basketOptionLabel(b),
         amount: Number(b.amount) || 0, price: Number(b.price) || 0,
         matched: !!prod, supplierCode: prod?.supplierCode ?? null, catalogName: cat?.name ?? null,
+        catalogId: cat?.id ?? null,   // SKU 링크 자동 기록용(옵션코드 ↔ 이 카탈로그)
       }
     })
     const itemsSubtotal = items.reduce((s, it) => s + it.price * it.amount, 0)
@@ -427,10 +429,18 @@ export async function runImport(days: number, win?: { start: string; end: string
 
     const { refreshed, procured } = await refreshExisting(rows)
 
+    // SKU 3단 연결의 카탈로그 링크 자동 기록 — 이번에 본 주문(중복 포함)의 옵션코드 ↔ 카탈로그.
+    // 처음 팔린 상품도 다음 순간부터 /sku-links 에서 공급사 변형을 확정할 수 있게 된다.
+    const skuLinked = await linkSkusToCatalog(
+      rows.flatMap(r => r.items
+        .filter(i => i.catalogId != null)
+        .map(i => ({ optionMemo: i.option, catalogId: i.catalogId as number }))),
+    )
+
     skipped = rows.filter(r => r.dup).length
     const partial = rows.filter(r => !r.dup && !r.allMatched).length
     await writeStatus({ state: 'done', days, startedAt, finishedAt: new Date().toISOString(), created, dup: skipped, partial, custCreated, custUpdated, optionFilled, refreshed, procured, stockCovered })
-    return { ok: true, created, skipped, dup: skipped, etcCreated, custCreated, custUpdated, partial, optionFilled, refreshed, procured, stockCovered }
+    return { ok: true, created, skipped, dup: skipped, etcCreated, custCreated, custUpdated, partial, optionFilled, refreshed, procured, stockCovered, skuLinked }
   } catch (e) {
     const err = e instanceof MakeshopError ? { error: e.message, detail: e.detail } : { error: String(e) }
     await writeStatus({ state: 'error', days, startedAt, finishedAt: new Date().toISOString(), created: 0, dup: 0, partial: 0, error: String(err.error) }).catch(() => {})

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { createWithSeqRetry } from '@/lib/seq'
 import { calcDiscount } from '@/lib/utils'
 import { channelWhere } from '@/lib/order-channel'
+import { linkSkusToCatalog } from '@/lib/sku-link'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -263,6 +264,14 @@ export async function POST(req: Request) {
         .catch(() => { /* 삭제된 카탈로그 등은 무시 */ })
     }
   }
+
+  // 3) SKU 3단 연결의 카탈로그 링크 기록 — 옵션코드가 있는 품목만(스마레지 SKU 를 특정할 수 있는 것).
+  //    supplierProductId(발주 대상)는 사람이 /sku-links 에서 확정한다.
+  await linkSkusToCatalog(
+    (items as OrderItemInput[])
+      .filter(i => i.catalogId && i.optionMemo)
+      .map(i => ({ optionMemo: i.optionMemo as string, catalogId: i.catalogId as number })),
+  ).catch(() => { /* 링크 기록 실패가 주문 등록을 막지 않는다 */ })
 
   return NextResponse.json(order, { status: 201 })
 }

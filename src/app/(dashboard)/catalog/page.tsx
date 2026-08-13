@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useApiCache } from '@/lib/useApiCache'
-import { Search, RefreshCw, ChevronLeft, ChevronRight, Link2, Link2Off, X, Check, ImageOff, Barcode, Languages, ScanLine, Layers, List, LayoutGrid, Plus, Pencil, Trash2 } from 'lucide-react'
+import { Search, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Link2, Link2Off, X, Check, ImageOff, Barcode, Languages, ScanLine, Layers, List, LayoutGrid, Plus, Pencil, Trash2 } from 'lucide-react'
+import SkuPanel from './SkuPanel'
 import BarcodeScanner from '@/components/BarcodeScanner'
 import { formatNumber, SUPPLIER_COLORS, SUPPLIER_LIST } from '@/lib/utils'
 import Image from 'next/image'
@@ -314,6 +315,7 @@ export default function CatalogPage() {
   const [marginF, setMarginF] = useState('')
   const [page, setPage] = useState(1)
   const [modalItem, setModalItem] = useState<CatalogItem | null>(null)
+  const [skuOpen, setSkuOpen] = useState<number | null>(null)   // SKU 패널을 펼친 카탈로그
   const [krwPerJpy] = useState(9.5)
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list')
   // 수동(이벤트) 상품 추가/편집
@@ -633,9 +635,16 @@ export default function CatalogPage() {
               const marginPct = (marginJpy != null && item.priceJpy > 0) ? (marginJpy / item.priceJpy) * 100 : null
               const mColor = marginPct == null ? '' : marginPct < 0 ? 'text-red-600 dark:text-red-400' : marginPct < 20 ? 'text-amber-600 dark:text-amber-400' : 'text-green-700 dark:text-green-400'
               return (
-                <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                <React.Fragment key={item.id}>
+                <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2.5">
+                      {/* SKU 패널 토글 — 이 상품군에 매달린 스마레지 SKU 를 보고 공급사 변형을 확정한다 */}
+                      <button onClick={() => setSkuOpen(skuOpen === item.id ? null : item.id)}
+                        title={t.catalog.skuToggle}
+                        className={`shrink-0 p-0.5 rounded ${skuOpen === item.id ? 'text-blue-600' : 'text-gray-300 dark:text-gray-600 hover:text-blue-500'}`}>
+                        {skuOpen === item.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      </button>
                       <div className="w-9 h-9 shrink-0"><CatalogImage src={img} alt={item.name} label="" /></div>
                       <div className="min-w-0">
                         <p className="font-medium text-gray-900 dark:text-gray-100 leading-tight truncate flex items-center gap-1.5">
@@ -683,6 +692,14 @@ export default function CatalogPage() {
                     </button>
                   </td>
                 </tr>
+                {skuOpen === item.id && (
+                  <tr>
+                    <td colSpan={6} className="px-4 bg-gray-50/60 dark:bg-gray-700/20">
+                      <SkuPanel catalogId={item.id} catalogSupplierProductId={item.supplierProductId} />
+                    </td>
+                  </tr>
+                )}
+                </React.Fragment>
               )
             })}
             {!loading && items.length === 0 && (
