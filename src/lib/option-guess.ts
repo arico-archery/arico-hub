@@ -84,12 +84,32 @@ export function matchesOption(skuText: string, variantText: string): boolean {
   return optionMatchScore(skuText, variantText) > 0
 }
 
+// ── 림(리무) 특례 ────────────────────────────────────
+// 림은 양쪽 표기 체계가 아예 다르다.
+//   스마레지 SKU : 사이즈 S/M/L + 파운드   (예: 「S 40ポンド」) — 림 SKU 400건 중 399건이 이 형식
+//   공급사 변형  : 활 길이/파운드          (예: 「66/40」)
+// 리커브 관례상 25인치 핸들 기준 S=66" · M=68" · L=70" 이므로 그 대응으로 맞춘다.
+// 이 규칙은 변형이 「두자리/두자리」 형식일 때만 발동하므로, 같은 S/M/L 을 쓰는
+// 탭·체스트가드 등 다른 상품에는 영향이 없다.
+const LIMB_LEN: Record<string, string> = { s: '66', m: '68', l: '70' }
+const LIMB_VARIANT = /^(\d{2})\s*\/\s*(\d{2})$/
+
+function limbScore(skuText: string, len: string, lbs: string): number {
+  const t = optionTokens(skuText)
+  const size = ['s', 'm', 'l'].find(x => t.has(x))
+  if (!size || LIMB_LEN[size] !== len) return 0
+  return t.has(lbs) ? 2 : 0     // 길이·파운드 둘 다 맞을 때만
+}
+
 /**
  * 일치 점수 = 맞으면 변형 토큰 수, 아니면 0.
  * 「더 구체적인 쪽」을 고르는 데 쓴다 — オブリックピンク 는 OPAQUE PINK(2) 와 PINK(1) 둘 다
  * 부분집합이지만, 추천해야 하는 건 OPAQUE PINK 다.
  */
 export function optionMatchScore(skuText: string, variantText: string): number {
+  const limb = variantText.trim().match(LIMB_VARIANT)
+  if (limb) return limbScore(skuText, limb[1], limb[2])
+
   const sku = optionTokens(skuText)
   const v = optionTokens(variantText)
   if (v.size === 0 || sku.size === 0) return 0
