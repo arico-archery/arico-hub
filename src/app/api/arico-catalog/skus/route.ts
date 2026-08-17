@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { calcCostJpy } from '@/lib/utils'
+import { isServiceSku } from '@/lib/sku-service'
 
 // 카탈로그 1건에 매달린 스마레지 SKU 목록 (3단 연결의 가운데 층을 카탈로그 관점에서 본다).
 // GET /api/arico-catalog/skus?catalogId=123
@@ -28,24 +29,26 @@ export async function GET(req: Request) {
 
   const linked = await prisma.smaregiProduct.findMany({
     where: { catalogId },
-    select: { id: true, productCode: true, name: true, size: true, color: true, price: true, stock: true, supplierProductId: true },
+    select: { id: true, productCode: true, name: true, size: true, color: true, category: true, price: true, stock: true, supplierProductId: true },
     orderBy: { name: 'asc' },
   })
 
   // 후보: 미연결 SKU 중 이름이 겹치는 것. 카탈로그명의 의미있는 토큰으로 좁힌다.
   const norm = (s: string) => String(s || '').normalize('NFKC').replace(/【[^】]*】/g, '').replace(/[（）()]/g, ' ').trim()
   const tokens = norm(cat.name).split(/[\s　]+/).filter(t => t.length >= 2).slice(0, 2)
-  const candidates = tokens.length
+  const candRows = tokens.length
     ? await prisma.smaregiProduct.findMany({
         where: {
           catalogId: null,
           AND: tokens.map(t => ({ name: { contains: t, mode: 'insensitive' as const } })),
         },
-        select: { id: true, productCode: true, name: true, size: true, color: true, price: true, stock: true, supplierProductId: true },
-        take: 40,
+        select: { id: true, productCode: true, name: true, size: true, color: true, category: true, price: true, stock: true, supplierProductId: true },
+        take: 60,
         orderBy: { name: 'asc' },
       })
     : []
+  // 송료·가공비 등 청구서용 항목은 붙일 후보에서 제외 (발주 대상이 아니다)
+  const candidates = candRows.filter(r => !isServiceSku(r)).slice(0, 40)
 
   // 확정된 공급사 변형 정보 부착
   const supIds = [...new Set([...linked, ...candidates].map(r => r.supplierProductId).filter((v): v is number => v != null))]

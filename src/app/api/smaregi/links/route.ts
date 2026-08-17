@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { calcCostJpy } from '@/lib/utils'
+import { isServiceSku } from '@/lib/sku-service'
 
 // SKU 3단 연결(카탈로그 → 스마레지 SKU → 공급사 변형) 관리 API.
 // GET  /api/smaregi/links?filter=sold|sold-unlinked|no-catalog|linked|all&q=&limit=&offset=
@@ -38,12 +39,16 @@ export async function GET(req: Request) {
   const rows = await prisma.smaregiProduct.findMany({
     where,
     select: {
-      id: true, productCode: true, name: true, size: true, color: true,
+      id: true, productCode: true, name: true, size: true, color: true, category: true,
       price: true, stock: true, catalogId: true, supplierProductId: true,
     },
     orderBy: { name: 'asc' },
   })
-  let list = rows.map(r => ({ ...r, sold: soldCount.get(r.productCode) ?? 0 }))
+  // 송료·가공비 등 청구서 작성용 항목은 발주 대상이 아니라 기본 제외 (service=1 이면 그것만 본다)
+  const svc = searchParams.get('service') === '1'
+  let list = rows
+    .filter(r => svc ? isServiceSku(r) : !isServiceSku(r))
+    .map(r => ({ ...r, sold: soldCount.get(r.productCode) ?? 0 }))
   if (filter === 'sold') list = list.filter(r => r.sold > 0)
   // 미확정 = 카탈로그는 붙었는데 공급사 변형이 아직인 것. 카탈로그부터 없는 건 아래 no-catalog 로 분리한다
   if (filter === 'sold-unlinked') list = list.filter(r => r.sold > 0 && r.supplierProductId == null && r.catalogId != null)
