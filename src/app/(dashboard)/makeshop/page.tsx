@@ -27,6 +27,7 @@ export default function MakeshopPage() {
   const [importing, setImporting] = useState(false)
   const [result, setResult] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [step, setStep] = useState<string | null>(null)   // 분할 실행 진행 표시
 
   const loadPreview = async () => {
     setLoading(true); setErr(null); setResult(null); setRows(null); setSummary(null)
@@ -41,15 +42,38 @@ export default function MakeshopPage() {
     } catch (e) { setErr(String(e)) } finally { setLoading(false) }
   }
 
+  // 서버 함수는 60초 제한. 긴 기간을 한 번에 돌리면 도중에 잘리고, 잘리면 진행상태가
+  // 'running' 인 채 남아 주문관리 화면이 계속 「수신 중」이 된다(2026-09-01 180일에서 실제 발생).
+  // → 기간을 30일씩 잘라 순서대로 호출하고 결과를 합산한다.
+  const WINDOW_DAYS = 30
+  const ymd = (d: Date) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
+
   const runImport = async () => {
-    setImporting(true); setResult(null); setErr(null)
+    setImporting(true); setResult(null); setErr(null); setStep(null)
+    const wins: { from: string; to: string }[] = []
+    for (let off = days; off > 0; off -= WINDOW_DAYS) {
+      wins.push({
+        from: ymd(new Date(Date.now() - off * 86400000)),
+        to: ymd(new Date(Date.now() - Math.max(0, off - WINDOW_DAYS) * 86400000)),
+      })
+    }
+    const sum = { created: 0, refreshed: 0, custCreated: 0, custUpdated: 0, partial: 0, etcCreated: 0 }
     try {
-      const res = await fetch(`/api/makeshop/import-orders?days=${days}`, { method: 'POST' })
-      const d = await res.json()
-      if (!res.ok || !d.ok) { setErr(`${d.error}${d.detail ? ' — ' + JSON.stringify(d.detail).slice(0, 300) : ''}`); return }
-      setResult(L(`✅ 주문 ${d.created}건 생성 · 기존 주문 상태 갱신 ${d.refreshed ?? 0} · 거래처 신규 ${d.custCreated}·갱신 ${d.custUpdated} · 일부미매칭 ${d.partial} · ETC상품 ${d.etcCreated}`, `✅ 受注 ${d.created}件作成 · 既存受注の状態を更新 ${d.refreshed ?? 0} · 取引先 新規 ${d.custCreated}·更新 ${d.custUpdated} · 一部未マッチ ${d.partial} · ETC商品 ${d.etcCreated}`))
+      for (let i = 0; i < wins.length; i++) {
+        const w = wins[i]
+        setStep(L(`${i + 1}/${wins.length} 구간 처리 중 (${w.from}~${w.to})`, `${i + 1}/${wins.length} 期間を処理中 (${w.from}~${w.to})`))
+        const res = await fetch(`/api/makeshop/import-orders?days=${days}&from=${w.from}&to=${w.to}`, { method: 'POST' })
+        const d = await res.json()
+        if (!res.ok || !d.ok) {
+          setErr(L(`${i + 1}/${wins.length} 구간(${w.from}~${w.to})에서 실패 — `, `${i + 1}/${wins.length} 期間(${w.from}~${w.to})で失敗 — `)
+            + `${d.error}${d.detail ? ' — ' + JSON.stringify(d.detail).slice(0, 300) : ''}`)
+          return
+        }
+        for (const k of Object.keys(sum) as (keyof typeof sum)[]) sum[k] += Number(d[k]) || 0
+      }
+      setResult(L(`✅ 주문 ${sum.created}건 생성 · 기존 주문 상태 갱신 ${sum.refreshed} · 거래처 신규 ${sum.custCreated}·갱신 ${sum.custUpdated} · 일부미매칭 ${sum.partial} · ETC상품 ${sum.etcCreated}`, `✅ 受注 ${sum.created}件作成 · 既存受注の状態を更新 ${sum.refreshed} · 取引先 新規 ${sum.custCreated}·更新 ${sum.custUpdated} · 一部未マッチ ${sum.partial} · ETC商品 ${sum.etcCreated}`))
       loadPreview()
-    } catch (e) { setErr(String(e)) } finally { setImporting(false) }
+    } catch (e) { setErr(String(e)) } finally { setImporting(false); setStep(null) }
   }
 
   const badge = (r: Row) => r.dup
@@ -84,6 +108,11 @@ export default function MakeshopPage() {
       {err && (
         <div className="mb-4 p-3 rounded-xl text-sm bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 text-red-700 dark:text-red-300 flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /><span className="break-all">{err}</span>
+        </div>
+      )}
+      {step && (
+        <div className="mb-4 p-3 rounded-xl text-sm bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/50 text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
+          <RefreshCw className="w-4 h-4 animate-spin shrink-0" /><span>{step}</span>
         </div>
       )}
       {result && (

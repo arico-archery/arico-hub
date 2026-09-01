@@ -167,9 +167,21 @@ export async function GET(req: Request) {
 
 // 수신 진행상태를 Setting에 기록(탭 이동/새로고침에도 유지). 화면이 status API로 조회.
 const STATUS_KEY = 'makeshop_import_status'
+// at = 마지막 갱신 시각(하트비트).
+// 함수가 타임아웃으로 강제 종료되면 catch 조차 돌지 않아 state 가 'running' 인 채 영구히 남는다
+// (2026-09-01 실제 발생: 180일 수신이 58.7초에 잘려 화면이 계속 「수신 중」이었다).
+// 화면은 at 이 오래 갱신되지 않은 running 을 「중단됨」으로 판정한다 → 무한 폴링 방지.
 async function writeStatus(s: Record<string, unknown>) {
-  const value = JSON.stringify(s)
+  const value = JSON.stringify({ ...s, at: new Date().toISOString() })
   await prisma.setting.upsert({ where: { key: STATUS_KEY }, create: { key: STATUS_KEY, value }, update: { value } })
+}
+
+// DB 왕복 병렬도. 순차로 돌리면 건수가 늘어날수록 60초 제한을 넘긴다.
+const DB_CONC = 8
+async function updateChunked<T>(items: T[], run: (x: T) => Promise<unknown>) {
+  for (let i = 0; i < items.length; i += DB_CONC) {
+    await Promise.allSettled(items.slice(i, i + DB_CONC).map(run))
+  }
 }
 
 // 이미 받은 주문의 "현재 상태"를 자사몰에서 읽어와 반영한다.
@@ -199,6 +211,7 @@ export async function refreshExisting(rows: RefreshRow[], dryRun = false) {
   })
   const byNo = new Map(cur.map(o => [o.externalOrderNo, o]))
   const now = new Date()
+  const updates: { id: number; data: Record<string, unknown> }[] = []
 
   for (const r of allDup) {
     const o = byNo.get(r.externalOrderNo)
@@ -244,8 +257,10 @@ export async function refreshExisting(rows: RefreshRow[], dryRun = false) {
         to: `${(data.status as string) ?? o.status}/${(data.paymentStatus as string) ?? o.paymentStatus}${data.trackingNo ? ' +운송장' : ''}`,
       })
     }
-    if (!dryRun) await prisma.order.update({ where: { id: o.id }, data })
+    if (!dryRun) updates.push({ id: o.id, data })
   }
+  // 중복 주문이 수백 건이면 순차 왕복만으로 60초를 넘긴다 → 병렬 처리
+  await updateChunked(updates, u => prisma.order.update({ where: { id: u.id }, data: u.data }))
 
   // ⑤ 자사몰이 발송완료한 주문의 미발주(needed) 품목 → received.
   //    수신 후에 자사몰에서 발송된 주문(매장 재고 출고 등)의 품목이 백오더에
@@ -404,6 +419,8 @@ export async function runImport(days: number, win?: { start: string; end: string
       if (i % 80 === 0) await writeStatus({ state: 'running', days, startedAt, finishedAt: null, created, dup: 0, partial: 0 }).catch(() => {})
     }
 
+    const beat = () => writeStatus({ state: 'running', days, startedAt, finishedAt: null, created, dup: 0, partial: 0 }).catch(() => {})
+
     // 옵션 백필: 이미 받은 주문(중복)의 품목 optionMemo를 최신 옵션으로 채움.
     // 주문 생성 시 품목은 r.items 순서대로 만들어졌으므로 id 오름차순 = 같은 순서 → 인덱스로 매칭.
     let optionFilled = 0
@@ -414,20 +431,22 @@ export async function runImport(days: number, win?: { start: string; end: string
         select: { externalOrderNo: true, items: { select: { id: true, optionMemo: true }, orderBy: { id: 'asc' } } },
       })
       const byExt = new Map(existOrders.map(o => [o.externalOrderNo, o.items]))
+      const optUpdates: { id: number; option: string }[] = []
       for (const r of dupRows) {
         const items = byExt.get(r.externalOrderNo)
         if (!items) continue
         for (let i = 0; i < r.items.length && i < items.length; i++) {
           const opt = r.items[i].option
-          if (opt && items[i].optionMemo !== opt) {
-            await prisma.orderItem.update({ where: { id: items[i].id }, data: { optionMemo: opt } })
-            optionFilled++
-          }
+          if (opt && items[i].optionMemo !== opt) optUpdates.push({ id: items[i].id, option: opt })
         }
       }
+      optionFilled = optUpdates.length
+      await updateChunked(optUpdates, u => prisma.orderItem.update({ where: { id: u.id }, data: { optionMemo: u.option } }))
     }
 
+    await beat()
     const { refreshed, procured } = await refreshExisting(rows)
+    await beat()
 
     // SKU 3단 연결의 카탈로그 링크 자동 기록 — 이번에 본 주문(중복 포함)의 옵션코드 ↔ 카탈로그.
     // 처음 팔린 상품도 다음 순간부터 /sku-links 에서 공급사 변형을 확정할 수 있게 된다.
@@ -449,9 +468,14 @@ export async function runImport(days: number, win?: { start: string; end: string
 }
 
 // POST — 수동 수신(로그인 필요).
+// from/to(YYYYMMDD)를 주면 그 구간만 처리한다. 서버 함수는 60초 제한이라 긴 기간은
+// 화면이 30일씩 잘라 연속 호출한다(2026-09-01 180일 한 번에 돌리다 58.7초에 잘렸다).
 export async function POST(req: Request) {
-  const days = Math.min(365, Math.max(1, Number(new URL(req.url).searchParams.get('days')) || 90))
-  const result = await runImport(days)
+  const url = new URL(req.url)
+  const days = Math.min(365, Math.max(1, Number(url.searchParams.get('days')) || 90))
+  const from = url.searchParams.get('from'); const to = url.searchParams.get('to')
+  const win = (from && /^\d{8}$/.test(from) && to && /^\d{8}$/.test(to)) ? { start: `${from}000000`, end: `${to}235959` } : undefined
+  const result = await runImport(days, win)
   const status = result.ok ? 200 : result.error === 'not_configured' ? 503 : 502
   return NextResponse.json(result, { status })
 }

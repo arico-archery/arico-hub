@@ -105,6 +105,9 @@ function getCurrentStep(done: boolean[]): number {
 // ── 상태 레이블 ───────────────────────────────────────
 
 // ── 컴포넌트 ─────────────────────────────────────────
+// MakeShop 수신: 하트비트가 이 시간 넘게 끊기면 서버 작업이 죽은 것으로 판정한다
+const STALE_MS = 5 * 60 * 1000
+
 export default function OrdersPage() {
   const t = useT()
 
@@ -181,7 +184,7 @@ export default function OrdersPage() {
   // MakeShop 수신 (수동) — 상태를 서버(Setting)에 기록하고 폴링해서 탭 이동/새로고침에도 유지.
   const { lang } = useI18n()
   // refreshed = 이미 받은 주문 중 자사몰의 현재 상태(입금·발송·취소)를 반영한 건수
-  type MsStatus = { state: 'idle' | 'running' | 'done' | 'error'; startedAt?: string; finishedAt?: string; created?: number; dup?: number; refreshed?: number; partial?: number; error?: string }
+  type MsStatus = { state: 'idle' | 'running' | 'done' | 'error'; startedAt?: string; at?: string; finishedAt?: string; created?: number; dup?: number; refreshed?: number; partial?: number; error?: string }
   const [msStatus, setMsStatus] = useState<MsStatus | null>(null)
   const [msConfirm, setMsConfirm] = useState(false)
   const [exportConfirm, setExportConfirm] = useState(false)   // CSV 내보내기 확인창
@@ -197,6 +200,18 @@ export default function OrdersPage() {
     let s: MsStatus
     try { s = await (await fetch('/api/makeshop/import-status', { cache: 'no-store' })).json() }
     catch { msPollingRef.current = false; return }
+
+    // 서버 함수가 타임아웃으로 강제 종료되면 catch 조차 돌지 않아 state 가 'running' 인 채 남는다.
+    // 그대로 두면 3초마다 영원히 폴링하며 「수신 중」이 사라지지 않는다(2026-09-01 실제 발생).
+    // → 하트비트(at)가 STALE_MS 넘게 끊기면 중단된 것으로 본다. Vercel 함수 상한이 60초라
+    //    정상 실행이 여기에 걸리는 일은 없다.
+    if (s.state === 'running') {
+      const beat = Date.parse(s.at || s.startedAt || '')
+      if (beat && Date.now() - beat > STALE_MS) {
+        s = { ...s, state: 'error', error: 'timeout' }
+        expectingRef.current = false; sawRunningRef.current = false
+      }
+    }
 
     let display: MsStatus = s
     if (expectingRef.current) {
@@ -397,7 +412,9 @@ export default function OrdersPage() {
       )}
       {msStatus?.state === 'error' && !msDismissed && (
         <div className="mb-4 flex items-center justify-between gap-3 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-700">
-          <span>⚠️ {lang === 'ja' ? '取込失敗' : '수신 실패'}: {msStatus.error || 'unknown'}</span>
+          <span>⚠️ {lang === 'ja' ? '取込失敗' : '수신 실패'}: {msStatus.error === 'timeout'
+            ? (lang === 'ja' ? 'サーバーの制限時間(60秒)を超えて中断されました。期間を短くして再実行してください' : '서버 제한시간(60초)을 넘겨 중단되었습니다. 기간을 줄여 다시 실행해 주세요')
+            : (msStatus.error || 'unknown')}</span>
           <button onClick={() => setMsDismissed(true)} className="text-red-500 hover:text-red-700 dark:hover:text-red-100 shrink-0"><X className="w-4 h-4" /></button>
         </div>
       )}
